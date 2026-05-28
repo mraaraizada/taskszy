@@ -1,6 +1,11 @@
 import { Building2, Calendar, TrendingUp } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export default function RecentlyJoinedOrganizations({ organizations, isLoading }) {
+  const { setSelectedOrganizationId, setNavigationRequest } = useApp();
+  
+  console.log('🏢 RecentlyJoinedOrganizations: Rendering with', organizations?.length, 'organizations');
+  
   // Sort by join date and get the 5 most recent
   const recentOrgs = [...organizations]
     .sort((a, b) => new Date(b.joinDate) - new Date(a.joinDate))
@@ -79,10 +84,10 @@ export default function RecentlyJoinedOrganizations({ organizations, isLoading }
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#1F2937' }}>
-            Recently Joined Organizations
+            Organizations
           </div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-            Latest {recentOrgs.length} organizations
+            Updates
           </div>
         </div>
         <div style={{
@@ -131,14 +136,45 @@ export default function RecentlyJoinedOrganizations({ organizations, isLoading }
         ) : (
           recentOrgs.map((org, index) => {
             const planColors = getPlanColor(org.subscriptionPlan);
+            
+            // Calculate days until expiry
+            const getDaysUntilExpiry = () => {
+              if (!org.planExpiryDate) return null;
+              try {
+                const now = new Date();
+                const expiry = new Date(org.planExpiryDate);
+                if (isNaN(expiry.getTime())) return null;
+                const diffTime = expiry - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays;
+              } catch (e) {
+                return null;
+              }
+            };
+            
+            const daysUntilExpiry = getDaysUntilExpiry();
+            
+            const handleCardClick = (e) => {
+              console.log('🔗 Card clicked! Event:', e);
+              console.log('🔗 Organization:', org.id, org.name);
+              console.log('🔗 Setting selectedOrganizationId to:', org.id);
+              setSelectedOrganizationId(org.id);
+              console.log('🔗 Setting navigationRequest to: team');
+              setNavigationRequest('team');
+              console.log('🔗 Navigation request sent!');
+            };
+            
+            console.log('🏢 Rendering card for:', org.name, 'with click handler');
+            
             return (
               <div
                 key={org.id}
+                onClick={handleCardClick}
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
+                  flexDirection: 'column',
                   gap: 12,
-                  padding: '12px',
+                  padding: '16px',
                   borderRadius: 12,
                   border: '1px solid #E5E7EB',
                   background: '#FAFBFC',
@@ -154,75 +190,93 @@ export default function RecentlyJoinedOrganizations({ organizations, isLoading }
                   e.currentTarget.style.borderColor = '#E5E7EB';
                 }}
               >
-                {/* Organization Avatar */}
-                <div style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #667EEA, #764BA2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 14,
-                  fontWeight: 800,
-                  color: '#fff',
-                  flexShrink: 0,
-                }}>
-                  {getInitials(org.name)}
-                </div>
+                {/* Header Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Organization Logo */}
+                  {org.workspaceLogo ? (
+                    <img
+                      src={org.workspaceLogo}
+                      alt={org.name}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      background: 'linear-gradient(135deg, #667EEA, #764BA2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: '#fff',
+                      flexShrink: 0,
+                    }}>
+                      {getInitials(org.name)}
+                    </div>
+                  )}
 
-                {/* Organization Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Organization Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#1F2937',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textTransform: 'capitalize',
+                    }}>
+                      {org.name}
+                    </div>
+                    <div style={{
+                      fontSize: 11,
+                      color: '#6B7280',
+                      marginTop: 2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textTransform: 'capitalize',
+                    }}>
+                      {org.workspaceSub || 'No description'}
+                    </div>
+                  </div>
+
+                  {/* Plan Badge */}
                   <div style={{
-                    fontSize: 13,
+                    padding: '4px 10px',
+                    borderRadius: 8,
+                    background: planColors.bg,
+                    color: planColors.color,
+                    fontSize: 10,
                     fontWeight: 700,
-                    color: '#1F2937',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {org.name}
-                  </div>
-                  <div style={{
-                    fontSize: 11,
-                    color: '#6B7280',
-                    marginTop: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}>
-                    <Calendar size={11} />
-                    {formatDate(org.joinDate)}
-                  </div>
-                </div>
-
-                {/* Plan Badge */}
-                <div style={{
-                  padding: '4px 10px',
-                  borderRadius: 8,
-                  background: planColors.bg,
-                  color: planColors.color,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}>
-                  {org.subscriptionPlan}
-                </div>
-
-                {/* New Badge */}
-                {index === 0 && (
-                  <div style={{
-                    padding: '4px 8px',
-                    borderRadius: 6,
-                    background: '#ECFDF5',
-                    color: '#12C479',
-                    fontSize: 9,
-                    fontWeight: 800,
                     flexShrink: 0,
                   }}>
-                    NEW
+                    {org.subscriptionPlan}
                   </div>
-                )}
+
+                  {/* New Badge */}
+                  {index === 0 && (
+                    <div style={{
+                      padding: '4px 8px',
+                      borderRadius: 6,
+                      background: '#ECFDF5',
+                      color: '#12C479',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      flexShrink: 0,
+                    }}>
+                      NEW
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })

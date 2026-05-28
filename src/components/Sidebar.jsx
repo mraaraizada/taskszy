@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, CheckSquare, Users, Wallet,
   Settings2, Settings, TrendingUp,
-  StickyNote, LogOut, User, HelpCircle, Archive,
+  StickyNote, LogOut, User, HelpCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from './AdminPasswordModal';
@@ -42,24 +42,21 @@ const menuSections = [
 
 export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const { helpSubmissions, trashedItems, isPlanActive, triggerPlanBlink } = useApp();
+  const { helpSubmissions, isPlanActive, triggerPlanBlink, currentUser, currentUid } = useApp();
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const pendingHelp = helpSubmissions.filter(s => s.status === 'pending').length;
-  const trashCount = trashedItems?.length || 0;
+
+  // Use currentUser directly from AppContext - it already has all profile data loaded
+  // No need for separate profile loading or enrichedUser state
 
   const handleNavClick = (id) => {
-    // Settings (profile) always allowed
-    if (id === 'settings') { setActiveItem(id); return; }
-    if (!isPlanActive) { triggerPlanBlink(); return; }
+    // Block ALL navigation when plan is inactive (including profile/settings)
+    if (!isPlanActive) { 
+      triggerPlanBlink(); 
+      return; 
+    }
     setActiveItem(id);
-  };
-
-  const handleArchiveClick = () => {
-    if (!isPlanActive) { triggerPlanBlink(); return; }
-    requestAdminPassword('open archive', () => {
-      setActiveItem('trash');
-    });
-  };
+  }
 
   return (
     <aside data-tour="sidebar" style={{
@@ -135,38 +132,6 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
         ))}
       </nav>
 
-      {/* Archive round button */}
-      <div style={{ padding: '12px 8px' }}>
-        <button
-          onClick={handleArchiveClick}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', padding: '10px 14px', borderRadius: 12,
-            background: activeItem === 'trash' ? 'linear-gradient(135deg, #FEF2F2, #FEE2E2)' : 'var(--bg-subtle)',
-            border: `1.5px solid ${activeItem === 'trash' ? '#FECACA' : 'var(--border)'}`,
-            cursor: 'pointer', transition: 'all 0.15s',
-            boxShadow: activeItem === 'trash' ? '0 2px 8px rgba(239,68,68,0.12)' : 'none',
-          }}
-          onMouseEnter={e => {
-            if (activeItem !== 'trash') {
-              e.currentTarget.style.background = 'var(--bg-surface)';
-              e.currentTarget.style.borderColor = '#9CA3AF';
-            }
-          }}
-          onMouseLeave={e => {
-            if (activeItem !== 'trash') {
-              e.currentTarget.style.background = 'var(--bg-subtle)';
-              e.currentTarget.style.borderColor = 'var(--border)';
-            }
-          }}
-        >
-          <Archive size={16} strokeWidth={2} color={activeItem === 'trash' ? '#EF4444' : '#6B7280'} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: activeItem === 'trash' ? '#EF4444' : '#6B7280' }}>
-            Archive
-          </span>
-        </button>
-      </div>
-
       {/* Admin user card + logout */}
       <div style={{ padding: '0 4px 20px' }}>
         <div style={{
@@ -176,20 +141,44 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)',
+              background: currentUser?.avatarImg ? 'transparent' : `linear-gradient(135deg, ${currentUser?.color || '#3B5BFC'}, #7C3AED)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 800, color: '#fff', flexShrink: 0,
               boxShadow: '0 4px 10px rgba(59,91,252,0.35)',
-            }}>FA</div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1D2E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ferra Alexandra</div>
-              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 700 }}>Administrator</div>
+              overflow: 'hidden',
+            }}>
+              {currentUser?.avatarImg ? (
+                <img src={currentUser.avatarImg} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              ) : (
+                currentUser?.avatar || 'A'
+              )}
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1D2E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.name || 'Admin'}</div>
+              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 700 }}>{currentUser?.role || 'Administrator'}</div>
             </div>
           </div>
+          
+          {/* Status + since date */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#12C479', boxShadow: '0 0 0 3px #DCFCE7', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: '#12C479', fontWeight: 700 }}>Active</span>
-            <span style={{ fontSize: 10, color: '#B0B8CC', marginLeft: 'auto' }}>Since Jan 2025</span>
+            <div style={{ 
+              width: 7, 
+              height: 7, 
+              borderRadius: '50%', 
+              background: '#12C479', 
+              boxShadow: '0 0 0 3px #DCFCE7', 
+              flexShrink: 0 
+            }} />
+            <span style={{ 
+              fontSize: 11, 
+              color: '#12C479', 
+              fontWeight: 700 
+            }}>
+              Active
+            </span>
+            <span style={{ fontSize: 10, color: '#B0B8CC', marginLeft: 'auto' }}>
+              Since {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+            </span>
           </div>
 
           {!confirmLogout ? (

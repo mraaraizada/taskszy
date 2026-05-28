@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
+console.log('🔄 AppContext.jsx loaded at:', new Date().toISOString(), '- Project Dashboard Context');
+
 // ── Shared Constants ──────────────────────────────────────────────────────────
 export const STAGES = ['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update', 'Complete'];
 export const STAGE_COLORS = { New: '#9CA3AF', Start: '#3B5BFC', Issue: '#EF4444', 'Review A': '#F97316', 'Review B': '#7C3AED', Update: '#D97706', Complete: '#12C479' };
@@ -64,311 +66,11 @@ export const ADMIN_A_ROLES = [
   { id: 1,  name: 'Admin',            description: 'Full system access — all permissions granted',          color: '#3B5BFC', roleType: 'Management',  members: 1, permissions: ADMIN_PERMS },
 ];
 
-const INITIAL_TEAM = [
-  { id: 1, name: 'Sarah Johnson', role: 'Project Manager', email: 'sarah@taskzy.io', avatar: 'SJ', color: '#7C3AED', status: 'Active', joinedDate: new Date('2024-01-15'), desc: 'Experienced project manager with 8+ years in tech' },
-  { id: 2, name: 'Marcus Chen', role: 'Senior Developer', email: 'marcus@taskzy.io', avatar: 'MC', color: '#12C479', status: 'Active', joinedDate: new Date('2024-02-01'), desc: 'Full-stack developer specializing in React and Node.js' },
-  { id: 3, name: 'Team Member A', role: 'Team Member', email: 'teammembera@taskzy.io', avatar: 'TA', color: '#F97316', status: 'Active', joinedDate: new Date('2024-02-15'), desc: 'Dedicated team member contributing to various projects' },
-  { id: 4, name: 'Management Z', role: 'Management', email: 'managementz@taskzy.io', avatar: 'MZ', color: '#06B6D4', status: 'Active', joinedDate: new Date('2024-03-01'), desc: 'Management team member overseeing operations' },
-  { id: 5, name: 'Emily Davis', role: 'UI/UX Designer', email: 'emily@taskzy.io', avatar: 'ED', color: '#8B5CF6', status: 'Active', joinedDate: new Date('2024-02-10'), desc: 'Creative designer focused on user experience' },
-  { id: 6, name: 'Alex Kumar', role: 'QA Engineer', email: 'alex@taskzy.io', avatar: 'AK', color: '#EC4899', status: 'Active', joinedDate: new Date('2024-03-01'), desc: 'Quality assurance specialist with automation expertise' },
-  { id: 7, name: 'David Park', role: 'Backend Developer', email: 'david@taskzy.io', avatar: 'DP', color: '#3B82F6', status: 'Active', joinedDate: new Date('2024-03-15'), desc: 'Backend specialist with expertise in microservices' },
-  { id: 8, name: 'Lisa Wong', role: 'Frontend Developer', email: 'lisa@taskzy.io', avatar: 'LW', color: '#10B981', status: 'Active', joinedDate: new Date('2024-03-20'), desc: 'Frontend developer passionate about performance' },
-  { id: 9, name: 'James Miller', role: 'DevOps Engineer', email: 'james@taskzy.io', avatar: 'JM', color: '#F59E0B', status: 'Active', joinedDate: new Date('2024-04-01'), desc: 'DevOps expert managing CI/CD pipelines' },
-  { id: 10, name: 'Rachel Green', role: 'Content Writer', email: 'rachel@taskzy.io', avatar: 'RG', color: '#14B8A6', status: 'Active', joinedDate: new Date('2024-04-05'), desc: 'Creative content writer and copywriter' },
-];
+const INITIAL_TEAM = [];
 
-const INITIAL_TASKS = [
-  {
-    id: 'TSK-001',
-    title: 'Design Landing Page',
-    description: 'Create modern landing page design for new product launch',
-    stage: 'Review A',
-    deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    totalBudget: 25000,
-    paid: false,
-    tags: [
-      { label: 'Design', emoji: '🎨', color: '#7C3AED', bg: '#F5F3FF' },
-      { label: 'Content', emoji: '✍️', color: '#059669', bg: '#ECFDF5' }
-    ],
-    category: { label: 'Design', emoji: '🎨', color: '#7C3AED', bg: '#F5F3FF' },
-    members: [
-      { id: 5, name: 'Emily Davis', avatar: 'ED', color: '#8B5CF6', budget: 25000, stage: 'Review A' }
-    ],
-    createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-002',
-    title: 'API Integration',
-    description: 'Integrate payment gateway API with backend',
-    stage: 'Start',
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    totalBudget: 45000,
-    paid: false,
-    tags: [
-      { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' }
-    ],
-    category: { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' },
-    members: [
-      { id: 2, name: 'Marcus Chen', avatar: 'MC', color: '#12C479', budget: 45000, stage: 'Start' }
-    ],
-    createdDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'Marcus Chen', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-003',
-    title: 'Mobile App Testing',
-    description: 'Complete QA testing for iOS and Android apps',
-    stage: 'Complete',
-    deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    totalBudget: 30000,
-    paid: true,
-    paidOn: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    tags: [
-      { label: 'Testing', emoji: '🧪', color: '#EF4444', bg: '#FEF2F2' }
-    ],
-    category: { label: 'Support', emoji: '🛟', color: '#DC2626', bg: '#FEF2F2' },
-    members: [
-      { id: 6, name: 'Alex Kumar', avatar: 'AK', color: '#EC4899', budget: 30000, stage: 'Complete' }
-    ],
-    createdDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000), user: 'Alex Kumar', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), user: 'Alex Kumar', action: 'updated' },
-      { stage: 'Complete', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'updated' },
-      { stage: 'Complete', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'paid' },
-    ]
-  },
-  {
-    id: 'TSK-004',
-    title: 'Database Optimization',
-    description: 'Optimize database queries and improve performance',
-    stage: 'New',
-    deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    totalBudget: 35000,
-    paid: false,
-    tags: [
-      { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' }
-    ],
-    category: { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' },
-    members: [
-      { id: 2, name: 'Marcus Chen', avatar: 'MC', color: '#12C479', budget: 35000, stage: 'New' }
-    ],
-    createdDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-    ]
-  },
-  {
-    id: 'TSK-005',
-    title: 'User Dashboard Redesign',
-    description: 'Redesign user dashboard with new analytics widgets',
-    stage: 'Review B',
-    deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    totalBudget: 40000,
-    paid: false,
-    tags: [
-      { label: 'Design', emoji: '🎨', color: '#7C3AED', bg: '#F5F3FF' },
-      { label: 'UI/UX', emoji: '✨', color: '#8B5CF6', bg: '#F5F3FF' }
-    ],
-    category: { label: 'Design', emoji: '🎨', color: '#7C3AED', bg: '#F5F3FF' },
-    members: [
-      { id: 5, name: 'Emily Davis', avatar: 'ED', color: '#8B5CF6', budget: 40000, stage: 'Review B' }
-    ],
-    createdDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-      { stage: 'Update', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'updated' },
-      { stage: 'Review B', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-006',
-    title: 'Content Creation',
-    description: 'Create marketing content for social media campaigns',
-    stage: 'Start',
-    deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-    totalBudget: 20000,
-    paid: false,
-    tags: [
-      { label: 'Content', emoji: '✍️', color: '#059669', bg: '#ECFDF5' },
-      { label: 'Marketing', emoji: '📢', color: '#F97316', bg: '#FFF7ED' }
-    ],
-    category: { label: 'Marketing', emoji: '📢', color: '#F97316', bg: '#FFF7ED' },
-    members: [
-      { id: 3, name: 'Team Member A', avatar: 'TA', color: '#F97316', budget: 20000, stage: 'Start' }
-    ],
-    createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Team Member A', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-007',
-    title: 'CI/CD Pipeline Setup',
-    description: 'Configure automated deployment pipeline with Docker and Kubernetes',
-    stage: 'Start',
-    deadline: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
-    totalBudget: 50000,
-    paid: false,
-    tags: [
-      { label: 'DevOps', emoji: '⚙️', color: '#6B7280', bg: '#F3F4F6' }
-    ],
-    category: { label: 'Operations', emoji: '⚙️', color: '#6B7280', bg: '#F3F4F6' },
-    members: [
-      { id: 9, name: 'James Miller', avatar: 'JM', color: '#F59E0B', budget: 50000, stage: 'Start' }
-    ],
-    createdDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'James Miller', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-008',
-    title: 'Blog Post Series',
-    description: 'Write 5 technical blog posts about React best practices',
-    stage: 'Review A',
-    deadline: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
-    totalBudget: 18000,
-    paid: false,
-    tags: [
-      { label: 'Content', emoji: '✍️', color: '#059669', bg: '#ECFDF5' },
-      { label: 'Marketing', emoji: '📢', color: '#F97316', bg: '#FFF7ED' }
-    ],
-    category: { label: 'Content', emoji: '✍️', color: '#D97706', bg: '#FFFBEB' },
-    members: [
-      { id: 10, name: 'Rachel Green', avatar: 'RG', color: '#14B8A6', budget: 18000, stage: 'Review A' }
-    ],
-    createdDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), user: 'Rachel Green', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Rachel Green', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-009',
-    title: 'Microservices Architecture',
-    description: 'Design and implement microservices architecture for scalability',
-    stage: 'Start',
-    deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
-    totalBudget: 65000,
-    paid: false,
-    tags: [
-      { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' }
-    ],
-    category: { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' },
-    members: [
-      { id: 7, name: 'David Park', avatar: 'DP', color: '#3B82F6', budget: 65000, stage: 'Start' }
-    ],
-    createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'David Park', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-010',
-    title: 'Performance Optimization',
-    description: 'Optimize frontend performance and reduce bundle size',
-    stage: 'Review A',
-    deadline: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
-    totalBudget: 28000,
-    paid: false,
-    tags: [
-      { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' }
-    ],
-    category: { label: 'Development', emoji: '💻', color: '#3B5BFC', bg: '#EEF2FF' },
-    members: [
-      { id: 8, name: 'Lisa Wong', avatar: 'LW', color: '#10B981', budget: 28000, stage: 'Review A' }
-    ],
-    createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), user: 'Lisa Wong', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Lisa Wong', action: 'updated' },
-    ]
-  },
-  {
-    id: 'TSK-011',
-    title: 'Security Audit',
-    description: 'Conduct comprehensive security audit and penetration testing',
-    stage: 'Complete',
-    deadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    totalBudget: 42000,
-    paid: true,
-    paidOn: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    tags: [
-      { label: 'Security', emoji: '🔒', color: '#DC2626', bg: '#FEF2F2' }
-    ],
-    category: { label: 'Support', emoji: '🛟', color: '#DC2626', bg: '#FEF2F2' },
-    members: [
-      { id: 6, name: 'Alex Kumar', avatar: 'AK', color: '#EC4899', budget: 42000, stage: 'Complete' }
-    ],
-    createdDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000), user: 'Alex Kumar', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), user: 'Alex Kumar', action: 'updated' },
-      { stage: 'Complete', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'updated' },
-      { stage: 'Complete', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'paid' },
-    ]
-  },
-  {
-    id: 'TSK-012',
-    title: 'Email Campaign Design',
-    description: 'Design responsive email templates for marketing campaigns',
-    stage: 'Update',
-    deadline: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
-    totalBudget: 15000,
-    paid: false,
-    tags: [
-      { label: 'Design', emoji: '🎨', color: '#7C3AED', bg: '#F5F3FF' },
-      { label: 'Marketing', emoji: '📢', color: '#F97316', bg: '#FFF7ED' }
-    ],
-    category: { label: 'Marketing', emoji: '📢', color: '#F97316', bg: '#FFF7ED' },
-    members: [
-      { id: 5, name: 'Emily Davis', avatar: 'ED', color: '#8B5CF6', budget: 15000, stage: 'Update' }
-    ],
-    createdDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-    history: [
-      { stage: 'New', date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'created' },
-      { stage: 'Start', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-      { stage: 'Review A', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'Emily Davis', action: 'updated' },
-      { stage: 'Update', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'Admin', action: 'updated' },
-    ]
-  },
-];
+const INITIAL_TASKS = [];
 
-const INITIAL_ACTIVITY = [
-  { id: 1, type: 'review', title: 'Submitted for Review', sub: 'TSK-010 — Performance Optimization', time: new Date(Date.now() - 30 * 60 * 1000) },
-  { id: 2, type: 'start', title: 'Task Started', sub: 'TSK-009 — Microservices Architecture', time: new Date(Date.now() - 1 * 60 * 60 * 1000) },
-  { id: 3, type: 'payment', title: 'Payment Processed', sub: 'TSK-011 — Security Audit', amount: '+₹ 42,000', up: true, time: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-  { id: 4, type: 'complete', title: 'Task Completed', sub: 'TSK-011 — Security Audit', amount: '+₹ 42,000', up: true, time: new Date(Date.now() - 3 * 60 * 60 * 1000) },
-  { id: 5, type: 'update', title: 'Update Requested', sub: 'TSK-012 — Email Campaign Design', time: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-  { id: 6, type: 'review', title: 'Submitted for Review', sub: 'TSK-008 — Blog Post Series', time: new Date(Date.now() - 5 * 60 * 60 * 1000) },
-  { id: 7, type: 'start', title: 'Task Started', sub: 'TSK-007 — CI/CD Pipeline Setup', time: new Date(Date.now() - 6 * 60 * 60 * 1000) },
-  { id: 8, type: 'new', title: 'Task Created', sub: 'TSK-009 — Microservices Architecture', time: new Date(Date.now() - 7 * 60 * 60 * 1000) },
-  { id: 9, type: 'review', title: 'Submitted for Review', sub: 'TSK-005 — User Dashboard Redesign', time: new Date(Date.now() - 8 * 60 * 60 * 1000) },
-  { id: 10, type: 'payment', title: 'Payment Processed', sub: 'TSK-003 — Mobile App Testing', amount: '+₹ 30,000', up: true, time: new Date(Date.now() - 10 * 60 * 60 * 1000) },
-  { id: 11, type: 'complete', title: 'Task Completed', sub: 'TSK-003 — Mobile App Testing', amount: '+₹ 30,000', up: true, time: new Date(Date.now() - 11 * 60 * 60 * 1000) },
-  { id: 12, type: 'new', title: 'Task Created', sub: 'TSK-004 — Database Optimization', time: new Date(Date.now() - 12 * 60 * 60 * 1000) },
-  { id: 13, type: 'start', title: 'Task Started', sub: 'TSK-002 — API Integration', time: new Date(Date.now() - 14 * 60 * 60 * 1000) },
-  { id: 14, type: 'member', title: 'Member Added', sub: 'Rachel Green — Content Writer', time: new Date(Date.now() - 16 * 60 * 60 * 1000) },
-  { id: 15, type: 'member', title: 'Member Added', sub: 'James Miller — DevOps Engineer', time: new Date(Date.now() - 18 * 60 * 60 * 1000) },
-];
+const INITIAL_ACTIVITY = [];
 
 const INITIAL_HELP_SUBMISSIONS = [];
 
@@ -422,6 +124,15 @@ export function AppProvider({ children }) {
   const [yearlyGrowth, setYearlyGrowth] = useState([]);
   const [planDistribution, setPlanDistribution] = useState([]);
   
+  // Global search state for filtering organizations across all pages
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  
+  // Selected organization ID for navigation from Dashboard to Team page
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(null);
+  
+  // Navigation request state (to trigger navigation from child components)
+  const [navigationRequest, setNavigationRequest] = useState(null);
+  
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('darkMode') === 'true'; } catch { return false; }
   });
@@ -469,7 +180,7 @@ export function AppProvider({ children }) {
     return () => clearTimeout(timer);
   }, []);
   
-  // Initialize organization data with empty state
+  // Initialize organization data - empty for real Firebase data
   useEffect(() => {
     setOrganizations([]);
     setMonthlyGrowth([]);
@@ -480,9 +191,182 @@ export function AppProvider({ children }) {
   // Refresh data function - updates data without showing skeleton
   const refreshData = useCallback(() => {
     setRefreshTrigger(prev => prev + 1);
-    // In a real app, this would fetch fresh data from API
-    // For now, it just triggers a re-render to simulate data refresh
   }, []);
+  
+  // Load organizations from Firebase with caching and change detection
+  const loadOrganizations = useCallback(async (forceRefresh = false) => {
+    // Prevent multiple simultaneous loads
+    if (loadOrganizations.loading) {
+      console.log('⏳ AppContext: Organizations already loading, skipping...');
+      return;
+    }
+    
+    console.log('🔄 AppContext: Loading organizations...', { forceRefresh });
+    loadOrganizations.loading = true;
+    
+    try {
+      const { getOrganizationsPaginated, getOrganizationStatsOptimized } = await import('../lib/optimizedOrganizationService');
+      console.log('📦 AppContext: Fetching organizations from optimized service...');
+      const result = await getOrganizationsPaginated({ pageSize: 100, forceRefresh });
+      const stats = await getOrganizationStatsOptimized();
+      
+      console.log('✅ AppContext: Organizations fetched', {
+        count: result.organizations.length,
+        stats
+      });
+      
+      // Only update state if data actually changed - use deep comparison
+      setOrganizations(prevOrgs => {
+        // Skip update if arrays are identical (same reference from cache)
+        if (prevOrgs === result.organizations) {
+          console.log('✅ AppContext: Organizations unchanged (same reference), skipping state update');
+          return prevOrgs;
+        }
+        
+        // Deep comparison for content changes
+        const hasChanged = prevOrgs.length !== result.organizations.length || 
+                          JSON.stringify(prevOrgs) !== JSON.stringify(result.organizations);
+        
+        if (hasChanged) {
+          console.log('🔄 AppContext: Organizations data changed, updating state');
+          return result.organizations;
+        }
+        console.log('✅ AppContext: Organizations data unchanged, skipping state update');
+        return prevOrgs;
+      });
+      
+      // Use memoized calculations for growth data - only calculate if orgs changed
+      console.log('📊 AppContext: Calculating growth metrics...');
+      const monthlyData = calculateMonthlyGrowth(result.organizations);
+      const yearlyData = calculateYearlyGrowth(result.organizations);
+      const planDist = calculatePlanDistribution(stats);
+      
+      // Only update if data changed
+      setMonthlyGrowth(prev => {
+        const changed = JSON.stringify(prev) !== JSON.stringify(monthlyData);
+        return changed ? monthlyData : prev;
+      });
+      
+      setYearlyGrowth(prev => {
+        const changed = JSON.stringify(prev) !== JSON.stringify(yearlyData);
+        return changed ? yearlyData : prev;
+      });
+      
+      setPlanDistribution(prev => {
+        const changed = JSON.stringify(prev) !== JSON.stringify(planDist);
+        return changed ? planDist : prev;
+      });
+      
+      console.log('✅ AppContext: Organizations loaded successfully', {
+        total: result.organizations.length,
+        stats,
+        monthlyGrowthPoints: monthlyData.length,
+        yearlyGrowthPoints: yearlyData.length,
+        planDistributionCount: planDist.length
+      });
+    } catch (error) {
+      console.error('❌ AppContext: Error loading organizations:', error);
+      toast.error('Failed to load organizations');
+    } finally {
+      loadOrganizations.loading = false;
+      console.log('🏁 AppContext: Organization loading complete');
+    }
+  }, []);
+  
+  // Set up real-time listener for organizations (auto-refresh on changes) - only when authenticated
+  useEffect(() => {
+    // Only setup listener if user is logged in
+    if (!userEmail) {
+      console.log('⏭️ Skipping listener setup - user not authenticated');
+      return;
+    }
+    
+    let unsubscribe = null;
+    
+    const setupListener = async () => {
+      try {
+        const { collection, onSnapshot } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        
+        console.log('👂 Setting up real-time listener for organizations...');
+        
+        const workspacesRef = collection(db, 'workspaces');
+        unsubscribe = onSnapshot(workspacesRef, (snapshot) => {
+          console.log('🔔 Organizations changed, refreshing data...');
+          loadOrganizations(true); // Force refresh when data changes
+        }, (error) => {
+          console.error('❌ Listener error:', error);
+        });
+      } catch (error) {
+        console.error('❌ Failed to setup listener:', error);
+      }
+    };
+    
+    setupListener();
+    
+    return () => {
+      if (unsubscribe) {
+        console.log('👋 Cleaning up organizations listener');
+        unsubscribe();
+      }
+    };
+  }, [loadOrganizations, userEmail]);
+  
+  // Memoized calculation functions
+  const calculateMonthlyGrowth = (orgs) => {
+    const monthlyData = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = month.toLocaleDateString('en-US', { month: 'short' });
+      const count = orgs.filter(o => {
+        const joinDate = new Date(o.joinDate);
+        return joinDate.getMonth() === month.getMonth() && joinDate.getFullYear() === month.getFullYear();
+      }).length;
+      monthlyData.push({ month: monthName, count });
+    }
+    return monthlyData;
+  };
+  
+  const calculateYearlyGrowth = (orgs) => {
+    const yearlyData = [];
+    const now = new Date();
+    for (let i = 2; i >= 0; i--) {
+      const year = now.getFullYear() - i;
+      const count = orgs.filter(o => new Date(o.joinDate).getFullYear() === year).length;
+      yearlyData.push({ year: year.toString(), count });
+    }
+    return yearlyData;
+  };
+  
+  const calculatePlanDistribution = (stats) => {
+    return [
+      { name: 'Starter', value: stats.byPlan.Starter || 0, color: '#3B5BFC' },
+      { name: 'Professional', value: stats.byPlan.Professional || 0, color: '#7C3AED' },
+      { name: 'Business', value: stats.byPlan.Business || 0, color: '#12C479' },
+      { name: 'Enterprise', value: stats.byPlan.Enterprise || 0, color: '#F97316' },
+      { name: 'Free', value: stats.byPlan.Free || 0, color: '#9CA3AF' },
+    ].filter(plan => plan.value > 0);
+  };
+  
+  
+  // Load organizations on mount ONLY if user is authenticated
+  useEffect(() => {
+    // Only load organizations if user is logged in (has email in localStorage)
+    if (userEmail) {
+      loadOrganizations();
+    } else {
+      console.log('⏭️ Skipping organization load - user not authenticated');
+    }
+  }, [loadOrganizations, userEmail]);
+
+  // Separate effect for manual refresh trigger (doesn't reload organizations automatically)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      // Only log that refresh was triggered, don't auto-reload
+      console.log('🔄 Refresh triggered, but using cached data');
+    }
+  }, [refreshTrigger]);
 
   useEffect(() => {
     try { localStorage.setItem('darkMode', darkMode); } catch {}
@@ -807,6 +691,11 @@ export function AppProvider({ children }) {
   // Provide TAGS and CATEGORIES for all users
   const contextTags = TAGS;
   const contextCategories = CATEGORIES;
+  // Manual refresh function for organizations (force refresh from Firebase)
+  const refreshOrganizations = useCallback(async () => {
+    console.log('🔄 Manual refresh triggered');
+    await loadOrganizations(true); // Force refresh bypasses cache
+  }, [loadOrganizations]);
 
   return (
     <AppContext.Provider value={{
@@ -830,6 +719,13 @@ export function AppProvider({ children }) {
       monthlyGrowth, setMonthlyGrowth,
       yearlyGrowth, setYearlyGrowth,
       planDistribution, setPlanDistribution,
+      refreshOrganizations, // Export manual refresh function
+      // Global search
+      globalSearchQuery, setGlobalSearchQuery,
+      // Selected organization for navigation
+      selectedOrganizationId, setSelectedOrganizationId,
+      // Navigation request
+      navigationRequest, setNavigationRequest,
     }}>
       {children}
     </AppContext.Provider>

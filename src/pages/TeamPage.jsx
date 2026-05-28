@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { notify } from '../lib/notify';
 import { Plus, Search, Mail, Star, CheckCircle, Clock, Edit2, X, User, Users, Phone, MapPin, Lock, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Avatar from '../components/Avatar';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
+import { createMemberAccount, createMemberFallback } from '../lib/memberService';
+import { updateProfile } from '../lib/userProfileService';
+import { monitor } from '../lib/performanceMonitor';
 
 const AVATAR_COLORS = ['#3B5BFC','#7C3AED','#12C479','#F97316','#EF4444','#06B6D4','#EC4899','#8B5CF6'];
 
@@ -16,27 +19,101 @@ function getColor(index) {
 }
 
 // ── Add / Edit Member Modal ─────────────────────────────────────────────────
-function MemberModal({ member, onClose, onSave, roles, managementMode = false }) {
+function MemberModal({ member, onClose, onSave, roles, managementMode = false, onNavigateToManage, currentUser, existingTeam = [] }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
+  const { workspaceId } = useApp();
   const isEdit = !!member;
   const [form, setForm] = useState({
     name: member?.name || '',
     email: member?.email || '',
     phone: member?.phone || '',
     location: member?.location || '',
-    role: member?.role || roles[0] || '',
+    role: member?.role || '', // Don't auto-select first role - require manual selection
     password: '',
     desc: member?.desc || '',
     status: member?.status || 'Active',
   });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const [modalError, setModalError] = useState('');
 
   const handleSaveClick = () => {
-    if (!form.name.trim() || !form.email.trim() || !form.role) return;
-    requestAdminPassword(isEdit ? 'update this member' : 'add this member', () => {
+    // Validate all required fields
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim() || !form.location.trim() || !form.role) {
+      setModalError('Please fill in all required fields.');
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) {
+      setModalError('Please enter a valid email address.');
+      return;
+    }
+    
+    // Check for duplicate email in existing team (only for new members or if email changed)
+    if (!isEdit || (isEdit && form.email.trim().toLowerCase() !== member?.email?.toLowerCase())) {
+      const emailExists = existingTeam.some(m => 
+        m.email?.toLowerCase() === form.email.trim().toLowerCase() && 
+        m.id !== member?.id
+      );
+      
+      if (emailExists) {
+        setModalError('A team member with this email already exists. Please use a different email address.');
+        return;
+      }
+    }
+    
+    // For new members, password is required
+    if (!isEdit && !form.password.trim()) {
+      setModalError('Password is required for new members.');
+      return;
+    }
+    
+    // Validate password length
+    if (!isEdit && form.password.trim().length < 6) {
+      setModalError('Password must be at least 6 characters long.');
+      return;
+    }
+    
+    if (!workspaceId) {
+      setModalError('Workspace not initialized. Please refresh and try again.');
+      return;
+    }
+    
+    setModalError('');
+    requestAdminPassword(isEdit ? 'update this member' : 'add this member', async () => {
       const initials = getInitials(form.name);
       const color = member?.color || getColor(Math.floor(Math.random() * AVATAR_COLORS.length));
-      onSave({
+      
+      // Find the selected role to get its roleType
+      const selectedRole = roles.find(r => r.name === form.role);
+      const roleType = selectedRole?.roleType || 'Team Member';
+      
+      console.log('🎭 Role mapping:', { 
+        selectedRoleName: form.role, 
+        selectedRole, 
+        roleType, 
+        '⚠️ ROLE TYPE': roleType,
+        '⚠️ THIS DETERMINES DASHBOARD ROLE': roleType === 'Admin' ? 'admin' : roleType === 'Management' ? 'management' : 'member',
+        allRoles: roles.map(r => ({ name: r.name, roleType: r.roleType }))
+      });
+      
+      // Map roleType to dashboard role
+      let dashboardRole = 'member'; // default
+      if (roleType === 'Admin') {
+        dashboardRole = 'admin';
+      } else if (roleType === 'Management') {
+        dashboardRole = 'management';
+      } else {
+        dashboardRole = 'member';
+      }
+      
+      console.log('✅ Dashboard role mapped:', { roleType, dashboardRole });
+      
+      // Generate member ID ONCE at the beginning for new members
+      const memberId = member?.id || Date.now();
+      
+      const newMember = {
         ...member,
         ...form,
         avatar: initials,
@@ -45,8 +122,112 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false })
         completed: member?.completed || 0,
         rating: member?.rating || 0,
         joined: member?.joined || new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        id: member?.id || Date.now(),
-      }, !member ? { name: 'Admin', avatar: 'A', color: '#3B5BFC' } : null);
+        id: memberId,
+      };
+      
+      console.log('👤 New member object created:', {
+        id: newMember.id,
+        name: newMember.name,
+        email: newMember.email,
+        role: newMember.role,
+        '⚠️ ROLE FROM FORM': form.role,
+        '⚠️ ROLE IN NEW MEMBER': newMember.role,
+        selectedRoleName: form.role,
+        roleType: roleType,
+        dashboardRole: dashboardRole
+      });
+
+      if (!isEdit) {
+        // New member — Create using client-side method
+        
+        let uid;
+        try {
+          const result = await createMemberAccount({
+            email: form.email.trim().toLowerCase(), // Ensure clean email
+            password: form.password,
+            role: dashboardRole,
+            workspaceId,
+            memberId: memberId, // Use the pre-generated ID
+            name: form.name.trim(),
+            phone: form.phone.trim()
+          });
+          
+          uid = result.uid;
+          
+          // Show appropriate message based on whether admin needs to re-login
+          if (result.requiresRelogin) {
+            alert(`Team member created!\n\n${form.name} can log in with:\nEmail: ${form.email}\nPassword: ${form.password}\n\nYou will need to log in again.`);
+          } else {
+            // Admin stayed logged in - just show success
+            console.log('Team member created, admin still logged in');
+          }
+        } catch (createErr) {
+          console.error('❌ Failed to create member:', createErr);
+          console.error('❌ Error details:', {
+            message: createErr.message,
+            code: createErr.code,
+            stack: createErr.stack
+          });
+          
+          // Display user-friendly error message
+          const errorMessage = createErr.message || 'Failed to create member account. Please try again.';
+          setModalError(errorMessage);
+          
+          // Don't close modal - let user fix the issue
+          return;
+        }
+        
+        // Auth account created successfully - save to team collection
+        newMember.uid = uid;
+        
+        // Use actual current user info for addedBy field
+        console.log('🔍 Current user data:', currentUser);
+        const addedByInfo = currentUser ? {
+          uid: currentUser.uid || null, // Add uid for profile enrichment
+          name: currentUser.name || 'Admin',
+          avatar: currentUser.avatar || 'A',
+          avatarImg: currentUser.avatarImg || null, // Add profile picture
+          color: currentUser.color || '#3B5BFC',
+          role: currentUser.role || 'Administrator' // Use display role name, not userRole
+        } : { name: 'Admin', avatar: 'A', color: '#3B5BFC', role: 'Administrator' };
+        
+        console.log('👤 Adding member with addedBy info:', addedByInfo);
+        onSave(newMember, addedByInfo);
+        
+        // Close modal
+        onClose();
+      } else {
+        // Editing existing member
+        if (member?.uid) {
+          try { 
+            await updateProfile(member.uid, { 
+              name: form.name,
+              phone: form.phone,
+              role: dashboardRole, // Use mapped dashboard role
+              memberId: member.id 
+            }); 
+            console.log('✅ User profile updated:', { name: form.name, phone: form.phone, role: dashboardRole });
+          } catch (err) {
+            console.error('❌ Failed to update user profile:', err);
+          }
+        }
+        
+        // If password is provided, send password reset email
+        if (form.password.trim()) {
+          try {
+            const { sendPasswordResetEmail } = await import('../lib/memberService');
+            await sendPasswordResetEmail(form.email);
+            setModalError('');
+            alert(`Password reset email sent to ${form.email}. The user can set a new password using the link in the email.`);
+          } catch (err) {
+            console.error('Password reset error:', err);
+            setModalError('Member updated, but failed to send password reset email. You can send it manually from Firebase Console.');
+          }
+        }
+        
+        onSave(newMember, null);
+      }
+
       onClose();
     });
   };
@@ -72,72 +253,196 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false })
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {[
                 { label: 'Full Name *', key: 'name', icon: User, placeholder: 'John Doe' },
-                { label: 'Email Address *', key: 'email', icon: Mail, placeholder: 'john@taskzy.io' },
+                { label: 'Email Address *', key: 'email', icon: Mail, placeholder: 'john@taskzy.io', readOnlyOnEdit: true },
                 { label: 'Phone Number *', key: 'phone', icon: Phone, placeholder: '+1 555 0000' },
                 { label: 'Location *', key: 'location', icon: MapPin, placeholder: 'City, State' },
-              ].map(field => (
-                <div key={field.key}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{field.label}</label>
-                  <div style={{ position: 'relative' }}>
-                    <field.icon size={14} color="#9CA3AF" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-                    <input value={form[field.key]} onChange={e => f(field.key)(e.target.value)} placeholder={field.placeholder}
-                      style={{ width: '100%', padding: '10px 14px 10px 32px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = '#E8EAEF'} />
+              ].map(field => {
+                const isReadOnly = isEdit && field.readOnlyOnEdit;
+                return (
+                  <div key={field.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                      {field.label}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <field.icon size={14} color="#9CA3AF" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+                      <input 
+                        type={field.key === 'phone' ? 'tel' : field.key === 'email' ? 'email' : 'text'}
+                        value={form[field.key]} 
+                        onChange={e => {
+                          if (isReadOnly) return; // Prevent changes if read-only
+                          // Only allow digits, +, -, spaces, and parentheses for phone
+                          if (field.key === 'phone') {
+                            const filtered = e.target.value.replace(/[^\d+\-\s()]/g, '');
+                            f(field.key)(filtered);
+                          } else if (field.key === 'email') {
+                            // Remove spaces from email
+                            const filtered = e.target.value.replace(/\s/g, '');
+                            f(field.key)(filtered);
+                          } else {
+                            f(field.key)(e.target.value);
+                          }
+                        }} 
+                        readOnly={isReadOnly}
+                        placeholder={field.placeholder}
+                        style={{ 
+                          width: '100%', 
+                          padding: '10px 14px 10px 32px', 
+                          border: `1.5px solid ${isReadOnly ? '#E8EAEF' : 'var(--border)'}`, 
+                          borderRadius: 10, 
+                          fontSize: 13, 
+                          color: isReadOnly ? '#9CA3AF' : 'var(--text-primary)', 
+                          outline: 'none', 
+                          background: isReadOnly ? '#F9FAFB' : 'var(--input-bg)', 
+                          boxSizing: 'border-box',
+                          cursor: isReadOnly ? 'not-allowed' : 'text',
+                        }}
+                        onFocus={e => !isReadOnly && (e.target.style.borderColor = '#3B5BFC')} 
+                        onBlur={e => !isReadOnly && (e.target.style.borderColor = '#E8EAEF')} 
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Login credentials - Only show when adding new member */}
+          {!isEdit && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Login Credentials</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Username (Email)</label>
+                  <div style={{ padding: '10px 14px', background: 'var(--input-bg)', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {form.email || 'Set email above'}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Login credentials */}
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Login Credentials</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Username (Email)</label>
-                <div style={{ padding: '10px 14px', background: 'var(--input-bg)', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: 13, color: 'var(--text-muted)' }}>
-                  {form.email || 'Set email above'}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                    Initial Password *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Lock size={14} color="#9CA3AF" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 1 }} />
+                    <input 
+                      type="password" 
+                      value={form.password} 
+                      onChange={e => f('password')(e.target.value)} 
+                      placeholder="Set password..."
+                      style={{ 
+                        width: '100%', 
+                        padding: '10px 14px 10px 32px', 
+                        border: '1.5px solid var(--border)', 
+                        borderRadius: 10, 
+                        fontSize: 13, 
+                        color: 'var(--text-primary)', 
+                        outline: 'none', 
+                        background: 'var(--input-bg)', 
+                        boxSizing: 'border-box',
+                        cursor: 'text',
+                        position: 'relative',
+                        zIndex: 2
+                      }}
+                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} 
+                      onBlur={e => e.target.style.borderColor = '#E8EAEF'} 
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{isEdit ? 'Reset Password' : 'Initial Password *'}</label>
-                <div style={{ position: 'relative' }}>
-                  <Lock size={14} color="#9CA3AF" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-                  <input type="password" value={form.password} onChange={e => f('password')(e.target.value)} placeholder={isEdit ? 'Leave blank to keep' : 'Set password...'}
-                    style={{ width: '100%', padding: '10px 14px 10px 32px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-                    onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = '#E8EAEF'} />
-                </div>
+            </div>
+          )}
+
+          {/* Role - Only show when adding new member, not when editing */}
+          {!isEdit && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Role Assignment *</div>
+                {onNavigateToManage && (
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); onNavigateToManage(); }}
+                    title="Create a new role"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                      border: '1.5px solid #3B5BFC', background: '#EEF2FF', color: '#3B5BFC',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#3B5BFC'; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#EEF2FF'; e.currentTarget.style.color = '#3B5BFC'; }}
+                  >
+                    <Plus size={11} /> Add Role
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {roles.map(r => {
+                  const roleName = typeof r === 'string' ? r : r.name;
+                  const roleType = typeof r === 'object' ? r.roleType : null;
+                  const roleWorkDesc = typeof r === 'object' ? r.workDescription : '';
+                  const isSelected = form.role === roleName;
+                  const isAdminRole = roleType === 'Admin';
+                  
+                  // Premium gold gradient for Admin roles when selected
+                  const selectedBg = isAdminRole 
+                    ? 'linear-gradient(135deg, #FFD700, #FFA500)' 
+                    : '#EEF2FF';
+                  const selectedBorder = isAdminRole ? '#FFD700' : '#3B5BFC';
+                  const selectedColor = isAdminRole ? '#8B4513' : '#3B5BFC';
+                  
+                  return (
+                    <button key={roleName} onClick={() => {
+                      f('role')(roleName);
+                      // Auto-fill desc from role's workDescription
+                      if (roleWorkDesc) {
+                        f('desc')(roleWorkDesc);
+                        console.log('📝 Auto-filled desc from role:', { roleName, workDescription: roleWorkDesc });
+                      }
+                    }} style={{
+                      padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${isSelected ? selectedBorder : '#E8EAEF'}`,
+                      background: isSelected ? selectedBg : '#fff',
+                      color: isSelected ? selectedColor : '#6B7280',
+                      transition: 'all 0.15s',
+                      boxShadow: isSelected && isAdminRole ? '0 2px 8px rgba(255, 215, 0, 0.3)' : 'none',
+                    }}>{roleName}</button>
+                  );
+                })}
               </div>
             </div>
-          </div>
-
-          {/* Role */}
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Role Assignment *</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {roles.map(r => (
-                <button key={r} onClick={() => f('role')(r)} style={{
-                  padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: `1.5px solid ${form.role === r ? '#3B5BFC' : '#E8EAEF'}`,
-                  background: form.role === r ? '#EEF2FF' : '#fff',
-                  color: form.role === r ? '#3B5BFC' : '#6B7280',
-                  transition: 'all 0.15s',
-                }}>{r}</button>
-              ))}
-            </div>
-          </div>
+          )}
 
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 28px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '11px 22px', background: 'var(--input-bg)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSaveClick} disabled={!form.name.trim() || !form.email.trim()} style={{
-            padding: '11px 28px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            background: form.name.trim() && form.email.trim() ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : '#E8EAEF',
-            color: form.name.trim() && form.email.trim() ? '#fff' : '#9CA3AF',
-            boxShadow: form.name.trim() && form.email.trim() ? '0 6px 20px #3B5BFC40' : 'none',
-          }}>{isEdit ? 'Update' : 'Add Member'}</button>
+        <div style={{ padding: '16px 28px 24px', borderTop: '1px solid var(--border-light)' }}>
+          {modalError && (
+            <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500, marginBottom: 12 }}>
+              {modalError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '11px 22px', background: 'var(--input-bg)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
+            <button 
+              onClick={handleSaveClick} 
+              disabled={
+                !form.name.trim() || 
+                !form.email.trim() || 
+                !form.phone.trim() || 
+                !form.location.trim() || 
+                !form.role || 
+                (!isEdit && !form.password.trim())
+              } 
+              style={{
+                padding: '11px 28px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, 
+                cursor: (form.name.trim() && form.email.trim() && form.phone.trim() && form.location.trim() && form.role && (isEdit || form.password.trim())) ? 'pointer' : 'not-allowed',
+                background: (form.name.trim() && form.email.trim() && form.phone.trim() && form.location.trim() && form.role && (isEdit || form.password.trim())) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : '#E8EAEF',
+                color: (form.name.trim() && form.email.trim() && form.phone.trim() && form.location.trim() && form.role && (isEdit || form.password.trim())) ? '#fff' : '#9CA3AF',
+                boxShadow: (form.name.trim() && form.email.trim() && form.phone.trim() && form.location.trim() && form.role && (isEdit || form.password.trim())) ? '0 6px 20px #3B5BFC40' : 'none',
+              }}
+            >
+              {isEdit ? 'Update' : 'Add Member'}
+            </button>
+          </div>
         </div>
       </div>
       {showPasswordModal && (
@@ -201,12 +506,12 @@ function MemberProfileModal({ member, onClose }) {
             </div>
           </div>
 
-          {/* Description */}
-          {member.desc && (
+          {/* About */}
+          {member.about && (
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>About</div>
               <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: '1.6', background: 'var(--bg-subtle)', padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                {member.desc}
+                {member.about}
               </div>
             </div>
           )}
@@ -228,7 +533,7 @@ function MemberProfileModal({ member, onClose }) {
                       </div>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{s.label}</span>
                     </div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value > 0 ? s.value : ''}</div>
                   </div>
                 );
               })}
@@ -241,10 +546,10 @@ function MemberProfileModal({ member, onClose }) {
             <div style={{ background: 'var(--bg-subtle)', borderRadius: 12, padding: '16px', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Overall Progress</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: member.color }}>{member.tasks ? Math.round((member.completed / member.tasks) * 100) : 0}%</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: member.color }}>{(member.tasks && member.tasks > 0) ? Math.round((member.completed / member.tasks) * 100) + '%' : ''}</span>
               </div>
               <div style={{ height: 8, background: '#E8EAEF', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ width: `${member.tasks ? Math.round((member.completed / member.tasks) * 100) : 0}%`, height: '100%', background: member.color, borderRadius: 8, transition: 'width 0.6s ease' }} />
+                <div style={{ width: (member.tasks && member.tasks > 0) ? `${Math.round((member.completed / member.tasks) * 100)}%` : '100%', height: '100%', background: (member.tasks && member.tasks > 0) ? member.color : '#E8EAEF', borderRadius: 8, transition: 'width 0.6s ease' }} />
               </div>
             </div>
           </div>
@@ -259,23 +564,59 @@ function MemberProfileModal({ member, onClose }) {
 function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementMode = false, atLimit = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const [hover, setHover] = useState(false);
+  const [daysRemaining, setDaysRemaining] = useState(null);
+  
+  // Calculate days remaining for 7-day timer
+  useEffect(() => {
+    if (member.status === 'Inactive' && member.deactivatedAt) {
+      const calculateDays = () => {
+        const deactivatedDate = member.deactivatedAt.seconds 
+          ? new Date(member.deactivatedAt.seconds * 1000) 
+          : new Date(member.deactivatedAt);
+        const now = new Date();
+        const daysPassed = Math.floor((now - deactivatedDate) / (1000 * 60 * 60 * 24));
+        const remaining = Math.max(0, 7 - daysPassed);
+        setDaysRemaining(remaining);
+      };
+      
+      calculateDays();
+      // Update every hour
+      const interval = setInterval(calculateDays, 1000 * 60 * 60);
+      return () => clearInterval(interval);
+    } else {
+      setDaysRemaining(null);
+    }
+  }, [member.status, member.deactivatedAt]);
+  
+  const canActivate = member.status === 'Inactive' && (daysRemaining === null || daysRemaining === 0);
   
   const handleToggleStatus = (e) => {
     e.stopPropagation();
+    
     // Block activating if at plan limit
     if (member.status === 'Inactive' && atLimit) {
       notify.error('Plan limit reached. Deactivate another member first or upgrade your plan.');
       return;
     }
+    
+    // Block activating if 7-day timer hasn't expired
+    if (member.status === 'Inactive' && daysRemaining > 0) {
+      notify.error(`Cannot activate yet. ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining.`);
+      return;
+    }
+    
     const actionText = member.status === 'Active' ? 'deactivate this member' : 'activate this member';
     requestAdminPassword(actionText, () => {
       onToggleStatus(member.id);
+      // Don't switch tabs - just let the user disappear from current view
+      // The user will be in the appropriate tab (Active/Inactive) based on their new status
     });
   };
   
   return (
     <>
       <div
+        data-member-id={member.id}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         onClick={() => onViewProfile(member)}
@@ -303,11 +644,11 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
       {/* Stats */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         {[
-          { label: 'Tasks', value: member.tasks, icon: <Clock size={12} color={member.color} /> },
-          { label: 'Done', value: member.completed, icon: <CheckCircle size={12} color="#12C479" /> },
+          { label: 'Tasks', value: member.tasks || 0, icon: <Clock size={12} color={member.color} /> },
+          { label: 'Done', value: member.completed || 0, icon: <CheckCircle size={12} color="#12C479" /> },
         ].map(s => (
           <div key={s.label} style={{ flex: 1, background: 'var(--input-bg)', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{s.icon}<span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{s.icon}<span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value > 0 ? s.value : ''}</span></div>
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.label}</span>
           </div>
         ))}
@@ -317,24 +658,73 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Completion</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: member.color }}>{member.tasks ? Math.round((member.completed / member.tasks) * 100) : 0}%</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: member.color }}>{(member.tasks && member.tasks > 0) ? Math.round((member.completed / member.tasks) * 100) + '%' : ''}</span>
         </div>
         <div style={{ height: 4, background: '#E8EAEF', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ width: `${member.tasks ? Math.round((member.completed / member.tasks) * 100) : 0}%`, height: '100%', background: member.color, borderRadius: 4, transition: 'width 0.6s ease' }} />
+          <div style={{ width: (member.tasks && member.tasks > 0) ? `${Math.round((member.completed / member.tasks) * 100)}%` : '100%', height: '100%', background: (member.tasks && member.tasks > 0) ? member.color : '#E8EAEF', borderRadius: 4, transition: 'width 0.6s ease' }} />
         </div>
       </div>
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 20, height: 20, borderRadius: '50%', background: member.addedBy?.color || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-            {member.addedBy?.avatar || 'A'}
-          </div>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{member.addedBy?.name || 'Admin'}</span>
+          {/* Show profile picture if available, otherwise show avatar initials */}
+          {member.addedBy?.avatarImg ? (
+            <img 
+              src={member.addedBy.avatarImg} 
+              alt={member.addedBy.name}
+              style={{ 
+                width: 20, 
+                height: 20, 
+                borderRadius: '50%', 
+                objectFit: 'cover',
+                flexShrink: 0,
+                border: '1.5px solid var(--border-light)'
+              }} 
+            />
+          ) : (
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: member.addedBy?.color || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+              {member.addedBy?.avatar || (member.addedBy?.name ? member.addedBy.name[0].toUpperCase() : 'A')}
+            </div>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {member.addedBy?.name && member.addedBy?.role 
+              ? `${member.addedBy.name.split(' ')[0]} (${member.addedBy.role})`
+              : member.addedBy?.name 
+              ? member.addedBy.name
+              : member.createdBy 
+              ? `Created by ${member.createdBy}` 
+              : 'Added by Admin'}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={handleToggleStatus} style={{ padding: '5px 10px', background: member.status === 'Active' ? '#FEF2F2' : (atLimit ? '#F3F4F6' : '#ECFDF5'), border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: (member.status === 'Inactive' && atLimit) ? 'not-allowed' : 'pointer', color: member.status === 'Active' ? '#EF4444' : (atLimit ? '#9CA3AF' : '#12C479') }} title={member.status === 'Inactive' && atLimit ? 'Plan limit reached — upgrade to activate' : ''}>
-            {member.status === 'Active' ? 'Deactivate' : 'Activate'}
+          <button 
+            onClick={handleToggleStatus} 
+            disabled={member.status === 'Inactive' && (atLimit || daysRemaining > 0)}
+            style={{ 
+              padding: '5px 10px', 
+              background: member.status === 'Active' ? '#FEF2F2' : (atLimit || daysRemaining > 0 ? '#F3F4F6' : '#ECFDF5'), 
+              border: 'none', 
+              borderRadius: 8, 
+              fontSize: 11, 
+              fontWeight: 600, 
+              cursor: (member.status === 'Inactive' && (atLimit || daysRemaining > 0)) ? 'not-allowed' : 'pointer', 
+              color: member.status === 'Active' ? '#EF4444' : (atLimit || daysRemaining > 0 ? '#9CA3AF' : '#12C479'),
+              opacity: (member.status === 'Inactive' && (atLimit || daysRemaining > 0)) ? 0.6 : 1
+            }} 
+            title={
+              member.status === 'Inactive' && atLimit 
+                ? 'Plan limit reached — upgrade to activate' 
+                : member.status === 'Inactive' && daysRemaining > 0
+                ? `Wait ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} to activate`
+                : ''
+            }
+          >
+            {member.status === 'Active' 
+              ? 'Deactivate' 
+              : daysRemaining > 0 
+              ? `${daysRemaining}d` 
+              : 'Activate'}
           </button>
           <button onClick={(e) => { e.stopPropagation(); onEdit(member); }} style={{ padding: '5px 10px', background: '#EEF2FF', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#3B5BFC' }}>
             Edit
@@ -353,15 +743,132 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
   );
 }
 
-function TeamPage({ managementMode = false }) {
-  const { team, saveMember, toggleMemberStatus, financials, roles, currentPlan } = useApp();
+// Track if team has been enriched at least once (persists across component mounts)
+let hasEnrichedTeamOnce = false;
+
+function TeamPage({ managementMode = false, onNavigateToManage, currentUser, setPageFilteredData = null }) {
+  const { team, saveMember, toggleMemberStatus, financials, roles, currentPlan, workspaceId, currentUid } = useApp();
+
+  // Track page load
+  useEffect(() => {
+    monitor.trackPageLoad('team_page');
+  }, []);
+
+  // State to hold enriched team members with profile data
+  const [enrichedTeam, setEnrichedTeam] = useState([]);
+  const [isEnriching, setIsEnriching] = useState(false); // Don't show skeleton initially
+
+  // Load and enrich team members with profile data from Firestore
+  useEffect(() => {
+    console.log('🔄 TeamPage: team prop changed, re-enriching...', team.map(m => ({ id: m.id, name: m.name, status: m.status })));
+    
+    const enrichTeamWithProfiles = async () => {
+      if (!team || team.length === 0) {
+        setEnrichedTeam([]);
+        setIsEnriching(false);
+        hasEnrichedTeamOnce = true;
+        return;
+      }
+
+      // Only show loading skeleton on very first load ever, not on subsequent visits
+      if (!hasEnrichedTeamOnce) {
+        setIsEnriching(true);
+      }
+
+      try {
+        const { getProfile } = await import('../lib/userProfileService');
+        
+        // Enrich each team member with their profile data
+        const enrichedMembers = await Promise.all(
+          team.map(async (member) => {
+            // Only enrich if member has a uid
+            if (!member.uid) {
+              return member;
+            }
+
+            try {
+              const profileData = await getProfile(member.uid);
+              
+              // Also enrich the addedBy field with creator's profile data
+              let enrichedAddedBy = member.addedBy || null;
+              if (member.addedBy?.uid) {
+                try {
+                  const creatorProfile = await getProfile(member.addedBy.uid);
+                  if (creatorProfile) {
+                    enrichedAddedBy = {
+                      ...member.addedBy,
+                      name: creatorProfile.name || member.addedBy.name,
+                      avatarImg: creatorProfile.avatarImg || null,
+                      avatar: member.addedBy.avatar, // Keep original initials as fallback
+                      color: member.addedBy.color,
+                      role: member.addedBy.role,
+                      uid: member.addedBy.uid,
+                    };
+                  }
+                } catch (err) {
+                  console.warn(`⚠️ Failed to load creator profile for ${member.addedBy.uid}:`, err);
+                }
+              }
+              
+              if (profileData) {
+                // Merge profile data with team member data
+                // IMPORTANT: Preserve status and other critical fields from team data
+                const enrichedMember = {
+                  ...member, // Start with all member data (including status)
+                  name: profileData.name || member.name,
+                  phone: profileData.phone || member.phone || '',
+                  location: profileData.location || member.location || '',
+                  about: profileData.about || member.about || '',
+                  avatarImg: profileData.avatarImg || member.avatarImg || null,
+                  userRole: profileData.role || member.userRole || 'member', // Add userRole from profile
+                  // Use enriched addedBy with profile data
+                  addedBy: enrichedAddedBy,
+                  // Explicitly preserve status from team data
+                  status: member.status,
+                };
+                
+                console.log('👤 Enriched member:', { id: member.id, name: member.name, status: member.status, enrichedStatus: enrichedMember.status });
+                
+                // DON'T preload avatars - let the Avatar component handle loading
+                // This prevents unnecessary errors and the Avatar component has proper fallback
+                
+                // DON'T auto-save to Firestore - just enrich for display
+                // This prevents unnecessary writes and role overwrites
+                
+                return enrichedMember;
+              }
+            } catch (err) {
+              console.error(`❌ Error loading profile for member ${member.id}:`, err);
+            }
+            
+            return member;
+          })
+        );
+
+        setEnrichedTeam(enrichedMembers);
+        setIsEnriching(false);
+        hasEnrichedTeamOnce = true; // Mark as enriched - persists across component mounts
+        console.log('📖 Team enriched with profile data:', enrichedMembers.length, 'members');
+      } catch (err) {
+        console.error('❌ Error enriching team with profiles:', err);
+        setEnrichedTeam(team);
+        setIsEnriching(false);
+        hasEnrichedTeamOnce = true;
+      }
+    };
+
+    enrichTeamWithProfiles();
+  }, [team, saveMember]);
+
+  // Use enriched team for display - show team data immediately, don't wait for enrichment
+  const displayTeam = enrichedTeam.length > 0 ? enrichedTeam : team;
 
   // Member limit based on selected plan (default Professional = 15 if no plan selected)
-  const PLAN_LIMITS = { starter: 7, professional: 15, business: 28, lifetime: Infinity, custom: Infinity };
+  const PLAN_LIMITS = { starter: 7, professional: 15, business: 30, enterprise: 50 };
   const memberLimit = currentPlan
-    ? (currentPlan.users === 'Unlimited' || currentPlan.users === 'Custom' ? Infinity : (PLAN_LIMITS[currentPlan.id] ?? currentPlan.users))
+    ? (currentPlan.users === 'Unlimited' || currentPlan.users === 'Custom' ? 0 : (PLAN_LIMITS[currentPlan.id] ?? currentPlan.users))
     : 15;
-  const activeCount = team.filter(m => m.status === 'Active').length;
+  const activeCount = displayTeam.filter(m => m.status === 'Active').length;
   const atLimit = activeCount >= memberLimit;
   const roleNames = roles.map(r => r.name);
   const [filter, setFilter] = useState('Active');
@@ -374,7 +881,20 @@ function TeamPage({ managementMode = false }) {
   const [pageLoading, setPageLoading] = useState(false); // Loading state for pagination
   const membersPerPage = 15;
 
-  const filtered = team.filter(m => {
+  // Check if current user is workspace owner
+  const isWorkspaceOwner = workspaceId && currentUid && workspaceId === `ws_${currentUid}`;
+
+  const filtered = displayTeam.filter(m => {
+    // In management dashboard, only show team members (hide admin and management users)
+    if (managementMode && m.userRole && (m.userRole === 'admin' || m.userRole === 'management')) {
+      return false;
+    }
+    
+    // Hide admin's own card ONLY if NOT workspace owner
+    if (!isWorkspaceOwner && currentUser && currentUser.uid && m.uid === currentUser.uid) {
+      return false;
+    }
+    
     const matchFilter = filter === 'All' || (filter === 'Active' ? m.status === 'Active' : m.status === 'Inactive');
     const matchRole = roleFilter === 'All Roles' || m.role === roleFilter;
     return matchFilter && matchRole;
@@ -384,6 +904,13 @@ function TeamPage({ managementMode = false }) {
   const startIndex = (currentPage - 1) * membersPerPage;
   const endIndex = startIndex + membersPerPage;
   const paginatedMembers = filtered.slice(startIndex, endIndex);
+  
+  // Update filtered data for search - use FULL filtered data, not just paginated
+  useEffect(() => {
+    if (setPageFilteredData) {
+      setPageFilteredData({ team: filtered }); // Search all filtered members, not just current page
+    }
+  }, [filtered.length, filter, roleFilter, setPageFilteredData]);
 
   // Handle page change with loading animation
   const handlePageChange = (newPage) => {
@@ -492,8 +1019,8 @@ function TeamPage({ managementMode = false }) {
         {/* Scrollable Grid inside component */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '18px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            {pageLoading ? (
-              // Skeleton loading for pagination
+            {(pageLoading || isEnriching) ? (
+              // Skeleton loading for pagination or enriching
               <>
                 {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => (
                   <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: 16, border: '1.5px solid var(--border)', padding: '22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -558,8 +1085,10 @@ function TeamPage({ managementMode = false }) {
           member={editMember}
           onClose={() => { setShowModal(false); setEditMember(null); }}
           onSave={saveMember}
-          roles={roleNames}
+          roles={roles}
           managementMode={managementMode}
+          onNavigateToManage={onNavigateToManage}
+          currentUser={currentUser}
         />
       )}
 

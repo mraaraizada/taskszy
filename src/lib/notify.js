@@ -5,14 +5,31 @@
 import { toast } from 'sonner';
 import { createElement } from 'react';
 import {
-  CheckCircle, Trash2, Wallet, Plus, RefreshCw, PauseCircle,
+  CheckCircle, Trash2, Wallet, Plus, RefreshCw, PauseCircle, Hourglass,
   Calendar, UserPlus, UserCheck, User, StickyNote, Lock,
   Send, MessageSquare, RotateCcw, Archive, X, AlertCircle,
-  DollarSign, ClipboardCheck, Shield,
+  ClipboardCheck, Shield,
 } from 'lucide-react';
 
 const SIZE = 16;
 const icon = (Icon, color) => createElement(Icon, { size: SIZE, color, strokeWidth: 2.5 });
+
+// ⭐ Custom Rupee icon component
+const RupeeIcon = ({ size = 16, color = '#7C3AED' }) => 
+  createElement('span', { 
+    style: { 
+      fontSize: size, 
+      fontWeight: 700, 
+      color,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: size,
+      height: size,
+    } 
+  }, '₹');
+
+const rupeeIcon = (color) => createElement(RupeeIcon, { size: SIZE, color });
 
 const OPTS = (extra = {}) => ({ duration: 3000, ...extra });
 
@@ -22,14 +39,14 @@ export const notify = {
   taskUpdated:   (desc)  => toast.success('Task updated',           { description: desc, icon: icon(ClipboardCheck, '#3B5BFC'), ...OPTS() }),
   taskDeleted:   (desc)  => toast.error('Task deleted',             { description: desc, icon: icon(Trash2, '#EF4444'), ...OPTS() }),
   taskStage:     (stage, desc) => toast('Stage updated',            { description: desc, icon: icon(RefreshCw, '#3B5BFC'), ...OPTS() }),
-  taskPaused:    (desc)  => toast('Task paused',                    { description: desc, icon: icon(PauseCircle, '#F97316'), ...OPTS() }),
-  taskResumed:   (desc)  => toast.success('Task resumed',           { description: desc, icon: icon(CheckCircle, '#12C479'), ...OPTS() }),
+  taskPaused:    (desc)  => toast('Task hold',                    { description: desc, icon: icon(Hourglass, '#F97316'), ...OPTS() }),
+  taskResumed:   (desc)  => toast.success('Task active',           { description: desc, icon: icon(CheckCircle, '#12C479'), ...OPTS() }),
   taskScheduled: (desc)  => toast.success('Task scheduled',         { description: desc, icon: icon(Calendar, '#7C3AED'), ...OPTS() }),
   taskUnscheduled: ()    => toast('Scheduled task removed',         { icon: icon(X, '#6B7280'), ...OPTS({ duration: 2500 }) }),
 
   // ── Payment actions ───────────────────────────────────────────────────────
   paymentProcessed: (desc) => toast.success('Payment processed',   { description: desc, icon: icon(Wallet, '#12C479'), ...OPTS({ duration: 3500 }) }),
-  paymentAdded:     (desc) => toast.success('Payment added',       { description: desc, icon: icon(DollarSign, '#7C3AED'), ...OPTS() }),
+  paymentAdded:     (desc) => toast.success('Payment added',       { description: desc, icon: rupeeIcon('#7C3AED'), ...OPTS() }),
   paymentsProcessed: (count, desc) => toast.success(`${count} payment${count > 1 ? 's' : ''} processed`, { description: desc, icon: icon(Wallet, '#12C479'), ...OPTS({ duration: 3500 }) }),
 
   // ── Member actions ────────────────────────────────────────────────────────
@@ -41,6 +58,7 @@ export const notify = {
   // ── Note actions ──────────────────────────────────────────────────────────
   noteSaved:   (desc) => toast.success('Note saved',               { description: desc, icon: icon(StickyNote, '#7C3AED'), ...OPTS({ duration: 2500 }) }),
   noteDeleted: (desc) => toast.error('Note deleted',               { description: desc, icon: icon(Trash2, '#EF4444'), ...OPTS({ duration: 2500 }) }),
+  sheetDeleted: (desc) => toast.error('Sheet deleted',             { description: desc, icon: icon(Trash2, '#EF4444'), ...OPTS({ duration: 2500 }) }),
 
   // ── Auth / profile actions ────────────────────────────────────────────────
   profileUpdated:    () => toast.success('Profile updated',        { icon: icon(User, '#3B5BFC'), ...OPTS({ duration: 2500 }) }),

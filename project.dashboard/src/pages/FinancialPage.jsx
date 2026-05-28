@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Clock, CheckCircle, TrendingUp, ArrowUpRight, Wallet, Download, X, DollarSign, Calendar, Plus, User, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight, ReceiptIndianRupee } from 'lucide-react';
+import { Clock, CheckCircle, TrendingUp, ArrowUpRight, Wallet, Download, X, DollarSign, Calendar, Plus, User, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight, ReceiptIndianRupee, Building2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
 import { FinancialSkeleton } from '../components/Skeleton';
+import { getPaymentsPaginated, getCustomRequestsPaginated, getCouponsOptimized } from '../lib/optimizedPaymentService';
+import { toast } from 'sonner';
+
+// Payment data will be fetched from Firebase
+const MOCK_PAYMENTS = [];
 
 function exportToCSV(rows) {
   const headers = ['Task ID', 'Task Title', 'Member', 'Assigned By', 'Role', 'Stage', 'Due Date', 'Amount', 'Status'];
@@ -665,13 +670,23 @@ function CategoryPaymentModal({ selectedRows, onClose, onConfirm, team }) {
                 const key = `${row.id}-${row.memberName}`;
                 return (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: row.memberColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.memberAvatar}</div>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: row.memberAvatarImg ? 'transparent' : row.memberColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+                      {row.memberAvatarImg ? (
+                        <img src={row.memberAvatarImg} alt={row.memberName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        row.memberAvatar
+                      )}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{row.title}</div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{row.memberName}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>₹</span>
+                      {row.stage && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: STAGE_BG[row.stage] || 'var(--bg-subtle)', color: STAGE_COLORS[row.stage] || 'var(--text-muted)' }}>
+                          {row.stage}
+                        </span>
+                      )}
                       <input
                         type="number"
                         value={taskAmounts[key]}
@@ -747,9 +762,8 @@ function PaymentDetailPanel({ payment, onClose }) {
   }, [onClose]);
 
   const handleDownloadPDF = () => {
-    console.log('Download PDF for payment:', payment);
     // In a real app, this would generate and download a PDF receipt
-    alert('PDF download functionality would be implemented here');
+    toast.info('PDF download functionality coming soon');
   };
 
   return (
@@ -925,24 +939,27 @@ export default function FinancialPage() {
   // Check if Admin A is logged in
   const isAdminA = typeof window !== 'undefined' && localStorage.getItem('userEmail') === 'adminuser@taskzy.io';
   
-  const { tasks, financials, STAGE_COLORS, STAGE_BG, markTaskPaid, team, addTaskHistoryEntry } = useApp();
+  const { tasks, financials, STAGE_COLORS, STAGE_BG, markTaskPaid, team, addTaskHistoryEntry, organizations, globalSearchQuery } = useApp();
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const [selectedRows, setSelectedRows] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [manualPayments, setManualPayments] = useState([]);
+  const [subscriptionPayments, setSubscriptionPayments] = useState([]); // ⭐ Add subscription payments state
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
   const [showCategoryPaymentModal, setShowCategoryPaymentModal] = useState(false);
   const [showCouponPanel, setShowCouponPanel] = useState(false);
+  const [showOrgPanel, setShowOrgPanel] = useState(false);
+  const [pendingOrgCount, setPendingOrgCount] = useState(0);
   
-  // Set default date range to last 30 days
+  // Set default date range to last 30 days (including today)
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(today.getDate() - 30);
+  thirtyDaysAgo.setDate(today.getDate() - 29); // 29 days ago + today = 30 days
   
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(today.toISOString().split('T')[0]);
@@ -957,12 +974,91 @@ export default function FinancialPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
   const [rowsPerPage] = useState(15);
+  
+  // Use real data from Firebase
+  const [useMockData] = useState(false);
 
   // Check if page has been visited before
   const [initialLoading, setInitialLoading] = useState(() => {
     const visited = sessionStorage.getItem('visited_financial');
     return !visited;
   });
+
+  // Load subscription payments with optimized pagination
+  // Load subscription payments with optimized pagination
+  useEffect(() => {
+    let mounted = true;
+    
+    const loadSubscriptionPayments = async () => {
+      try {
+        const result = await getPaymentsPaginated({ pageSize: 100 });
+        
+        if (!mounted) return;
+        
+        const payments = result.payments.map(payment => {
+          const toDate = (dateValue) => {
+            if (!dateValue) return null;
+            if (dateValue instanceof Date) return dateValue;
+            if (typeof dateValue?.toDate === 'function') return dateValue.toDate();
+            if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+              const date = new Date(dateValue);
+              return isNaN(date.getTime()) ? null : date;
+            }
+            return null;
+          };
+          
+          // Use the Razorpay payment ID if available, otherwise use document ID
+          const razorpayPaymentId = payment.paymentId || payment.razorpayPaymentId || null;
+          
+          return {
+            id: payment.id,
+            paymentId: razorpayPaymentId, // Razorpay payment ID (pay_xxx format)
+            documentId: payment.id, // Firestore document ID (ws_xxx format)
+            workspaceId: payment.workspaceId,
+            userId: payment.userId,
+            userName: payment.userInfo?.name || 'N/A',
+            userEmail: payment.userInfo?.email || 'N/A',
+            userPhone: payment.userInfo?.phone || 'N/A',
+            planName: payment.plan?.name || 'N/A',
+            billingCycle: payment.plan?.billingCycle || 'monthly',
+            amount: payment.pricing?.total || 0,
+            couponCode: payment.coupon?.code || null,
+            couponDiscount: payment.coupon?.discount || 0,
+            status: payment.status || 'pending',
+            transactionDate: toDate(payment.transactionDate),
+            orderId: payment.orderId || null,
+            fromHeaderUpgrade: payment.fromHeaderUpgrade || false,
+          };
+        });
+        
+        setSubscriptionPayments(payments);
+      } catch (err) {
+        toast.error('Failed to load payments');
+      }
+    };
+    
+    loadSubscriptionPayments();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Load pending organization count (custom plan requests that are not completed)
+  useEffect(() => {
+    const loadPendingCount = async () => {
+      try {
+        // Use optimized service instead of real-time listener
+        const result = await getCustomRequestsPaginated({ pageSize: 100, status: 'pending' });
+        const pendingCount = result.requests.filter(req => req.status !== 'completed').length;
+        setPendingOrgCount(pendingCount);
+      } catch (err) {
+        toast.error('Failed to load pending requests count');
+      }
+    };
+    
+    loadPendingCount();
+  }, []);
 
   // Initial loading effect
   useEffect(() => {
@@ -987,88 +1083,154 @@ export default function FinancialPage() {
   // Build flat rows: one row per member per task
   const allRows = [];
   const planTypes = ['Starter', 'Professional', 'Business', 'Enterprise'];
-  tasks.forEach(task => {
-    task.members.forEach(m => {
-      allRows.push({
-        id:         task.id,
-        taskId:     task.id,
-        title:      task.title,
-        description: task.description,
-        deadline:   task.deadline,
-        memberName: m.name,
-        memberId:   m.id,
-        memberRole: m.role,
-        memberAvatar: m.avatar,
-        memberColor:  m.color,
-        stage:      m.stage,
-        amount:     m.budget || 0,
-        isPaid:     task.paid || task.stage === 'Complete',
-        taskStage:  task.stage,
-        isManual:   false,
-        assignedBy: 'John Smith',
-        assignedRole: 'Admin',
-        paidOn:     (task.paid || task.stage === 'Complete') ? task.paidOn || new Date().toISOString() : null,
-        category:   task.category || null,
-        planType:   planTypes[Math.floor(Math.random() * planTypes.length)],
-      });
+  const addedPaymentIds = new Set(); // Track added payment IDs to prevent duplicates
+  
+  // Add subscription payments from payments collection
+  subscriptionPayments.forEach(payment => {
+    // Use Razorpay payment ID if available, otherwise use document ID
+    const displayPaymentId = payment.paymentId || payment.documentId || payment.id;
+    const isRazorpayId = payment.paymentId && payment.paymentId.startsWith('pay_');
+    
+    // Skip if this payment was already added (use document ID for deduplication)
+    const dedupeKey = payment.documentId || payment.id;
+    if (addedPaymentIds.has(dedupeKey)) {
+      return;
+    }
+    
+    addedPaymentIds.add(dedupeKey);
+    
+    // Find organization name from workspaceId
+    const organization = organizations?.find(org => org.id === payment.workspaceId);
+    const organizationName = organization?.name || payment.workspaceId || 'Unknown Organization';
+    
+    allRows.push({
+      id: dedupeKey, // Use document ID for React key
+      taskId: null,
+      title: organizationName, // Show organization name in the Organization column
+      description: `Subscription payment for ${payment.planName} plan`,
+      deadline: payment.transactionDate || new Date(),
+      memberName: payment.userName || 'N/A',
+      memberId: null,
+      memberRole: 'Subscription',
+      memberAvatar: organizationName?.substring(0, 2).toUpperCase() || 'OR',
+      memberColor: '#3B5BFC',
+      stage: payment.status === 'completed' ? 'Complete' : 'New',
+      amount: payment.amount || 0,
+      isPaid: payment.status === 'completed',
+      taskStage: payment.status === 'completed' ? 'Complete' : 'New',
+      isManual: false,
+      isSubscription: true,
+      assignedBy: 'System',
+      assignedRole: 'Admin',
+      paidOn: payment.status === 'completed' ? payment.transactionDate?.toISOString() : null,
+      planType: payment.planName || 'N/A',
+      paymentId: displayPaymentId, // Display payment ID (Razorpay ID if available)
+      razorpayPaymentId: payment.paymentId, // Store Razorpay ID separately
+      documentId: payment.documentId || payment.id, // Store document ID separately
+      isRazorpayId: isRazorpayId, // Flag to indicate if it's a proper Razorpay ID
+      memberPhone: payment.userPhone || 'N/A',
+      userPhone: payment.userPhone || 'N/A',
+      userEmail: payment.userEmail || 'N/A',
+      coupon: payment.couponCode || null,
+      couponCode: payment.couponCode || null,
+      orderId: payment.orderId || null,
+      workspaceId: payment.workspaceId || null,
+      organizationName: organizationName,
+      fromHeaderUpgrade: payment.fromHeaderUpgrade || false,
     });
   });
-
-  // Add manual payments
-  manualPayments.forEach(payment => {
-    if (payment.paymentType === 'investment') {
-      // Investment payment
-      allRows.push({
-        id:         payment.taskId,
-        taskId:     payment.taskId,
-        title:      payment.description,
-        description: payment.notes || payment.description,
-        deadline:   payment.dueDate,
-        memberName: payment.investmentCategory,
-        memberId:   null,
-        memberRole: 'Investment',
-        memberAvatar: '💰',
-        memberColor:  '#F97316',
-        stage:      payment.isPaid ? 'Complete' : 'New',
-        amount:     payment.amount,
-        isPaid:     payment.isPaid,
-        taskStage:  payment.isPaid ? 'Complete' : 'New',
-        isManual:   true,
-        isInvestment: true,
-        manualId:   payment.id,
-        assignedBy: payment.assignedBy || 'John Smith',
-        assignedRole: payment.assignedRole || 'Admin',
-        paidOn:     payment.paidOn || null,
+  
+  // Use mock data if enabled, otherwise use real task data
+  if (useMockData) {
+    allRows.push(...MOCK_PAYMENTS);
+  } else {
+    tasks.forEach(task => {
+      task.members.forEach(m => {
+        allRows.push({
+          id:         task.id,
+          taskId:     task.id,
+          title:      task.title,
+          description: task.description,
+          deadline:   task.deadline,
+          memberName: m.name,
+          memberId:   m.id,
+          memberRole: m.role,
+          memberAvatar: m.avatar,
+          memberColor:  m.color,
+          stage:      m.stage,
+          amount:     m.budget || 0,
+          isPaid:     task.paid || task.stage === 'Complete',
+          taskStage:  task.stage,
+          isManual:   false,
+          assignedBy: 'John Smith',
+          assignedRole: 'Admin',
+          paidOn:     (task.paid || task.stage === 'Complete') ? task.paidOn || new Date().toISOString() : null,
+          category:   task.category || null,
+          planType:   planTypes[Math.floor(Math.random() * planTypes.length)],
+        });
       });
-    } else {
-      // Team member payment
-      const member = team.find(m => m.id === payment.memberId);
-      if (member) {
+    });
+  }
+
+  // Add manual payments (only if not using mock data)
+  if (!useMockData) {
+    manualPayments.forEach(payment => {
+      if (payment.paymentType === 'investment') {
+        // Investment payment - map category to get icon
+        const categoryMatch = PAYMENT_CATEGORIES.find(c => c.label === payment.investmentCategory);
+        
         allRows.push({
           id:         payment.taskId,
           taskId:     payment.taskId,
           title:      payment.description,
           description: payment.notes || payment.description,
           deadline:   payment.dueDate,
-          memberName: member.name,
-          memberId:   member.id,
-          memberRole: member.role,
-          memberAvatar: member.avatar,
-          memberColor:  member.color,
+          memberName: payment.investmentCategory,
+          memberId:   null,
+          memberRole: 'Investment',
+          memberAvatar: categoryMatch?.icon || '💰',
+          memberColor:  categoryMatch?.color || '#F97316',
           stage:      payment.isPaid ? 'Complete' : 'New',
           amount:     payment.amount,
           isPaid:     payment.isPaid,
           taskStage:  payment.isPaid ? 'Complete' : 'New',
           isManual:   true,
-          isInvestment: false,
+          isInvestment: true,
           manualId:   payment.id,
           assignedBy: payment.assignedBy || 'John Smith',
           assignedRole: payment.assignedRole || 'Admin',
           paidOn:     payment.paidOn || null,
         });
+      } else {
+        // Team member payment
+        const member = team.find(m => m.id === payment.memberId);
+        if (member) {
+          allRows.push({
+            id:         payment.taskId,
+            taskId:     payment.taskId,
+            title:      payment.description,
+            description: payment.notes || payment.description,
+            deadline:   payment.dueDate,
+            memberName: member.name,
+            memberId:   member.id,
+            memberRole: member.role,
+            memberAvatar: member.avatar,
+            memberColor:  member.color,
+            stage:      payment.isPaid ? 'Complete' : 'New',
+            amount:     payment.amount,
+            isPaid:     payment.isPaid,
+            taskStage:  payment.isPaid ? 'Complete' : 'New',
+            isManual:   true,
+            isInvestment: false,
+            manualId:   payment.id,
+            assignedBy: payment.assignedBy || 'John Smith',
+            assignedRole: payment.assignedRole || 'Admin',
+            paidOn:     payment.paidOn || null,
+          });
+        }
       }
-    }
-  });
+    });
+  }
 
   // Filter by category/role
   const categoryFiltered = selectedCategories.length === 0
@@ -1103,7 +1265,21 @@ export default function FinancialPage() {
   let dateFiltered = memberFiltered;
   if (dateFrom || dateTo) {
     dateFiltered = memberFiltered.filter(r => {
-      const taskDate = new Date(r.deadline);
+      // Handle both Date objects and timestamp strings
+      let taskDate;
+      if (r.deadline instanceof Date) {
+        taskDate = new Date(r.deadline);
+      } else if (typeof r.deadline === 'string' || typeof r.deadline === 'number') {
+        taskDate = new Date(r.deadline);
+      } else {
+        return false; // Skip if invalid date
+      }
+      
+      // Validate date
+      if (isNaN(taskDate.getTime())) {
+        return false;
+      }
+      
       taskDate.setHours(0, 0, 0, 0);
       
       let matchesDate = true;
@@ -1130,11 +1306,44 @@ export default function FinancialPage() {
       ? dateFiltered.filter(r => !r.isPaid)
       : dateFiltered.filter(r => r.isPaid);
 
-  // Pending first, paid last
-  const sorted = [
-    ...statusFiltered.filter(r => !r.isPaid),
-    ...statusFiltered.filter(r =>  r.isPaid),
-  ];
+  // Filter by global search query (organization name)
+  const searchFiltered = globalSearchQuery
+    ? statusFiltered.filter(r => 
+        r.title?.toLowerCase().includes(globalSearchQuery.toLowerCase()) ||
+        r.organizationName?.toLowerCase().includes(globalSearchQuery.toLowerCase())
+      )
+    : statusFiltered;
+
+  // Sort by date (most recent first), then by status (pending first, paid last)
+  const sorted = [...searchFiltered].sort((a, b) => {
+    // First sort by payment status (pending before paid)
+    if (a.isPaid !== b.isPaid) {
+      return a.isPaid ? 1 : -1;
+    }
+    
+    // Then sort by date (most recent first)
+    // Handle both transactionDate (subscription payments) and deadline (task payments)
+    const getDate = (payment) => {
+      if (payment.transactionDate) {
+        return payment.transactionDate instanceof Date 
+          ? payment.transactionDate.getTime() 
+          : new Date(payment.transactionDate).getTime();
+      }
+      if (payment.deadline) {
+        return new Date(payment.deadline).getTime();
+      }
+      return 0;
+    };
+    
+    const dateA = getDate(a);
+    const dateB = getDate(b);
+    
+    // If dates are invalid, put them at the end
+    if (isNaN(dateA) || dateA === 0) return 1;
+    if (isNaN(dateB) || dateB === 0) return -1;
+    
+    return dateB - dateA; // Descending order (newest first)
+  });
 
   const totalBudget  = statusFiltered.reduce((s, r) => s + r.amount, 0);
   const totalPaid    = statusFiltered.filter(r => r.isPaid).reduce((s, r) => s + r.amount, 0);
@@ -1299,7 +1508,6 @@ export default function FinancialPage() {
   const handleCategoryPayment = (categoryData) => {
     // Store category payment data with tasks
     // This would typically update the context/state to mark these tasks with the category
-    console.log('Category Payment Created:', categoryData);
     
     // For now, we'll just close the modal and clear selection
     // In a real app, you'd update the tasks with category information
@@ -1395,9 +1603,25 @@ export default function FinancialPage() {
                       if (dateRangeFilter === range.value) return;
                       setDateRangeFilter(range.value);
                       const today = new Date();
-                      if (range.value === 'all') { setDateFrom(''); setDateTo(''); }
-                      else if (range.value === '7days') { const d = new Date(today); d.setDate(today.getDate() - 7); setDateFrom(d.toISOString().split('T')[0]); setDateTo(today.toISOString().split('T')[0]); }
-                      else if (range.value === '30days') { const d = new Date(today); d.setDate(today.getDate() - 30); setDateFrom(d.toISOString().split('T')[0]); setDateTo(today.toISOString().split('T')[0]); }
+                      today.setHours(23, 59, 59, 999); // Set to end of today
+                      if (range.value === 'all') { 
+                        setDateFrom(''); 
+                        setDateTo(''); 
+                      }
+                      else if (range.value === '7days') { 
+                        const d = new Date();
+                        d.setDate(d.getDate() - 6); // 6 days ago + today = 7 days
+                        d.setHours(0, 0, 0, 0);
+                        setDateFrom(d.toISOString().split('T')[0]); 
+                        setDateTo(today.toISOString().split('T')[0]); 
+                      }
+                      else if (range.value === '30days') { 
+                        const d = new Date();
+                        d.setDate(d.getDate() - 29); // 29 days ago + today = 30 days
+                        d.setHours(0, 0, 0, 0);
+                        setDateFrom(d.toISOString().split('T')[0]); 
+                        setDateTo(today.toISOString().split('T')[0]); 
+                      }
                     }}
                     style={{
                       padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -1452,44 +1676,6 @@ export default function FinancialPage() {
               </div>
             )}
             <button
-              onClick={() => {
-                const dataToExport = selectedRows.length > 0 ? selectedRows : sorted;
-                const csv = [
-                  ['Organization', 'User Name', 'Phone Number', 'Payment ID', 'Date & Time', 'Coupon', 'Plan', 'Amount', 'Status'],
-                  ...dataToExport.map(row => [
-                    row.title || 'N/A',
-                    row.memberName,
-                    row.memberPhone || '+1 (555) 000-0000',
-                    `#${row.id}`,
-                    new Date(row.deadline).toLocaleString('en-US'),
-                    row.coupon || '—',
-                    row.planType || 'Starter',
-                    `₹${row.amount.toLocaleString()}`,
-                    row.isPaid ? 'Paid' : 'Pending'
-                  ])
-                ].map(row => row.join(',')).join('\n');
-                
-                const blob = new Blob([csv], { type: 'text/csv' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `payments-${new Date().toISOString().split('T')[0]}.csv`;
-                a.click();
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px', borderRadius: 8,
-                background: 'linear-gradient(135deg, #12C479, #059669)',
-                border: 'none', color: '#fff', fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', boxShadow: '0 2px 8px rgba(18,196,121,0.25)',
-                transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              <Download size={12} /> Export Excel {selectedRows.length > 0 && `(${selectedRows.length})`}
-            </button>
-            <button
               onClick={() => setShowCouponPanel(true)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
@@ -1503,6 +1689,43 @@ export default function FinancialPage() {
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
               <Plus size={12} /> Coupon
+            </button>
+            <button
+              onClick={() => setShowOrgPanel(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 12px', borderRadius: 8,
+                background: 'linear-gradient(135deg, #3B5BFC, #2142D9)',
+                border: 'none', color: '#fff', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(59,91,252,0.25)',
+                transition: 'opacity 0.15s',
+                position: 'relative',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              <Building2 size={12} /> Organization
+              {pendingOrgCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  background: '#EF4444',
+                  color: '#fff',
+                  fontSize: 9,
+                  fontWeight: 800,
+                  padding: '2px 5px',
+                  borderRadius: 10,
+                  minWidth: 16,
+                  height: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(239,68,68,0.4)',
+                }}>
+                  {pendingOrgCount}
+                </span>
+              )}
             </button>
           </div>
           <div style={{ display: 'flex', gap: 10, marginLeft: 16 }}>
@@ -1556,29 +1779,15 @@ export default function FinancialPage() {
 
         {/* Column headers */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '50px 1.5fr 1.2fr 1.2fr 1fr 1.3fr 1fr 0.9fr 1fr',
+          display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1.2fr 1fr 1.3fr 1fr 0.9fr 1fr',
           padding: '10px 20px',
           borderBottom: '1.5px solid var(--border-light)',
           background: 'var(--bg-subtle)',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <input
-              type="checkbox"
-              checked={selectedRows.length > 0 && selectedRows.length === sorted.length}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setSelectedRows(sorted);
-                } else {
-                  setSelectedRows([]);
-                }
-              }}
-              style={{ width: 16, height: 16, cursor: 'pointer' }}
-            />
-          </div>
           {['Organization', 'User Name', 'Phone Number', 'Payment ID', 'Date & Time', 'Coupon', 'Plan', 'Amount'].map((h, i) => (
-            <div key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: i === 7 ? 'right' : 'left', paddingLeft: i === 0 ? 16 : 0 }}>
-              {h} {i === 0 && selectedRows.length > 0 && <span style={{ color: '#3B5BFC', marginLeft: 4, fontWeight: 800 }}>₹{selectedRows.reduce((sum, row) => sum + row.amount, 0).toLocaleString()}</span>}
+            <div key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: i === 7 ? 'right' : 'left' }}>
+              {h} {i === 0 && selectedRows.length > 0 && <span style={{ color: '#3B5BFC', marginLeft: 4, fontWeight: 800 }}>({selectedRows.length}) ₹{selectedRows.reduce((sum, row) => sum + row.amount, 0).toLocaleString()}</span>}
             </div>
           ))}
         </div>
@@ -1604,7 +1813,7 @@ export default function FinancialPage() {
                 <div key={key} 
                   onClick={() => toggleRow(row)}
                   style={{
-                    display: 'grid', gridTemplateColumns: '50px 1.5fr 1.2fr 1.2fr 1fr 1.3fr 1fr 0.9fr 1fr',
+                    display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1.2fr 1fr 1.3fr 1fr 0.9fr 1fr',
                     alignItems: 'center',
                     padding: '14px 20px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
@@ -1615,45 +1824,32 @@ export default function FinancialPage() {
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-subtle)'; }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isSelected ? '#EEF2FF' : 'var(--bg-surface)'; }}
                 >
-                  {/* Checkbox */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleRow(row)}
-                      style={{ width: 16, height: 16, cursor: 'pointer' }}
-                    />
-                  </div>
-
                   {/* Organization */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, paddingLeft: 16 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: row.memberColor || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                      {row.memberAvatar || (row.title ? row.title.substring(0, 2).toUpperCase() : 'OR')}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', wordWrap: 'break-word', lineHeight: '1.4' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal', textTransform: 'capitalize' }}>
                         {row.title || 'N/A'}
                       </div>
                     </div>
                   </div>
 
                   {/* User Name */}
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', wordWrap: 'break-word', lineHeight: '1.4' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal' }}>
                     {row.memberName}
                   </div>
 
                   {/* Phone Number */}
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, wordWrap: 'break-word', lineHeight: '1.4' }}>
-                    {row.memberPhone || '+1 (555) 000-0000'}
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal' }}>
+                    {row.userPhone || row.memberPhone || 'N/A'}
                   </div>
 
                   {/* Payment ID */}
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, wordWrap: 'break-word', lineHeight: '1.4' }}>
-                    #{row.id}
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal', wordBreak: 'break-all' }}>
+                    {row.isSubscription ? (row.paymentId || row.id) : `#${row.id}`}
                   </div>
 
                   {/* Date & Time */}
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, wordWrap: 'break-word', lineHeight: '1.4' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal' }}>
                     {new Date(row.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                       {new Date(row.deadline).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -1661,7 +1857,7 @@ export default function FinancialPage() {
                   </div>
 
                   {/* Coupon */}
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, wordWrap: 'break-word', lineHeight: '1.4' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal' }}>
                     {row.coupon || '—'}
                   </div>
 
@@ -1674,15 +1870,19 @@ export default function FinancialPage() {
                       borderRadius: 6,
                       background: row.planType === 'Starter' ? '#FEF3C7' : row.planType === 'Professional' ? '#DBEAFE' : row.planType === 'Business' ? '#F3E8FF' : '#FFF7ED',
                       color: row.planType === 'Starter' ? '#D97706' : row.planType === 'Professional' ? '#1D4ED8' : row.planType === 'Business' ? '#9333EA' : '#F97316',
-                      display: 'inline-block'
+                      display: 'inline-block',
+                      whiteSpace: 'nowrap'
                     }}>
                       {row.planType || 'Starter'}
                     </span>
                   </div>
 
                   {/* Amount */}
-                  <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 700, color: row.isPaid ? '#12C479' : '#6B7280', wordWrap: 'break-word', lineHeight: '1.4' }}>
+                  <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 700, color: row.isPaid ? '#12C479' : '#6B7280', wordWrap: 'break-word', lineHeight: '1.4', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                     ₹ {row.amount.toLocaleString()}
+                    {row.isSubscription && !row.fromHeaderUpgrade && (
+                      <ArrowUpRight size={14} color="#3B5BFC" strokeWidth={2.5} />
+                    )}
                   </div>
                 </div>
               );
@@ -1750,6 +1950,288 @@ export default function FinancialPage() {
           />
         </>
       )}
+
+      {showOrgPanel && (
+        <>
+          <div 
+            onClick={() => setShowOrgPanel(false)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 999,
+            }}
+          />
+          <OrganizationPanel
+            onClose={() => setShowOrgPanel(false)}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function OrganizationPanel({ onClose }) {
+  const { refreshOrganizations, organizations } = useApp();
+  const [loading, setLoading] = useState(false);
+  const [displayCount, setDisplayCount] = useState(10); // Show 10 organizations initially
+  const [customRequests, setCustomRequests] = useState([]);
+
+  // Load custom plan requests from organizations context
+  useEffect(() => {
+    if (organizations && organizations.length > 0) {
+      console.log('📊 Loading custom requests from organizations:', organizations.length);
+      
+      // Filter organizations that have customPlanRequest
+      const requests = organizations
+        .filter(org => org.customPlanRequest)
+        .map(org => ({
+          id: org.id,
+          workspaceId: org.id,
+          email: org.customPlanRequest.email || org.ownerEmail || 'N/A',
+          description: org.customPlanRequest.description || org.customPlanRequest.message || 'No description available',
+          requestDate: org.requestDate || org.createdAt || null,
+          isCompleted: org.isCompleted || false,
+          status: org.customPlanRequest.status || 'pending',
+        }));
+      
+      console.log('📊 Processed custom requests from organizations:', requests.length);
+      setCustomRequests(requests);
+    } else {
+      console.warn('⚠️ No organizations available in context');
+      setCustomRequests([]);
+    }
+  }, [organizations]);
+
+  // Paginated requests
+  const displayedRequests = customRequests.slice(0, displayCount);
+  const hasMore = displayCount < customRequests.length;
+
+  const handleLoadMore = () => {
+    setDisplayCount(prev => prev + 10); // Load 10 more
+  };
+
+  const handleMarkComplete = async (requestId) => {
+    try {
+      setLoading(true);
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
+      // Update workspace document to mark customPlanRequest as completed
+      await updateDoc(doc(db, 'workspaces', requestId), {
+        'customPlanRequest.status': 'completed',
+        'customPlanRequest.completedAt': new Date().toISOString(),
+        isCompleted: true,
+      });
+      
+      toast.success('Request marked as complete');
+      
+      // Refresh organizations in the main context
+      if (refreshOrganizations) {
+        await refreshOrganizations();
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('❌ Failed to mark as complete:', err);
+      toast.error('Failed to mark as complete');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 480,
+      height: '100%',
+      background: '#fff',
+      boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+      zIndex: 1000,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '24px 28px', borderBottom: '1px solid var(--border-light)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            Organizations
+          </div>
+          <button onClick={onClose} style={{ background: 'var(--input-bg)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <X size={16} color="var(--text-secondary)" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Loading requests...</div>
+          </div>
+        ) : customRequests.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+            <Building2 size={48} color="var(--border)" style={{ marginBottom: 16 }} />
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+              No custom plan requests yet
+            </div>
+            <div style={{ fontSize: 12 }}>
+              Requests will appear here
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {displayedRequests.map(org => {
+                return (
+                  <div
+                    key={org.id}
+                    style={{
+                      padding: '18px',
+                      background: 'var(--bg-surface)',
+                      border: '1.5px solid var(--border)',
+                      borderRadius: 12,
+                      transition: 'all 0.15s',
+                      position: 'relative',
+                    }}
+                  >
+                    {/* Date and Time - Top Right Corner */}
+                    <div style={{ 
+                      position: 'absolute', 
+                      top: 12, 
+                      right: 12, 
+                      fontSize: 10, 
+                      color: 'var(--text-muted)', 
+                      textAlign: 'right',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {org.requestDate ? (
+                        <>
+                          {org.requestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {org.requestDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </>
+                      ) : 'N/A'}
+                    </div>
+
+                    {/* Completion Badge */}
+                    {org.isCompleted && (
+                      <div style={{ marginBottom: 12 }}>
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                          background: '#ECFDF5',
+                          color: '#12C479',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}>
+                          <CheckCircle size={10} /> Complete
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Email - Without Icon */}
+                    <div style={{ marginBottom: 12, paddingRight: 80 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        {typeof org.email === 'string' ? org.email : 'N/A'}
+                      </div>
+                    </div>
+
+                    {/* Description Box */}
+                    <div style={{ 
+                      marginBottom: 12, 
+                      padding: '12px 14px', 
+                      background: 'var(--bg-subtle)', 
+                      borderRadius: 8, 
+                      border: '1px solid var(--border-light)' 
+                    }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {typeof org.description === 'string' ? org.description : 'No description available'}
+                      </div>
+                    </div>
+
+                    {/* Mark Complete Button - Only show if NOT completed */}
+                    {!org.isCompleted && (
+                      <button
+                        onClick={() => handleMarkComplete(org.id)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 16px',
+                          background: 'linear-gradient(135deg, #12C479, #059669)',
+                          border: 'none',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: '#fff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          boxShadow: '0 2px 8px rgba(18,196,121,0.25)',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(18,196,121,0.35)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(18,196,121,0.25)';
+                        }}
+                      >
+                        <CheckCircle size={14} /> Complete
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Load More Button */}
+            {hasMore && (
+              <button
+                onClick={handleLoadMore}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  marginTop: 16,
+                  background: 'var(--bg-surface)',
+                  border: '1.5px solid var(--border)',
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'var(--bg-hover)';
+                  e.currentTarget.style.borderColor = '#3B5BFC';
+                  e.currentTarget.style.color = '#3B5BFC';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'var(--bg-surface)';
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+              >
+                Load More
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1762,46 +2244,154 @@ function CouponPanel({ onClose }) {
   const [durationValue, setDurationValue] = useState('');
   const [amount, setAmount] = useState('');
   const [planType, setPlanType] = useState('all');
-  const [usageLimit, setUsageLimit] = useState('');
-  const [coupons, setCoupons] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('taskzy_coupons') || '[]'); } catch { return []; }
-  });
+  const [usageLimit, setUsageLimit] = useState(''); // Per workspace limit
+  const [totalCountLimit, setTotalCountLimit] = useState(''); // Total count limit across all workspaces
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false); // Toggle create form visibility
+  const [couponError, setCouponError] = useState(''); // Error message for duplicate coupon
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false); // Loading state for duplicate check
 
-  // Persist coupons to localStorage whenever they change
+  // Load coupons from Firestore on mount
   useEffect(() => {
-    try { localStorage.setItem('taskzy_coupons', JSON.stringify(coupons)); } catch {}
-  }, [coupons]);
+    const loadCoupons = async () => {
+      try {
+        const result = await getCouponsOptimized(100);
+        setCoupons(result);
+        setLoading(false);
+      } catch (err) {
+        toast.error('Failed to load coupons');
+        setLoading(false);
+      }
+    };
+    
+    loadCoupons();
+  }, []);
 
-  const handleCreate = () => {
+  // Check for duplicate coupon code while typing
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!couponText.trim()) {
+        setCouponError('');
+        return;
+      }
+
+      setCheckingDuplicate(true);
+      
+      try {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        
+        const couponsRef = collection(db, 'coupons');
+        const codeToCheck = couponText.trim().toUpperCase();
+        const q = query(couponsRef, where('code', '==', codeToCheck));
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+          setCouponError('Coupon code already exists');
+        } else {
+          setCouponError('');
+        }
+      } catch (err) {
+        // Silent error handling
+      } finally {
+        setCheckingDuplicate(false);
+      }
+    };
+
+    // Debounce the check by 500ms
+    const timeoutId = setTimeout(checkDuplicate, 500);
+    return () => clearTimeout(timeoutId);
+  }, [couponText]);
+
+  const handleCreate = async () => {
+    // Validate coupon code is not empty
+    if (!couponText.trim()) {
+      setCouponError('Coupon code is required');
+      return;
+    }
+    
     const newCoupon = {
-      id: Date.now(),
       code: couponText,
       type: discountType,
       value: discountType === 'percentage' ? parseInt(discountValue) : parseInt(amount),
       duration: discountType !== 'percentage' ? { value: parseInt(durationValue), unit: durationUnit } : null,
       plan: planType,
       used: 0,
-      limit: usageLimit ? parseInt(usageLimit) : null,
+      totalUsed: 0, // Total uses across all workspaces
+      usageByWorkspace: {}, // Track usage per workspace
+      limit: usageLimit ? parseInt(usageLimit) : null, // Usage limit per workspace
+      totalCountLimit: totalCountLimit ? parseInt(totalCountLimit) : null, // Total count limit across all workspaces
       active: true,
+      createdAt: new Date(),
     };
-    setCoupons(prev => [...prev, newCoupon]);
-    setCouponText('');
-    setDiscountValue('');
-    setDurationValue('');
-    setAmount('');
-    setUsageLimit('');
+    
+    try {
+      const { collection, addDoc, serverTimestamp, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
+      // Check if coupon code already exists (case-insensitive)
+      const couponsRef = collection(db, 'coupons');
+      const codeToCheck = couponText.trim().toUpperCase();
+      const q = query(couponsRef, where('code', '==', codeToCheck));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        setCouponError('Coupon code already exists');
+        return;
+      }
+      
+      await addDoc(collection(db, 'coupons'), {
+        ...newCoupon,
+        code: codeToCheck, // Store in uppercase
+        createdAt: serverTimestamp(),
+      });
+      
+      toast.success('Coupon created successfully');
+      
+      // Reset form
+      setCouponText('');
+      setDiscountValue('');
+      setDurationValue('');
+      setAmount('');
+      setUsageLimit('');
+      setTotalCountLimit('');
+      setCouponError('');
+    } catch (err) {
+      setCouponError('Failed to create coupon');
+      toast.error('Failed to create coupon');
+    }
   };
 
   const isFormValid = couponText && (
     discountType === 'percentage' ? discountValue : (durationValue && amount)
   );
 
-  const toggleCouponStatus = (id) => {
-    setCoupons(prev => prev.map(c => c.id === id ? { ...c, active: !c.active } : c));
+  const toggleCouponStatus = async (id) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
+      const coupon = coupons.find(c => c.id === id);
+      await updateDoc(doc(db, 'coupons', id), {
+        active: !coupon.active
+      });
+      toast.success('Coupon status updated');
+    } catch (err) {
+      toast.error('Failed to update coupon status');
+    }
   };
 
-  const deleteCoupon = (id) => {
-    setCoupons(prev => prev.filter(c => c.id !== id));
+  const deleteCoupon = async (id) => {
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
+      await deleteDoc(doc(db, 'coupons', id));
+      toast.success('Coupon deleted successfully');
+    } catch (err) {
+      toast.error('Failed to delete coupon');
+    }
   };
 
   return (
@@ -1830,9 +2420,143 @@ function CouponPanel({ onClose }) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
-          {/* Create New Coupon Section */}
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Create New Coupon</div>
+          
+          {/* Created Coupons List - Hidden when create form is shown */}
+          {!showCreateForm && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Created Coupons
+                    {coupons.length > 0 && (
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '2px 8px', borderRadius: 10 }}>
+                        {coupons.length}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* + Button to show create form */}
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+                  }}
+                >
+                  <Plus size={14} /> New Coupon
+                </button>
+              </div>
+            
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 12 }}>
+                Loading coupons...
+              </div>
+            ) : coupons.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  No coupons yet. Create your first coupon!
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {coupons.map(coupon => (
+                  <div key={coupon.id} style={{
+                    padding: '14px',
+                    border: `1.5px solid ${coupon.active ? 'var(--border)' : '#F3F4F6'}`,
+                    borderRadius: 10,
+                    background: coupon.active ? 'var(--bg-surface)' : '#F9FAFB',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: coupon.active ? '#7C3AED' : '#9CA3AF', letterSpacing: '0.5px' }}>{coupon.code}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
+                          {coupon.type === 'percentage'
+                            ? `${coupon.value}% off`
+                            : `${coupon.duration?.value} ${coupon.duration?.unit} • ₹${coupon.value?.toLocaleString()}`
+                          }
+                        </div>
+                        <div style={{ marginTop: 5 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 8, background: '#EEF2FF', color: '#3B5BFC', textTransform: 'capitalize' }}>
+                            {coupon.plan === 'all' ? 'All Plans' : coupon.plan}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                        <button
+                          onClick={() => toggleCouponStatus(coupon.id)}
+                          style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: coupon.active ? '#ECFDF5' : '#FEF2F2', color: coupon.active ? '#12C479' : '#EF4444', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {coupon.active ? 'Active' : 'Inactive'}
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {/* Total Count Badge - Purple */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: '#F5F3FF', border: '1px solid #E9D5FF' }}>
+                        <span style={{ fontSize: 10, color: '#6B7280' }}>Count:</span>
+                        <span style={{ fontWeight: 700, color: '#7C3AED', fontSize: 12 }}>
+                          {coupon.totalUsed || 0}
+                          {coupon.totalCountLimit && <span style={{ color: '#9CA3AF' }}> / {coupon.totalCountLimit}</span>}
+                        </span>
+                      </div>
+                      
+                      {/* Total Count Limit Badge - if limit exists */}
+                      {coupon.totalCountLimit && (
+                        <div style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: '#F5F3FF', color: '#7C3AED', fontWeight: 600, border: '1px solid #E9D5FF' }}>
+                          Limit: {coupon.totalCountLimit}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Create New Coupon Form - Shown when + button clicked */}
+          {showCreateForm && (
+            <div style={{ padding: '20px', background: 'var(--bg-subtle)', borderRadius: 12, border: '1.5px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => setShowCreateForm(false)}
+                    style={{ 
+                      background: 'none', 
+                      border: 'none', 
+                      cursor: 'pointer', 
+                      padding: 4, 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      color: 'var(--text-secondary)',
+                      borderRadius: 6,
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    title="Back to coupons list"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Create New Coupon</div>
+                </div>
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+                >
+                  <X size={16} color="var(--text-muted)" />
+                </button>
+              </div>
             
             {/* Coupon Code */}
             <div style={{ marginBottom: 16 }}>
@@ -1842,21 +2566,21 @@ function CouponPanel({ onClose }) {
               <input
                 type="text"
                 value={couponText}
-                onChange={e => setCouponText(e.target.value.toUpperCase())}
+                onChange={e => { setCouponText(e.target.value.toUpperCase()); }}
                 placeholder="e.g., SAVE20"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  border: '1.5px solid var(--border)',
+                  border: `1.5px solid ${couponError ? '#FCA5A5' : 'var(--border)'}`,
                   borderRadius: 8,
                   fontSize: 12,
                   color: 'var(--text-primary)',
                   outline: 'none',
-                  background: 'var(--input-bg)',
+                  background: couponError ? '#FEF2F2' : 'var(--input-bg)',
                   boxSizing: 'border-box',
                 }}
-                onFocus={e => e.target.style.borderColor = '#3B5BFC'}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                onFocus={e => e.target.style.borderColor = couponError ? '#FCA5A5' : '#3B5BFC'}
+                onBlur={e => e.target.style.borderColor = couponError ? '#FCA5A5' : 'var(--border)'}
               />
             </div>
 
@@ -2022,16 +2746,17 @@ function CouponPanel({ onClose }) {
               </div>
             </div>
 
-            {/* Usage Limit */}
+            {/* Usage Limit Per Workspace */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                USAGE LIMIT (Optional)
+                USAGE LIMIT PER WORKSPACE (Optional)
               </label>
               <input
                 type="number"
                 value={usageLimit}
                 onChange={e => setUsageLimit(e.target.value)}
-                placeholder="e.g., 100"
+                placeholder="e.g., 2"
+                min="0"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -2046,10 +2771,46 @@ function CouponPanel({ onClose }) {
                 onFocus={e => e.target.style.borderColor = '#3B5BFC'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                How many times <strong>each workspace</strong> can use this coupon. Leave empty for unlimited per workspace.
+              </div>
+            </div>
+
+            {/* Total Count Limit */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                TOTAL COUNT LIMIT (Optional)
+              </label>
+              <input
+                type="number"
+                value={totalCountLimit}
+                onChange={e => setTotalCountLimit(e.target.value)}
+                placeholder="e.g., 10"
+                min="0"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1.5px solid var(--border)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  background: 'var(--input-bg)',
+                  boxSizing: 'border-box',
+                }}
+                onFocus={e => e.target.style.borderColor = '#7C3AED'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                Maximum total uses <strong>across all workspaces</strong>. Leave empty for unlimited total uses.
+              </div>
             </div>
 
             <button
-              onClick={handleCreate}
+              onClick={() => {
+                handleCreate();
+                setShowCreateForm(false); // Close form after creating
+              }}
               disabled={!isFormValid}
               style={{
                 width: '100%',
@@ -2065,63 +2826,8 @@ function CouponPanel({ onClose }) {
             >
               Create Coupon
             </button>
-          </div>
-
-          {/* Created Coupons List */}
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
-              Created Coupons
-              {coupons.length > 0 && (
-                <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '2px 8px', borderRadius: 10 }}>
-                  {coupons.length}
-                </span>
-              )}
             </div>
-            {coupons.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 12 }}>
-                No coupons created yet
-              </div>
-            ) : coupons.map(coupon => (
-              <div key={coupon.id} style={{
-                padding: '14px',
-                border: `1.5px solid ${coupon.active ? 'var(--border)' : '#F3F4F6'}`,
-                borderRadius: 10,
-                marginBottom: 12,
-                background: coupon.active ? 'var(--bg-surface)' : '#F9FAFB',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: coupon.active ? '#7C3AED' : '#9CA3AF', letterSpacing: '0.5px' }}>{coupon.code}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
-                      {coupon.type === 'percentage'
-                        ? `${coupon.value}% off`
-                        : `${coupon.duration?.value} ${coupon.duration?.unit} • ₹${coupon.value?.toLocaleString()}`
-                      }
-                    </div>
-                    <div style={{ marginTop: 5 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 8, background: '#EEF2FF', color: '#3B5BFC', textTransform: 'capitalize' }}>
-                        {coupon.plan === 'all' ? 'All Plans' : coupon.plan}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                    <button
-                      onClick={() => toggleCouponStatus(coupon.id)}
-                      style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: coupon.active ? '#ECFDF5' : '#FEF2F2', color: coupon.active ? '#12C479' : '#EF4444', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      {coupon.active ? 'Active' : 'Inactive'}
-                    </button>
-                    <button onClick={() => deleteCoupon(coupon.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }} title="Delete coupon">
-                      <X size={13} color="#9CA3AF" />
-                    </button>
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                  Used: <span style={{ fontWeight: 700 }}>{coupon.used}</span>{coupon.limit ? ` / ${coupon.limit}` : ' (Unlimited)'}
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       </div>
   );

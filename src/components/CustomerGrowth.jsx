@@ -1,27 +1,51 @@
 import { TrendingUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
-export default function CustomerGrowth({ groupBy = 'tag' }) {
+export default function CustomerGrowth({ selectedCategory = null, selectedTags = null, dateFrom = '', dateTo = '' }) {
   const { tasks } = useApp();
 
+  // Filter tasks based on selected category, tags, and date range
+  const filteredTasks = tasks.filter(t => {
+    // Category filter - handle both single value and array
+    if (selectedCategory) {
+      const categories = Array.isArray(selectedCategory) ? selectedCategory : [selectedCategory];
+      if (categories.length > 0 && !categories.includes(t.category?.label)) {
+        return false;
+      }
+    }
+    
+    // Tags filter
+    if (selectedTags && selectedTags.length > 0) {
+      const hasMatchingTag = (t.tags || []).some(tag => selectedTags.includes(tag.label));
+      if (!hasMatchingTag) return false;
+    }
+    
+    // Date range filter
+    if (dateFrom && dateTo) {
+      const taskDate = t.createdDate ? new Date(t.createdDate) : new Date(t.deadline);
+      const fromDate = new Date(dateFrom);
+      const toDate = new Date(dateTo);
+      if (taskDate < fromDate || taskDate > toDate) return false;
+    }
+    
+    return true;
+  });
+
+  // Always show by tag, not affected by view by option
   const tagMap = {};
-  tasks.forEach(t => {
-    (t.tags || []).forEach(tag => {
-      if (!tagMap[tag.label]) tagMap[tag.label] = { name: tag.label, count: 0, color: tag.color };
-      tagMap[tag.label].count++;
-    });
+  filteredTasks.forEach(t => {
+    if (t.tags && t.tags.length > 0) {
+      t.tags.forEach(tag => {
+        if (!tagMap[tag.label]) tagMap[tag.label] = { name: tag.label, count: 0, color: tag.color };
+        tagMap[tag.label].count++;
+      });
+    }
   });
 
-  const catMap = {};
-  tasks.forEach(t => {
-    const cat = t.category?.label || 'Other';
-    const color = t.category?.color || '#C7D4FF';
-    if (!catMap[cat]) catMap[cat] = { name: cat, count: 0, color };
-    catMap[cat].count++;
-  });
-
-  // Use real data from tasks
-  const items = Object.values(groupBy === 'tag' ? tagMap : catMap).sort((a, b) => b.count - a.count);
+  // Use real data from tasks - only top 5
+  const items = Object.values(tagMap)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
     
   const max = Math.max(...items.map(i => i.count), 1);
   const total = items.reduce((s, i) => s + i.count, 0);
@@ -32,7 +56,7 @@ export default function CustomerGrowth({ groupBy = 'tag' }) {
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Task Growth</h2>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{groupBy === 'tag' ? 'Tags' : 'Categories'} by task count</p>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Tags by task count</p>
       </div>
 
       {/* Bubble row */}
@@ -47,7 +71,7 @@ export default function CustomerGrowth({ groupBy = 'tag' }) {
       ) : (
       <>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 10, marginBottom: 20, height: 90 }}>
-        {items.slice(0, 5).map(item => {
+        {items.map(item => {
           const size = Math.round(32 + (item.count / max) * 52);
           return (
             <div key={item.name} title={`${item.name}: ${item.count}`} style={{
@@ -70,7 +94,7 @@ export default function CustomerGrowth({ groupBy = 'tag' }) {
 
       {/* List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        {items.slice(0, 5).map(item => (
+        {items.map(item => (
           <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{item.name}</span>

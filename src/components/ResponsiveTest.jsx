@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Monitor, Tablet, Smartphone, Maximize2 } from 'lucide-react';
 
 /**
@@ -26,13 +26,13 @@ export default function ResponsiveTest() {
         </h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div className="show-mobile" style={{ padding: '8px 16px', background: '#3B5BFC', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-            📱 Mobile (< 640px)
+            [Phone] Mobile (< 640px)
           </div>
           <div className="hide-mobile hide-desktop" style={{ padding: '8px 16px', background: '#3B5BFC', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-            📱 Tablet (640-991px)
+            [Phone] Tablet (640-991px)
           </div>
           <div className="hide-mobile hide-tablet" style={{ padding: '8px 16px', background: '#3B5BFC', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-            💻 Desktop (> 991px)
+            [PC] Desktop (> 991px)
           </div>
         </div>
       </div>

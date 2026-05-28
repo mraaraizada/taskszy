@@ -1,13 +1,57 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { FileText } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function MemberWorkDesc({ member }) {
-  const { markDescRead } = useApp();
+  const { roles, saveMember } = useApp();
+  const hasMarkedReadRef = useRef(false);
+
+  // Get work description from the role, not from member.desc
+  const memberRole = roles.find(r => r.name === member.role);
+  const workDescription = memberRole?.workDescription || member.desc || '';
+  
+  // Check if there's an unread update
+  const roleUpdatedAt = memberRole?.workDescriptionUpdatedAt || 0;
+
+  // Log component mount
+  useEffect(() => {
+    console.log('🎬 MemberWorkDesc component MOUNTED for member:', member.id, member.name);
+    console.log('  📊 Role updated at:', roleUpdatedAt);
+    
+    return () => {
+      console.log('🎬 MemberWorkDesc component UNMOUNTED for member:', member.id, member.name);
+    };
+  }, []);
 
   useEffect(() => {
-    markDescRead(member.id);
-  }, [member.id, markDescRead]);
+    // Mark as viewed in localStorage AND Firestore when user actually views this page
+    if (!hasMarkedReadRef.current && roleUpdatedAt > 0) {
+      const storageKey = `desc_viewed_${member.id}_${roleUpdatedAt}`;
+      const readAt = Date.now();
+      
+      console.log('📖 User viewed description page - saving to localStorage and Firestore');
+      console.log('  📊 Storage key:', storageKey);
+      console.log('  📊 Read timestamp:', readAt);
+      
+      // Save to localStorage
+      try {
+        localStorage.setItem(storageKey, 'true');
+        console.log('✅ Description view saved to localStorage');
+      } catch (err) {
+        console.error('❌ Error saving to localStorage:', err);
+      }
+      
+      // Save to Firestore
+      try {
+        saveMember({ ...member, descReadAt: readAt });
+        console.log('✅ Description view timestamp saved to Firestore');
+      } catch (err) {
+        console.error('❌ Error saving to Firestore:', err);
+      }
+      
+      hasMarkedReadRef.current = true;
+    }
+  }, [member, roleUpdatedAt, saveMember]); // Run when component mounts or roleUpdatedAt changes
 
   function parsePoints(text) {
     if (!text) return [];
@@ -17,7 +61,7 @@ export default function MemberWorkDesc({ member }) {
       .filter(Boolean);
   }
 
-  const points = parsePoints(member.desc);
+  const points = parsePoints(workDescription);
 
   return (
     <div style={{

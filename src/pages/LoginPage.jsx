@@ -1,25 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
-import { USERS, useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import PlanSelection from '../components/PlanSelection';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { useLottie } from 'lottie-react';
-import emailSentAnimation from '../lottie/Email Sent by Todd Rocheford.json';
-import loginAnimation from '../lottie/Login.json';
-import carouselE from '../assets/carousel-e.png';
-import carouselG from '../assets/carousel-g.png';
-import carouselJ from '../assets/carousel-j.png';
-import carouselQ from '../assets/carousel-q.png';
-import carouselZ from '../assets/carousel-z.png';
+import { signIn, signUp, sendPasswordReset, sendVerificationEmail, mapAuthError, mapPasswordResetError, signInWithGoogle, signOutUser } from '../lib/authService';
+import { getProfile, createAdminProfile, stampLogin } from '../lib/userProfileService';
+import { db } from '../lib/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { getCarouselImages, DEFAULT_CAROUSEL_IMAGES } from '../lib/carouselService';
 
-const portfolioSlides = [
-  { imageUrl: carouselE },
-  { imageUrl: carouselG },
-  { imageUrl: carouselJ },
-  { imageUrl: carouselQ },
-  { imageUrl: carouselZ },
-];
+// Fallback hardcoded images (high quality URLs from service)
+const FALLBACK_IMAGES = DEFAULT_CAROUSEL_IMAGES;
 
 function GoogleIcon() {
   return (
@@ -91,15 +83,28 @@ const slideAnimStyle = `
 .form-enter-left {}
 `;
 
+// Dynamically import heavy lottie JSONs so they don't bloat the initial bundle
+function useEmailSentAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Email Sent by Todd Rocheford.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+function useLoginAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Login.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+
 function EmailSentLottie() {
+  const animationData = useEmailSentAnimation();
   const { View, animationItem } = useLottie({
-    animationData: emailSentAnimation,
+    animationData: animationData ?? null,
     loop: false,
-    autoplay: true,
+    autoplay: !!animationData,
   });
 
   useEffect(() => {
-    if (!animationItem) return;
+    if (!animationItem || !animationData) return;
 
     let phase = 1; // phase 1: play 0→124, phase 2: play 0→2 then stop
 
@@ -118,22 +123,25 @@ function EmailSentLottie() {
     return () => {
       try { animationItem.removeEventListener('enterFrame', onEnterFrame); } catch {}
     };
-  }, [animationItem]);
+  }, [animationItem, animationData]);
 
+  if (!animationData) return <div style={{ width: 120, height: 120 }} />;
   return <div style={{ width: 120, height: 120, pointerEvents: 'none' }}>{View}</div>;
 }
 
 function LoginLottie() {
+  const animationData = useLoginAnimation();
   const { View } = useLottie({
-    animationData: loginAnimation,
+    animationData: animationData ?? null,
     loop: true,
-    autoplay: true,
+    autoplay: !!animationData,
     style: { width: '100%', height: '100%', objectFit: 'contain' },
   });
+  if (!animationData) return <div style={{ width: '100%', height: '100%' }} />;
   return View;
 }
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, sessionExpired = false, onClearExpired }) {
   const { setCurrentPlan, setPlanExpiryDate } = useApp();
   const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState('');
@@ -147,33 +155,55 @@ export default function LoginPage({ onLogin }) {
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
   const [forgotError, setForgotError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState('');
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [carouselApi, setCarouselApi] = useState(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [confirmPasswordSignUp, setConfirmPasswordSignUp] = useState('');
   const [showConfirmPassSignUp, setShowConfirmPassSignUp] = useState(false);
-  const [signUpOtpSent, setSignUpOtpSent] = useState(false);
-  const [signUpOtp, setSignUpOtp] = useState('');
-  const [signUpOtpError, setSignUpOtpError] = useState('');
-  const [signUpOtpSuccess, setSignUpOtpSuccess] = useState('');
-  const [resendTimer, setResendTimer] = useState(0);
-  const [signUpResendTimer, setSignUpResendTimer] = useState(0);
   const [formKey, setFormKey] = useState(0);
   const [formDir, setFormDir] = useState('right'); // 'right' or 'left'
+  
+  // Carousel images state - starts with fallback, then loads from cache/Firebase
+  const [carouselImages, setCarouselImages] = useState(FALLBACK_IMAGES);
+
+  // Load carousel images on mount
+  useEffect(() => {
+    console.log('🎠 Initializing carousel images...');
+    const initialImages = getCarouselImages((updatedImages) => {
+      console.log('🎠 Carousel images updated:', updatedImages.length);
+      setCarouselImages(updatedImages);
+    });
+    
+    // If we got different images immediately (from cache), use them
+    if (JSON.stringify(initialImages) !== JSON.stringify(FALLBACK_IMAGES)) {
+      setCarouselImages(initialImages);
+    }
+  }, []);
+
+  // Check for deactivation reason in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reason = params.get('reason');
+    
+    if (reason === 'deactivated') {
+      setError('Your account has been deactivated.');
+    }
+    // No message for 'another-device' - silent logout
+    
+    // Clear the URL parameter
+    if (reason) {
+      window.history.replaceState({}, '', '/login');
+    }
+  }, []);
 
   const switchForm = (dir = 'right') => {
     setFormDir(dir);
     setFormKey(k => k + 1);
   };
 
+  // Convert carousel images to slides format
+  const portfolioSlides = carouselImages.map(img => ({ imageUrl: img }));
   const slide = portfolioSlides[slideIndex];
 
   // Update slideIndex when carousel changes
@@ -196,29 +226,11 @@ export default function LoginPage({ onLogin }) {
     return () => clearInterval(autoplay);
   }, [carouselApi]);
 
-  // Resend OTP countdown timer
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-    const interval = setInterval(() => {
-      setResendTimer(t => t - 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [resendTimer]);
-
-  // Sign-up resend OTP countdown timer
-  useEffect(() => {
-    if (signUpResendTimer <= 0) return;
-    const interval = setInterval(() => {
-      setSignUpResendTimer(t => t - 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [signUpResendTimer]);
-
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
-    // Sign-up flow — validate then send OTP
+    // Sign-up flow
     if (isSignUp) {
       if (password !== confirmPasswordSignUp) {
         setError('Passwords do not match.');
@@ -229,70 +241,154 @@ export default function LoginPage({ onLogin }) {
         return;
       }
       setLoading(true);
-      setTimeout(() => {
+      let authUser = null;
+      try {
+        const credential = await signUp(email, password);
+        authUser = credential.user;
+      } catch (err) {
         setLoading(false);
-        setSignUpOtpSent(true);
-        setSignUpResendTimer(60);
-        setSignUpOtpSuccess(`OTP sent to ${email}.`);
-        switchForm('right');
-      }, 900);
+        setError(mapAuthError(err.code));
+        return;
+      }
+      // Auth account created — now create Firestore profile
+      try {
+        await createAdminProfile(authUser.uid, { email: authUser.email });
+      } catch (err) {
+        // Profile creation failed - this is critical for plan selection
+        console.error('createAdminProfile failed:', err);
+        setLoading(false);
+        setError('Failed to create user profile. Please try again or contact support.');
+        // Sign out the user since profile creation failed
+        try {
+          await signOutUser();
+        } catch (signOutErr) {
+          console.error('Sign out failed:', signOutErr);
+        }
+        return;
+      }
+      sendVerificationEmail(authUser).catch(() => {});
+      setLoading(false);
+      setError('');
+      setAuthenticatedUser({ email: authUser.email, role: 'admin', memberId: null, workspaceId: `ws_${authUser.uid}`, isNewSignup: true });
+      setShowPlanSelection(true);
+      return;
+    }
+
+    // Basic validation
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const match = USERS.find(u => u.email === email.trim().toLowerCase() && u.password === password);
-      if (match) {
-        setLoading(false);
-        setAuthenticatedUser(match);
-        // Only show plan selection for admin users
-        if (match.role === 'admin') {
-          setShowPlanSelection(true);
-        } else {
-          // For management and member users, skip plan selection and login directly
-          onLogin(match.role, match.memberId, match.email);
-        }
-      } else {
-        setLoading(false);
-        setError('Invalid email or password. Please try again.');
+    try {
+      const credential = await signIn(email, password);
+      const user = credential.user;
+      const profile = await getProfile(user.uid);
+      setLoading(false);
+      if (!profile) {
+        setError('Account setup incomplete. Please contact your administrator.');
+        return;
       }
-    }, 900);
-  };
-
-  const handleVerifySignUpOtp = (e) => {
-    e.preventDefault();
-    setSignUpOtpError('');
-    if (signUpOtp === '123456') {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        // Account created — switch to login mode
-        setIsSignUp(false);
-        setSignUpOtpSent(false);
-        setSignUpOtp('');
-        setSignUpOtpSuccess('');
-        setPassword('');
-        setConfirmPasswordSignUp('');
-        setSignUpOtpError('');
-      }, 800);
-    } else {
-      setSignUpOtpError('Invalid OTP. Please try again.');
+      // Stamp loginTime + lastActivityTime on every sign-in
+      stampLogin(user.uid).catch(() => {});
+      
+      // Check team member status for non-admin users
+      // Skip this check if user is logging out or session expired
+      if ((profile.role === 'management' || profile.role === 'member') && profile.workspaceId && profile.memberId && user) {
+        try {
+          const teamMemberSnap = await getDoc(doc(db, `workspaces/${profile.workspaceId}/team/${profile.memberId}`));
+          if (teamMemberSnap.exists()) {
+            const memberData = teamMemberSnap.data();
+            if (memberData.status === 'Inactive') {
+              setLoading(false);
+              setError('Your account has been deactivated.');
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not check team member status:', err.message);
+          // Continue login if check fails - don't block access
+          // This can happen during logout or if permissions aren't ready yet
+        }
+      }
+      
+      // Check if user has completed workspace setup
+      let completedSetup = profile.hasCompletedSetup === true; // Check user's own setup status
+      
+      console.log('🔍 LoginPage - User profile:', { 
+        role: profile.role, 
+        hasCompletedSetup: profile.hasCompletedSetup, 
+        completedSetup,
+        workspaceId: profile.workspaceId
+      });
+      
+      // Load workspace data for admin and management users to check setup status
+      if ((profile.role === 'admin' || profile.role === 'management') && profile.workspaceId) {
+        try {
+          const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
+          if (workspaceSnap.exists()) {
+            const wsData = workspaceSnap.data();
+            
+            // Check workspace setup status (for admin/management)
+            const workspaceSetupComplete = wsData?.settings?.hasCompletedSetup === true;
+            
+            // For workspace owners, use workspace setup flag
+            if (profile.workspaceId === `ws_${user.uid}`) {
+              completedSetup = workspaceSetupComplete;
+              console.log('👑 Workspace owner - using workspace setup flag:', completedSetup);
+            }
+            
+            // Load workspace settings for WorkspaceSetup (if needed)
+            if (wsData?.settings && wsData.settings.workspaceName) {
+              const workspaceData = {
+                workspaceName: wsData.settings.workspaceName || '',
+                workspaceSub: wsData.settings.workspaceSub || '',
+                workspaceLogo: wsData.settings.workspaceLogo || null,
+              };
+              console.log('📦 LoginPage - Workspace data loaded:', workspaceData);
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not load workspace data (permissions may not be ready yet):', err.message);
+          // If this is a session re-login, assume setup is complete to avoid blocking
+          if (sessionExpired) {
+            console.log('✅ Session re-login - assuming setup complete to allow dashboard access');
+            completedSetup = true;
+          }
+        }
+      }
+      
+      // Always proceed to dashboard for authenticated users with workspace
+      // Plan selection is handled separately in the dashboard if needed
+      console.log('✅ LoginPage - Proceeding to dashboard:', { 
+        role: profile.role, 
+        completedSetup, 
+        workspaceId: profile.workspaceId 
+      });
+      
+      onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
+    } catch (err) {
+      setLoading(false);
+      setError(mapAuthError(err.code));
     }
   };
 
-  const handlePlanSelect = (plan, billingCycle, couponInfo) => {
-    // Save selected plan to context and localStorage
+  const handlePlanSelect = async (plan, billingCycle, couponInfo) => {
     const planData = { id: plan.id, name: plan.name, users: plan.users, color: plan.color, billingCycle };
     setCurrentPlan(planData);
-    try { localStorage.setItem('currentPlan', JSON.stringify(planData)); } catch {}
-    // Calculate and save expiry date — duration coupon overrides billing cycle
+    // Calculate expiry date
     const expiryDate = new Date();
     if (couponInfo && couponInfo.type === 'duration' && couponInfo.duration) {
       const { value, unit } = couponInfo.duration;
       if (unit === 'months') expiryDate.setMonth(expiryDate.getMonth() + value);
       else expiryDate.setDate(expiryDate.getDate() + value);
     } else if (plan.period === 'one-time') {
-      expiryDate.setFullYear(expiryDate.getFullYear() + 99); // Lifetime
+      expiryDate.setFullYear(expiryDate.getFullYear() + 99);
     } else if (billingCycle === 'yearly') {
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
     } else {
@@ -300,10 +396,30 @@ export default function LoginPage({ onLogin }) {
     }
     const expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     setPlanExpiryDate(expiryStr);
-    try { localStorage.setItem('planExpiryDate', expiryStr); } catch {}
-    // Proceed with login after plan selection
+
+    // Write full plan schema to Firestore workspace doc
+    const wsId = authenticatedUser?.workspaceId;
+    if (wsId) {
+      try {
+        await setDoc(doc(db, `workspaces/${wsId}`), {
+          plan: {
+            id:              planData.id,
+            name:            planData.name,
+            billingCycle:    planData.billingCycle,
+            users:           planData.users,
+            color:           planData.color,
+            expiryDate:      expiryStr,
+            expiryTimestamp: expiryDate,
+            isActive:        true,
+            createdAt:       new Date(),
+            updatedAt:       new Date(),
+          },
+        }, { merge: true });
+      } catch { /* non-fatal */ }
+    }
+
     setTimeout(() => {
-      onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email);
+      onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email, authenticatedUser.workspaceId || null, authenticatedUser.completedSetup ?? null, authenticatedUser.isNewSignup === true);
     }, 300);
   };
 
@@ -314,93 +430,192 @@ export default function LoginPage({ onLogin }) {
   };
 
   const handleForgotPassword = () => {
-    if (!email.trim()) {
-      setError('Please enter your email address first.');
-      return;
-    }
     setShowForgotPassword(true);
-    setForgotEmail(email);
+    setForgotEmail(email); // Pre-fill with email if entered
     setForgotError('');
     setForgotSuccess('');
-    setOtpSent(true);
-    setOtp('');
-    setOtpVerified(false);
-    setResendTimer(60);
-    setForgotSuccess(`OTP sent to ${email}.`);
     switchForm('right');
   };
 
   const handleBackToLoginForm = () => {
     setShowForgotPassword(false);
-    setOtpSent(false);
-    setOtpVerified(false);
-    setOtp('');
     setForgotEmail('');
     setForgotError('');
     setForgotSuccess('');
-    setNewPassword('');
-    setConfirmPassword('');
     switchForm('left');
   };
 
-  const handleSendOTP = (e) => {
-    e.preventDefault();
-    setForgotError('');
-    
-    // Check if email exists
-    const userExists = USERS.find(u => u.email === forgotEmail.trim().toLowerCase());
-    if (!userExists) {
-      setForgotError('Email not found in our system.');
-      return;
-    }
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const credential = await signInWithGoogle();
+      const user = credential.user;
+      const profile = await getProfile(user.uid);
 
-    // Simulate sending OTP
-    setOtpSent(true);
-    setResendTimer(60);
-    setForgotSuccess(`OTP sent to ${forgotEmail}.`);
+      if (isSignUp) {
+        // Sign-up via Google — create admin profile if not exists
+        if (!profile) {
+          try {
+            await createAdminProfile(user.uid, { email: user.email });
+          } catch (err) {
+            console.error('createAdminProfile failed:', err);
+            setLoading(false);
+            setError('Failed to create user profile. Please try again or contact support.');
+            // Sign out the user since profile creation failed
+            try {
+              await signOutUser();
+            } catch (signOutErr) {
+              console.error('Sign out failed:', signOutErr);
+            }
+            return;
+          }
+          setLoading(false);
+          // New Google signup — go through plan selection
+          setAuthenticatedUser({ email: user.email, role: 'admin', memberId: null, workspaceId: `ws_${user.uid}`, isNewSignup: true });
+          setShowPlanSelection(true);
+        } else {
+          // Already has an account — sign in directly
+          setLoading(false);
+          stampLogin(user.uid).catch(() => {});
+          
+          // Check team member status for non-admin users
+          // Skip this check if user is logging out or session expired
+          if ((profile.role === 'management' || profile.role === 'member') && profile.workspaceId && profile.memberId && user) {
+            try {
+              const teamMemberSnap = await getDoc(doc(db, `workspaces/${profile.workspaceId}/team/${profile.memberId}`));
+              if (teamMemberSnap.exists()) {
+                const memberData = teamMemberSnap.data();
+                if (memberData.status === 'Inactive') {
+                  setLoading(false);
+                  setError('Your account has been deactivated.');
+                  return;
+                }
+              }
+            } catch (err) {
+              console.warn('⚠️ Could not check team member status:', err.message);
+              // Continue login if check fails - don't block access
+              // This can happen during logout or if permissions aren't ready yet
+            }
+          }
+          
+          // Check if user has selected a plan and completed workspace setup
+          let completedSetup = profile.hasCompletedSetup === true; // Check user's own setup status
+          let hasPlan = true;
+          
+          if (profile.role === 'admin' && profile.workspaceId) {
+            try {
+              const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
+              if (workspaceSnap.exists()) {
+                const wsData = workspaceSnap.data();
+                hasPlan = wsData?.plan?.id != null;
+              } else {
+                hasPlan = false;
+              }
+            } catch {
+              hasPlan = false;
+            }
+          }
+          
+          // If no plan selected, show plan selection panel
+          if (profile.role === 'admin' && !hasPlan) {
+            setAuthenticatedUser({ 
+              email: user.email, 
+              role: 'admin', 
+              memberId: null, 
+              workspaceId: profile.workspaceId,
+              isNewSignup: false 
+            });
+            setShowPlanSelection(true);
+            return;
+          }
+          
+          onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
+        }
+      } else {
+        // Sign-in via Google — must have existing account
+        setLoading(false);
+        if (!profile) {
+          setError('No account found for this Google email. Please sign up first.');
+          return;
+        }
+        // Direct sign-in, no plan selection
+        stampLogin(user.uid).catch(() => {});
+        
+        // Check team member status for non-admin users
+        // Skip this check if user is logging out or session expired
+        if ((profile.role === 'management' || profile.role === 'member') && profile.workspaceId && profile.memberId && user) {
+          try {
+            const teamMemberSnap = await getDoc(doc(db, `workspaces/${profile.workspaceId}/team/${profile.memberId}`));
+            if (teamMemberSnap.exists()) {
+              const memberData = teamMemberSnap.data();
+              if (memberData.status === 'Inactive') {
+                setLoading(false);
+                setError('Your account has been deactivated.');
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('⚠️ Could not check team member status:', err.message);
+            // Continue login if check fails - don't block access
+            // This can happen during logout or if permissions aren't ready yet
+          }
+        }
+        
+        // Check if user has selected a plan and completed workspace setup
+        let completedSetup = profile.hasCompletedSetup === true; // Check user's own setup status
+        let hasPlan = true;
+        
+        if (profile.role === 'admin' && profile.workspaceId) {
+          try {
+            const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
+            if (workspaceSnap.exists()) {
+              const wsData = workspaceSnap.data();
+              hasPlan = wsData?.plan?.id != null;
+            } else {
+              hasPlan = false;
+            }
+          } catch {
+            hasPlan = false;
+          }
+        }
+        
+        // If no plan selected, show plan selection panel
+        if (profile.role === 'admin' && !hasPlan) {
+          setLoading(false);
+          setAuthenticatedUser({ 
+            email: user.email, 
+            role: 'admin', 
+            memberId: null, 
+            workspaceId: profile.workspaceId,
+            isNewSignup: false 
+          });
+          setShowPlanSelection(true);
+          return;
+        }
+        
+        onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
+      }
+    } catch (err) {
+      setLoading(false);
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      setError(mapAuthError(err.code));
+    }
   };
 
-  const handleVerifyOTP = (e) => {
+  const handleSendPasswordReset = async (e) => {
     e.preventDefault();
     setForgotError('');
-    
-    // Demo OTP verification (in real app, verify with backend)
-    if (otp === '123456') {
-      setOtpVerified(true);
-      setForgotSuccess('OTP verified successfully!');
-      setTimeout(() => setForgotSuccess(''), 2000);
-    } else {
-      setForgotError('Invalid OTP. Please try again.');
+    setForgotSuccess('');
+    setLoading(true);
+    try {
+      await sendPasswordReset(forgotEmail);
+      setForgotSuccess('Password reset email sent. Please check your inbox.');
+    } catch (err) {
+      setForgotError(mapPasswordResetError(err.code));
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleResetPassword = (e) => {
-    e.preventDefault();
-    setForgotError('');
-
-    // Validation
-    if (newPassword.length < 6) {
-      setForgotError('Password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setForgotError('Passwords do not match.');
-      return;
-    }
-
-    // Simulate password reset
-    setForgotSuccess('Password updated successfully! Redirecting to login...');
-    setTimeout(() => {
-      setShowForgotPassword(false);
-      setOtpSent(false);
-      setOtpVerified(false);
-      setOtp('');
-      setForgotEmail('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setForgotSuccess('');
-    }, 2000);
   };
 
   // Carousel autoplay — no unused variables needed
@@ -470,9 +685,12 @@ export default function LoginPage({ onLogin }) {
         <Carousel
           opts={{
             loop: true,
+            watchDrag: false, // Disable drag/swipe interaction
+            watchSlides: false, // Disable slide watching for better performance
           }}
           setApi={setCarouselApi}
           className="login-panel-left h-full"
+          style={{ pointerEvents: 'none' }} // Disable all pointer interactions
         >
           <CarouselContent className="h-full -ml-0">
             {portfolioSlides.map((slideData, index) => (
@@ -578,80 +796,16 @@ export default function LoginPage({ onLogin }) {
               {isSignUp ? 'Sign up to your account' : 'Sign in to your account'}
             </p>
 
-            {/* Sign-up OTP verification step */}
-            {isSignUp && signUpOtpSent ? (
-              <form onSubmit={handleVerifySignUpOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
-                  Enter it below to verify your account.
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
-                  <EmailSentLottie />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <InputOTP maxLength={6} value={signUpOtp} onChange={setSignUpOtp}>
-                    <InputOTPGroup>
-                      {[0,1,2,3,4,5].map(i => <InputOTPSlot key={i} index={i} />)}
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-                {signUpOtpSuccess && (
-                  <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
-                    {signUpOtpSuccess}
-                  </div>
-                )}
-                {signUpOtpError && (
-                  <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-                    {signUpOtpError}
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={loading || signUpOtp.length < 6}
-                  style={{
-                    width: '100%', height: 50, borderRadius: 12, border: 'none',
-                    background: 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)',
-                    color: '#fff', fontSize: 15, fontWeight: 700,
-                    cursor: (loading || signUpOtp.length < 6) ? 'default' : 'pointer',
-                    opacity: signUpOtp.length < 6 ? 0.6 : 1,
-                    boxShadow: '0 6px 20px rgba(59,91,252,0.35)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'opacity 0.2s',
-                  }}
-                >
-                  {loading ? (
-                    <>
-                      <span style={{ width: 16, height: 16, border: '2.5px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-                      Verifying…
-                    </>
-                  ) : 'Verify & Create Account'}
-                </button>
-                <button
-                  type="button"
-                  disabled={signUpResendTimer > 0}
-                  onClick={() => {
-                    setSignUpOtpSuccess(`OTP sent to ${email}.`);
-                    setSignUpResendTimer(60);
-                  }}
-                  style={{
-                    background: 'none', border: 'none',
-                    color: signUpResendTimer > 0 ? '#9CA3AF' : '#3B5BFC',
-                    fontSize: 13, fontWeight: 600,
-                    cursor: signUpResendTimer > 0 ? 'default' : 'pointer',
-                    textAlign: 'center',
-                  }}
-                >
-                  {signUpResendTimer > 0 ? `Resend OTP in ${signUpResendTimer}s` : 'Resend OTP'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setSignUpOtpSent(false); setSignUpOtp(''); setSignUpOtpError(''); setSignUpOtpSuccess(''); switchForm('left'); }}
-                  style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center' }}
-                >
-                  ← Back
-                </button>
-              </form>
-            ) : (
+            {/* Session expired banner */}
+            {sessionExpired && !isSignUp && (
+              <div style={{ background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#C2410C', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>⏱</span>
+                <span>Your session expired. Please sign in again.</span>
+                <button type="button" onClick={onClearExpired} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#C2410C', fontSize: 16, lineHeight: 1 }}>×</button>
+              </div>
+            )}
 
+            {/* Sign-in / Sign-up form */}
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Login Lottie Animation */}
               <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 16px' }}>
@@ -793,6 +947,8 @@ export default function LoginPage({ onLogin }) {
               {/* Google */}
               <button
                 type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
                 style={{
                   width: '100%',
                   height: 50,
@@ -806,16 +962,23 @@ export default function LoginPage({ onLogin }) {
                   fontSize: 14,
                   fontWeight: 600,
                   color: '#1A1D2E',
-                  cursor: 'pointer',
+                  cursor: loading ? 'default' : 'pointer',
                   transition: 'background 0.15s, border-color 0.15s, transform 0.15s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#F8F9FF'; e.currentTarget.style.borderColor = '#3B5BFC'; }}
+                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.background = '#F8F9FF'; e.currentTarget.style.borderColor = '#3B5BFC'; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+                onMouseDown={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.98)'; }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
                 <GoogleIcon /> {isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
               </button>
+
+              {/* Success message (e.g. after sign-up redirects back to sign-in) */}
+              {!isSignUp && forgotSuccess && (
+                <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
+                  {forgotSuccess}
+                </div>
+              )}
 
               {/* Error */}
               {error && (
@@ -852,10 +1015,7 @@ export default function LoginPage({ onLogin }) {
               </button>
             </form>
 
-            )} {/* end sign-up OTP ternary */}
-
             {/* Sign up / Sign in toggle */}
-            {!signUpOtpSent && (
             <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 16 }}>
               {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
               <span
@@ -871,7 +1031,6 @@ export default function LoginPage({ onLogin }) {
                 {isSignUp ? 'Sign in' : 'Sign up'}
               </span>
             </p>
-            )}
             </>
             ) : (
               <>
@@ -903,246 +1062,88 @@ export default function LoginPage({ onLogin }) {
                       marginBottom: 6,
                     }}
                   >
-                    Verify OTP
+                    Reset Password
                   </div>
                   <p style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 20 }}>
-                    Enter the 6-digit code sent to your email
+                    Enter your email and we'll send you a reset link
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 16px' }}>
                   <EmailSentLottie />
                 </div>
 
-                <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!otpVerified) {
-                      setForgotError('');
-                      if (otp === '123456') {
-                        setOtpVerified(true);
-                        setForgotSuccess('OTP verified successfully!');
-                        setTimeout(() => setForgotSuccess(''), 2000);
-                      } else {
-                        setForgotError('Invalid OTP. Please try again.');
-                      }
-                    } else {
-                      handleResetPassword(e);
-                    }
-                  }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <p style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', marginBottom: 8 }}>
-                      Sent to: <span style={{ fontWeight: 600, color: '#1A1D2E' }}>{forgotEmail}</span>
-                    </p>
+                <form onSubmit={handleSendPasswordReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={forgotEmail}
+                    onChange={(e) => { setForgotEmail(e.target.value); setForgotError(''); setForgotSuccess(''); }}
+                    style={{
+                      width: '100%',
+                      height: 48,
+                      borderRadius: 10,
+                      border: '1.5px solid #E5E7EB',
+                      padding: '0 16px',
+                      fontSize: 14,
+                      color: '#1A1D2E',
+                      outline: 'none',
+                      background: '#FAFBFF',
+                      transition: 'border-color 0.2s, background 0.2s',
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#3B5BFC'; e.target.style.background = '#F5F7FF'; e.target.style.boxShadow = '0 0 0 3px rgba(59,91,252,0.10)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.background = '#FAFBFF'; e.target.style.boxShadow = 'none'; }}
+                  />
 
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                      <InputOTP 
-                        maxLength={6} 
-                        value={otp}
-                        onChange={(value) => setOtp(value)}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
+                  {forgotError && (
+                    <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
+                      {forgotError}
                     </div>
+                  )}
 
-                    {!otpVerified && otp.length === 6 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForgotError('');
-                          if (otp === '123456') {
-                            setOtpVerified(true);
-                            setForgotSuccess('OTP verified! Now enter your new password.');
-                            setTimeout(() => setForgotSuccess(''), 3000);
-                          } else {
-                            setForgotError('Invalid OTP. Please try again.');
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          height: 44,
-                          borderRadius: 10,
-                          border: 'none',
-                          background: 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)',
-                          color: '#fff',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Verify OTP
-                      </button>
-                    )}
-
-                    {!otpVerified && (
-                      <button
-                        type="button"
-                        onClick={handleSendOTP}
-                        disabled={resendTimer > 0}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: resendTimer > 0 ? '#9CA3AF' : '#3B5BFC',
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: resendTimer > 0 ? 'default' : 'pointer',
-                          textAlign: 'center',
-                        }}
-                      >
-                        {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
-                      </button>
-                    )}
-
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <div style={{ flex: 1, height: 1, background: otpVerified ? '#3B5BFC' : '#E5E7EB' }} />
-                        <span style={{ fontSize: 11, color: otpVerified ? '#3B5BFC' : '#B0B8C8', fontWeight: 600 }}>
-                          {otpVerified ? 'OTP Verified' : 'Enter new password'}
-                        </span>
-                        <div style={{ flex: 1, height: 1, background: '#E5E7EB' }} />
-                      </div>
-
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type={showNewPass ? 'text' : 'password'}
-                          placeholder="New Password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          disabled={!otpVerified}
-                          style={{
-                            width: '100%',
-                            height: 48,
-                            borderRadius: 10,
-                            border: `1.5px solid ${otpVerified ? '#3B5BFC' : '#E5E7EB'}`,
-                            padding: '0 44px 0 16px',
-                            fontSize: 14,
-                            color: otpVerified ? '#1A1D2E' : '#9CA3AF',
-                            outline: 'none',
-                            background: otpVerified ? '#FAFBFF' : '#F9FAFB',
-                            cursor: otpVerified ? 'text' : 'not-allowed',
-                            transition: 'border-color 0.2s, background 0.2s',
-                          }}
-                        />
-                        {otpVerified && (
-                          <button
-                            type="button"
-                            onClick={() => setShowNewPass(!showNewPass)}
-                            style={{
-                              position: 'absolute',
-                              right: 14,
-                              top: '50%',
-                              transform: 'translateY(-50%)',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: 0,
-                              color: '#9CA3AF',
-                            }}
-                          >
-                            {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        )}
-                      </div>
-
-                      <div style={{ position: 'relative', marginTop: 8 }}>
-                        <input
-                          type={showConfirmPass ? 'text' : 'password'}
-                          placeholder="Confirm Password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          disabled={!otpVerified}
-                          style={{
-                            width: '100%',
-                            height: 48,
-                            borderRadius: 10,
-                            border: `1.5px solid ${otpVerified ? '#3B5BFC' : '#E5E7EB'}`,
-                            padding: '0 44px 0 16px',
-                            fontSize: 14,
-                            color: otpVerified ? '#1A1D2E' : '#9CA3AF',
-                            outline: 'none',
-                            background: otpVerified ? '#FAFBFF' : '#F9FAFB',
-                            cursor: otpVerified ? 'text' : 'not-allowed',
-                            transition: 'border-color 0.2s, background 0.2s',
-                          }}
-                        />
-                        {otpVerified && (
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmPass(!showConfirmPass)}
-                            style={{
-                              position: 'absolute',
-                              right: 14,
-                              top: '50%',
-                              transform: 'translateY(-50%)',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: 0,
-                              color: '#9CA3AF',
-                            }}
-                          >
-                            {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        )}
-                      </div>
-
-                      {otpVerified && (
-                        <div style={{ background: '#F0F4FF', border: '1.5px solid #C7D4FF', borderRadius: 10, padding: '10px 14px', marginTop: 12 }}>
-                          <p style={{ fontSize: 11, fontWeight: 700, color: '#3B5BFC', marginBottom: 4 }}>Password Requirements:</p>
-                          <ul style={{ fontSize: 11, color: '#6B7280', margin: 0, paddingLeft: 20 }}>
-                            <li>At least 6 characters long</li>
-                            <li>Both passwords must match</li>
-                          </ul>
-                        </div>
-                      )}
+                  {forgotSuccess && (
+                    <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
+                      {forgotSuccess}
                     </div>
+                  )}
 
-                    {forgotError && (
-                      <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-                        {forgotError}
-                      </div>
-                    )}
-
-                    {forgotSuccess && (
-                      <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
-                        {forgotSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={!otpVerified || !newPassword || !confirmPassword}
-                      style={{
-                        width: '100%',
-                        height: 50,
-                        borderRadius: 12,
-                        border: 'none',
-                        background: otpVerified && newPassword && confirmPassword ? 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)' : '#E5E7EB',
-                        color: '#fff',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        cursor: otpVerified && newPassword && confirmPassword ? 'pointer' : 'not-allowed',
-                        transition: 'transform 0.15s, box-shadow 0.2s',
-                        boxShadow: otpVerified && newPassword && confirmPassword ? '0 6px 20px rgba(59,91,252,0.35)' : 'none',
-                        letterSpacing: '0.3px',
-                      }}
-                    >
-                      Reset Password
-                    </button>
-                  </form>
-                </>
-              )}
+                  <button
+                    type="submit"
+                    disabled={loading || !forgotEmail.trim()}
+                    style={{
+                      width: '100%',
+                      height: 50,
+                      borderRadius: 12,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)',
+                      color: '#fff',
+                      fontSize: 15,
+                      fontWeight: 700,
+                      cursor: (loading || !forgotEmail.trim()) ? 'default' : 'pointer',
+                      opacity: !forgotEmail.trim() ? 0.6 : 1,
+                      boxShadow: '0 6px 20px rgba(59,91,252,0.35)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      transition: 'opacity 0.2s',
+                    }}
+                  >
+                    {loading ? (
+                      <>
+                        <span style={{ width: 16, height: 16, border: '2.5px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+                        Sending…
+                      </>
+                    ) : 'Send Reset Email'}
+                  </button>
+                </form>
+              </>
+            )}
             </div> {/* end login-form-card */}
             </>
           ) : (
             <div style={{ position: 'relative', zIndex: 2, width: '100%', height: '100%' }}>
               <PlanSelection
                 email={email}
+                workspaceId={authenticatedUser?.workspaceId}
+                activeTeamMembers={0}
                 onSelectPlan={handlePlanSelect}
                 onBack={handleBackToLogin}
               />

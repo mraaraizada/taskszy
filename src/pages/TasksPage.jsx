@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { notify } from '../lib/notify';
 import { Plus, X, RefreshCw, Wallet, Trash2, CheckCircle, CheckSquare, AlertCircle, Clock, Shield, UserCheck, Calendar, ChevronDown, ClipboardCheck, Edit2, ChevronLeft, ChevronRight, Hourglass, MessageSquare, Send } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
 import TaskChatPanel from '../components/TaskChatPanel';
+import TaskTimelinePanel from '../components/TaskTimelinePanel'; // ? PHASE 10: New timeline panel
 
-// ── Constants ───────────────────────────────────────────────────────────────
+// -- Constants ---------------------------------------------------------------
 const STAGES = ['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update', 'Complete'];
 const STAGE_COLORS = { New: '#9CA3AF', Start: '#3B5BFC', Issue: '#EF4444', 'Review A': '#F97316', 'Review B': '#7C3AED', Update: '#D97706', Complete: '#12C479' };
 const STAGE_BG     = { New: '#F3F4F6', Start: '#EEF2FF', Issue: '#FEF2F2', 'Review A': '#FFF7ED', 'Review B': '#F5F3FF', Update: '#FFFBEB', Complete: '#ECFDF5' };
@@ -16,6 +17,57 @@ const TAGS = [];
 
 const CATEGORIES = [];
 
+// Fallback function for generating task ID on client side
+// Format: 4 letters + 4 digits in random positions (e.g., A1BC2D34, 1AB2C3D4)
+function generateIdFallback() {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const digits = '0123456789';
+  
+  // Create array of 8 positions
+  const positions = Array(8).fill(null);
+  
+  // Randomly select 4 positions for letters
+  const letterPositions = [];
+  while (letterPositions.length < 4) {
+    const pos = Math.floor(Math.random() * 8);
+    if (!letterPositions.includes(pos)) {
+      letterPositions.push(pos);
+    }
+  }
+  
+  // Fill letter positions
+  letterPositions.forEach((pos) => {
+    positions[pos] = letters.charAt(Math.floor(Math.random() * letters.length));
+  });
+  
+  // Fill remaining positions with digits
+  for (let i = 0; i < 8; i++) {
+    if (positions[i] === null) {
+      positions[i] = digits.charAt(Math.floor(Math.random() * digits.length));
+    }
+  }
+  
+  return positions.join('');
+}
+
+// Function to lighten a color for background use
+function lightenColor(color, opacity = 0.15) {
+  if (!color || !color.startsWith('#')) return '#F0F2F8';
+  
+  // Extract RGB values
+  const hex = color.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  
+  // Create a light version by blending with white
+  const lightR = Math.round(r + (255 - r) * (1 - opacity));
+  const lightG = Math.round(g + (255 - g) * (1 - opacity));
+  const lightB = Math.round(b + (255 - b) * (1 - opacity));
+  
+  return `#${lightR.toString(16).padStart(2, '0')}${lightG.toString(16).padStart(2, '0')}${lightB.toString(16).padStart(2, '0')}`;
+}
+
 function generateId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let id = '#';
@@ -23,15 +75,27 @@ function generateId() {
   return id;
 }
 
-function StageFlow({ current, members = [], paid = false, history = [] }) {
+function StageFlow({ current, members = [], paid = false, history = [], taskId, getPaymentsForTask }) {
   const idx = STAGES.indexOf(current);
-  const visitedStages = new Set(history.map(h => h.stage));
+  const visitedStages = new Set(history.map((h) => h.stage));
 
   const membersByStage = {};
-  members.forEach(m => {
+  members.forEach((m) => {
     if (!membersByStage[m.stage]) membersByStage[m.stage] = [];
     membersByStage[m.stage].push(m);
   });
+
+  // Get payments for this task to check if members are paid
+  const taskPayments = getPaymentsForTask ? getPaymentsForTask(taskId) : [];
+  
+  // Debug: Log member avatar data
+  console.log('?? StageFlow members:', members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    avatar: m.avatar,
+    avatarImg: m.avatarImg,
+    hasAvatarImg: !!m.avatarImg
+  })));
 
   return (
     <div style={{ position: 'relative', paddingBottom: 18 }}>
@@ -52,20 +116,31 @@ function StageFlow({ current, members = [], paid = false, history = [] }) {
           const leftPct = (i / STAGES.length) * 100 + (100 / STAGES.length / 2);
           return (
             <div key={s} style={{ position: 'absolute', left: `${leftPct}%`, transform: 'translateX(-50%)', display: 'flex', gap: 1 }}>
-              {group.slice(0, 3).map((m) => (
-                <div key={m.id} style={{ width: 16, height: 16, borderRadius: '50%', background: m.color, border: '1.5px solid var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: '#fff', position: 'relative', cursor: 'default' }}
-                  onMouseEnter={e => { const tip = e.currentTarget.querySelector('.avatar-tip'); if (tip) tip.style.opacity = '1'; }}
-                  onMouseLeave={e => { const tip = e.currentTarget.querySelector('.avatar-tip'); if (tip) tip.style.opacity = '0'; }}
-                >
-                  {m.avatar}
-                  {paid && (
-                    <div style={{ position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: '50%', background: '#12C479', border: '1px solid var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 5 }}>✓</div>
-                  )}
-                  <div className="avatar-tip" style={{ position: 'absolute', bottom: '120%', left: '50%', transform: 'translateX(-50%)', background: '#fff', color: 'var(--text-primary)', fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', padding: '3px 7px', borderRadius: 6, border: '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s', zIndex: 100 }}>
-                    {m.name}
+              {group.slice(0, 3).map((m) => {
+                // Check if this member's payment is paid from payments collection
+                const memberPayment = taskPayments.find((p) => 
+                  String(p.memberId) === String(m.id) || 
+                  p.assignedTo?.some((a) => String(a.id) === String(m.id))
+                );
+                const isPaid = memberPayment && (memberPayment.isPaid === true || memberPayment.status === 'Paid');
+                const showGreenBorder = m.stage === 'Complete' && isPaid;
+                
+                return (
+                  <div key={m.id} style={{ width: 16, height: 16, borderRadius: '50%', background: m.avatarImg ? 'transparent' : m.color, border: showGreenBorder ? '2px solid #12C479' : '1.5px solid var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: '#fff', position: 'relative', cursor: 'default', overflow: 'hidden' }}
+                    onMouseEnter={(e) => { const tip = e.currentTarget.querySelector('.avatar-tip'); if (tip) tip.style.opacity = '1'; }}
+                    onMouseLeave={(e) => { const tip = e.currentTarget.querySelector('.avatar-tip'); if (tip) tip.style.opacity = '0'; }}
+                  >
+                    {m.avatarImg ? (
+                      <img src={m.avatarImg} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      m.avatar
+                    )}
+                    <div className="avatar-tip" style={{ position: 'absolute', bottom: '120%', left: '50%', transform: 'translateX(-50%)', background: '#fff', color: 'var(--text-primary)', fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', padding: '3px 7px', borderRadius: 6, border: '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s', zIndex: 100 }}>
+                      {m.name}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {group.length > 3 && (
                 <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-subtle)', border: '1.5px solid var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: 'var(--text-muted)' }}>
                   +{group.length - 3}
@@ -79,11 +154,12 @@ function StageFlow({ current, members = [], paid = false, history = [] }) {
   );
 }
 
-// ── Task Requests Panel (Inline Right Side) ─────────────────────────────────
+// -- Task Requests Panel (Inline Right Side) ---------------------------------
 function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
   const [statusFilter, setStatusFilter] = useState('Pending');
   const today = new Date();
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
+  const [displayCount, setDisplayCount] = useState(10); // Initially show 10 requests
   const panelRef = useRef(null);
 
   const selectedDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
@@ -91,16 +167,28 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
   const selectedYear = selectedDate.getFullYear();
   const monthLabel = selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const pendingRequests = requests.filter(r => r.status === 'pending');
-
   // Filter by pending/complete status + selected month
-  const filteredRequests = pendingRequests.filter(r => {
-    const d = new Date(r.timestamp);
-    if (d.getMonth() !== selectedMonth || d.getFullYear() !== selectedYear) return false;
+  const filteredRequests = requests.filter((r) => {
+    // Convert Firestore Timestamp to Date if needed
+    const timestamp = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+    
+    // Check if request is in selected month
+    if (timestamp.getMonth() !== selectedMonth || timestamp.getFullYear() !== selectedYear) return false;
+    
+    // Filter by status
     if (statusFilter === 'Pending') return !r.isComplete && !r.isCreated;
     if (statusFilter === 'Complete') return r.isComplete || r.isCreated;
     return true;
   });
+  
+  // Paginate requests - show only displayCount items
+  const displayedRequests = filteredRequests.slice(0, displayCount);
+  const hasMore = filteredRequests.length > displayCount;
+  
+  // Reset display count when month or filter changes
+  useEffect(() => {
+    setDisplayCount(10);
+  }, [monthOffset, statusFilter]);
   
   return (
     <div 
@@ -138,7 +226,7 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
         
         {/* Filter Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {['Pending', 'Complete'].map(filter => (
+          {['Pending', 'Complete'].map((filter) => (
             <button
               key={filter}
               onClick={() => setStatusFilter(filter)}
@@ -182,8 +270,9 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 220, lineHeight: 1.6 }}>Member task approvals for this month will appear here</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {filteredRequests.map(request => (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {displayedRequests.map((request) => (
               <div key={request.id} style={{ background: 'var(--bg-subtle)', borderRadius: 14, padding: '18px 20px', border: '1.5px solid var(--border)' }}>
                 {/* Submitted by */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -191,7 +280,7 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
                     width: 32, 
                     height: 32, 
                     borderRadius: '50%', 
-                    background: request.submittedBy.color,
+                    background: request.submittedBy.avatarImg ? 'transparent' : request.submittedBy.color,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
@@ -199,12 +288,17 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
                     fontWeight: 800,
                     color: '#fff',
                     flexShrink: 0,
+                    overflow: 'hidden',
                   }}>
-                    {request.submittedBy.avatar}
+                    {request.submittedBy.avatarImg ? (
+                      <img src={request.submittedBy.avatarImg} alt={request.submittedBy.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      request.submittedBy.avatar
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{request.submittedBy.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{request.submittedBy.role} • {request.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{request.submittedBy.role} • {(request.timestamp?.toDate ? request.timestamp.toDate() : new Date(request.timestamp)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                   </div>
                 </div>
 
@@ -213,6 +307,9 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{request.title}</div>
                   {request.isCreated && (
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 12, background: '#EEF2FF', color: '#3B5BFC', border: '1px solid #C7D4FF' }}>Created</span>
+                  )}
+                  {request.isComplete && !request.isCreated && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 12, background: '#ECFDF5', color: '#12C479', border: '1px solid #A7F3D0' }}>Completed</span>
                   )}
                 </div>
 
@@ -224,8 +321,12 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
                 {/* Approved by */}
                 {request.approvedBy && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, padding: '7px 10px', background: 'var(--bg-surface)', borderRadius: 9, border: '1.5px solid var(--border-light)' }}>
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: request.approvedBy.color || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                      {request.approvedBy.avatar || request.approvedBy.name?.slice(0,2).toUpperCase()}
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: request.approvedBy.avatarImg ? 'transparent' : (request.approvedBy.color || '#3B5BFC'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+                      {request.approvedBy.avatarImg ? (
+                        <img src={request.approvedBy.avatarImg} alt={request.approvedBy.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        request.approvedBy.avatar || request.approvedBy.name?.slice(0,2).toUpperCase()
+                      )}
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Approved by</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{request.approvedBy.name}</span>
@@ -233,214 +334,126 @@ function TaskRequestsModal({ onClose, onApprove, onComplete, requests }) {
                   </div>
                 )}
 
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button 
-                    onClick={() => onApprove(request)}
-                    style={{
-                      flex: 1,
-                      padding: '10px 18px',
-                      background: 'linear-gradient(135deg, #3B5BFC, #2142D9)',
-                      border: 'none',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#fff',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(59,91,252,0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <UserCheck size={14} strokeWidth={2.5} />
-                    Approve
-                  </button>
-                  <button 
-                    onClick={() => onComplete && onComplete(request)}
-                    style={{
-                      flex: 1,
-                      padding: '10px 18px',
-                      background: 'linear-gradient(135deg, #12C479, #059669)',
-                      border: 'none',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#fff',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(18,196,121,0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <CheckCircle size={14} strokeWidth={2.5} />
-                    Complete
-                  </button>
-                </div>
+                {/* Completed by */}
+                {request.completedBy && !request.isCreated && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, padding: '7px 10px', background: 'var(--bg-surface)', borderRadius: 9, border: '1.5px solid var(--border-light)' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: request.completedBy.avatarImg ? 'transparent' : (request.completedBy.color || '#12C479'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+                      {request.completedBy.avatarImg ? (
+                        <img src={request.completedBy.avatarImg} alt={request.completedBy.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        request.completedBy.avatar || request.completedBy.name?.slice(0,2).toUpperCase()
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed by</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{request.completedBy.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>{request.completedBy.role}</span>
+                  </div>
+                )}
+
+                {/* Actions - Only show for pending requests */}
+                {!request.isComplete && !request.isCreated && (
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button 
+                      onClick={() => onApprove(request)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 18px',
+                        background: 'linear-gradient(135deg, #3B5BFC, #2142D9)',
+                        border: 'none',
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#fff',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(59,91,252,0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <UserCheck size={14} strokeWidth={2.5} />
+                      Approve
+                    </button>
+                    <button 
+                      onClick={() => onComplete && onComplete(request)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 18px',
+                        background: 'linear-gradient(135deg, #12C479, #059669)',
+                        border: 'none',
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#fff',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(18,196,121,0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <CheckCircle size={14} strokeWidth={2.5} />
+                      Complete
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
+          
+          {/* Load More Button */}
+          {hasMore && (
+            <button
+              onClick={() => setDisplayCount((prev) => prev + 10)}
+              style={{
+                marginTop: 16,
+                padding: '12px 20px',
+                background: 'var(--bg-subtle)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-surface)';
+                e.currentTarget.style.borderColor = '#3B5BFC';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--bg-subtle)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+            >
+              <RefreshCw size={14} strokeWidth={2.5} />
+              Load More
+            </button>
+          )}
+        </>
         )}
       </div>
     </div>
   );
 }
 
-// ── Task Timeline Panel (Right Side) ────────────────────────────────────────
-function TaskTimelinePanel({ task, onClose }) {
-  const panelRef = useRef(null);
-  const { tasks } = useApp();
+// -- Task Timeline Panel (Right Side) ----------------------------------------
+// ? PHASE 10: Moved to separate component file: src/components/TaskTimelinePanel.jsx
+// This old implementation used task.history field
+// New implementation uses Firestore timeline subcollection with real-time updates
 
-  // Always read latest task from context
-  const t = tasks.find(x => x.id === task.id) || task;
-
-  if (!t) return null;
-
-  const timeline = t.history && t.history.length > 0
-    ? [...t.history].reverse()
-    : [{ stage: t.stage, date: t.createdDate || new Date(), user: 'Admin', action: 'created' }];
-
-  const ACTION_CONFIG = {
-    created: { label: 'Task Created',      color: '#3B5BFC', bg: '#EEF2FF', icon: '✦' },
-    updated: { label: 'Stage Updated',     color: STAGE_COLORS, bg: null,   icon: '→' },
-    paid:    { label: 'Payment Processed', color: '#12C479', bg: '#ECFDF5', icon: '₹' },
-    edit:    { label: 'Task Edited',       color: '#F97316', bg: '#FFF7ED', icon: '✎' },
-    paused:  { label: 'Task On Hold',    color: '#D97706', bg: '#FFFBEB', icon: '🔒' },
-    resumed: { label: 'Task Activated',  color: '#3B5BFC', bg: '#EEF2FF', icon: '🔓' },
-  };
-
-  const overdue = new Date(t.deadline) < new Date() && t.stage !== 'Complete';
-  const days = Math.ceil((new Date(t.deadline) - new Date()) / (1000 * 60 * 60 * 24));
-
-  return (
-    <div ref={panelRef} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 420, background: 'var(--bg-surface)', zIndex: 10, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', borderLeft: '1px solid var(--border-light)' }}>
-
-      {/* Header */}
-      <div style={{ padding: '20px 24px 16px', borderBottom: '1.5px solid var(--border-light)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: t.stage === 'Complete' ? '#12C479' : '#3B5BFC', padding: '2px 7px', borderRadius: 5 }}>{t.id}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: STAGE_BG[t.stage], color: STAGE_COLORS[t.stage] }}>{t.stage}</span>
-              {t.paid && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#ECFDF5', color: '#12C479' }}>✓ Paid</span>}
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-            <div style={{ fontSize: 11, color: overdue ? '#EF4444' : days <= 2 ? '#F97316' : 'var(--text-muted)', fontWeight: 600 }}>
-              {t.stage === 'Complete' ? '✅ Completed' : overdue ? `⚠ ${Math.abs(days)}d overdue` : days === 0 ? '🔥 Due today' : `Due ${new Date(t.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'var(--bg-subtle)', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, fontSize: 15, color: 'var(--text-secondary)' }}>✕</button>
-        </div>
-
-        {/* Tags + Category */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {t.category && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.category.bg, color: t.category.color, border: `1px solid ${t.category.color}30` }}>{t.category.emoji} {t.category.label}</span>}
-          {t.tags?.map(tag => <span key={tag.label} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: tag.bg, color: tag.color }}>{tag.emoji} {tag.label}</span>)}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-        {/* Progress bar */}
-        <div style={{ background: 'var(--bg-subtle)', borderRadius: 12, padding: '14px 16px', border: '1.5px solid var(--border-light)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Progress</div>
-          <StageFlow current={t.stage} members={t.members} paid={t.paid} history={t.history || []} />
-        </div>
-
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: '10px 12px', border: '1.5px solid var(--border-light)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Budget</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#12C479' }}>₹ {t.totalBudget?.toLocaleString()}</div>
-          </div>
-          <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: '10px 12px', border: '1.5px solid var(--border-light)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Payment</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: t.paid ? '#12C479' : '#F97316' }}>{t.paid ? `✅ Paid` : '⏳ Pending'}</div>
-            {t.paidOn && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{new Date(t.paidOn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
-          </div>
-        </div>
-
-        {/* Members */}
-        <div style={{ background: 'var(--bg-subtle)', borderRadius: 12, padding: '14px 16px', border: '1.5px solid var(--border-light)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Team Members</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {t.members.map(m => (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{m.avatar}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{m.name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.role}</div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: STAGE_BG[m.stage], color: STAGE_COLORS[m.stage] }}>{m.stage}</span>
-                  {m.budget > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: '#12C479', marginTop: 2 }}>₹ {m.budget?.toLocaleString()}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Activity Timeline */}
-        <div>
-          <div style={{ marginBottom: 12 }} />
-          <div style={{ position: 'relative', paddingLeft: 28 }}>
-            <div style={{ position: 'absolute', left: 10, top: 4, bottom: 4, width: 2, background: 'var(--border-light)', borderRadius: 2 }} />
-            {timeline.map((item, i) => {
-              const isStage = item.action === 'updated' || item.action === 'created';
-              const isPaid  = item.action === 'paid';
-              const isEdit  = item.action === 'edit';
-              const isPaused  = item.action === 'paused';
-              const isResumed = item.action === 'resumed';
-              const dotColor = isPaid ? '#12C479' : isEdit ? '#F97316' : isPaused ? '#D97706' : isResumed ? '#3B5BFC' : STAGE_COLORS[item.stage] || '#9CA3AF';
-              const dotBg   = isPaid ? '#ECFDF5' : isEdit ? '#FFF7ED' : isPaused ? '#FFFBEB' : isResumed ? '#EEF2FF' : STAGE_BG[item.stage] || '#F3F4F6';
-              return (
-                <div key={i} style={{ position: 'relative', marginBottom: i < timeline.length - 1 ? 16 : 0 }}>
-                  {/* Dot */}
-                  <div style={{ position: 'absolute', left: -22, top: 6, width: 14, height: 14, borderRadius: '50%', background: dotBg, border: `2px solid ${dotColor}`, zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: dotColor, fontWeight: 800 }}>
-                    {isPaid ? '₹' : isEdit ? '✎' : item.action === 'created' ? '✦' : isPaused ? '🔒' : isResumed ? '🔓' : '→'}
-                  </div>
-                  <div style={{ background: dotBg, borderRadius: 10, padding: '10px 12px', border: `1.5px solid ${dotColor}30` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: dotColor }}>
-                        {isPaid ? 'Payment Processed' : isEdit ? 'Task Edited' : item.action === 'created' ? 'Task Created' : isPaused ? 'Task On Hold' : isResumed ? 'Task Activated' : `→ ${item.stage}`}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                        {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#E8EAEF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#6B7280', flexShrink: 0 }}>
-                        {item.user?.slice(0, 2).toUpperCase()}
-                      </div>
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{item.user}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>· {new Date(item.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    {item.note && (
-                      <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{item.note}</div>
-                    )}
-                    {isPaid && t.totalBudget > 0 && (
-                      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: '#12C479' }}>₹ {t.totalBudget?.toLocaleString()}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-// ── Create Task Modal ───────────────────────────────────────────────────────
-function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestData = null, hideBudget = false, currentUser = null, managementMode = false }) {
+// -- Create Task Modal -------------------------------------------------------
+function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestData = null, hideBudget = false, currentUser = null, managementMode = false, onNavigateToManage = null }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
-  const { tasks } = useApp();
-  const [taskId, setTaskId] = useState(generateId());
+  const { tasks, workspaceId, TAGS, CATEGORIES } = useApp();
+  const [taskId, setTaskId] = useState('');
+  const [generatingId, setGeneratingId] = useState(true);
   const [title, setTitle] = useState(requestData?.title || '');
   const [description, setDescription] = useState(requestData?.description || '');
   const [deadline, setDeadline] = useState('');
@@ -449,7 +462,101 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   const [selectedTags, setSelectedTags] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [stage, setStage] = useState('New');
-  const [assignments, setAssignments] = useState([{ memberId: '', memberDesc: '', budget: '' }]);
+  
+  // ? Auto-assign management user when creating task in management mode
+  const [assignments, setAssignments] = useState(() => {
+    if (managementMode && currentUser && currentUser.memberId) {
+      // Find the management user in teamMembers to get their full info
+      const managementMember = teamMembers.find((m) => m.id === currentUser.memberId || String(m.id) === String(currentUser.memberId));
+      if (managementMember) {
+        console.log('?? Auto-assigning management user to new task:', managementMember.name);
+        return [{ memberId: String(managementMember.id), memberDesc: '', budget: '' }];
+      }
+    }
+    return [{ memberId: '', memberDesc: '', budget: '' }];
+  });
+  
+  // Restore form data from Firestore on mount
+  useEffect(() => {
+    if (!workspaceId) return;
+    
+    const loadDraft = async () => {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        
+        const draftRef = doc(db, `workspaces/${workspaceId}/taskDrafts/current`);
+        const draftSnap = await getDoc(draftRef);
+        
+        if (draftSnap.exists()) {
+          const data = draftSnap.data();
+          setTitle(data.title || '');
+          setDescription(data.description || '');
+          setDeadline(data.deadline || '');
+          setScheduledDate(data.scheduledDate || '');
+          setDateMode(data.dateMode || 'completion');
+          setSelectedTags(data.selectedTags || []);
+          setSelectedCategory(data.selectedCategory || null);
+          setStage(data.stage || 'New');
+          setAssignments(data.assignments || [{ memberId: '', memberDesc: '', budget: '' }]);
+          setPaymentEntries(data.paymentEntries || [{ title: '', amount: '' }]);
+          setScribes(data.scribes || []);
+          
+          console.log('? Task draft restored from Firestore');
+          
+          // Delete draft after restoring
+          const { deleteDoc } = await import('firebase/firestore');
+          await deleteDoc(draftRef);
+        }
+      } catch (err) {
+        console.error('Failed to restore task draft:', err);
+      }
+    };
+    
+    loadDraft();
+  }, [workspaceId]);
+  
+  // Generate task ID on mount
+  useEffect(() => {
+    import('../lib/taskIdService').then(({ generateTaskId }) => {
+      generateTaskId(workspaceId).then(id => {
+        setTaskId(id);
+        setGeneratingId(false);
+      }).catch(err => {
+        console.error('Failed to generate task ID:', err);
+        // Fallback to client-side generation
+        const fallbackId = generateIdFallback();
+        setTaskId(fallbackId);
+        setGeneratingId(false);
+      });
+    });
+  }, [workspaceId]);
+  
+  // Load scheduled task data if requestData is provided
+  useEffect(() => {
+    if (requestData && requestData.scheduledTaskId) {
+      console.log('📋 Loading scheduled task data into Create Task Modal:', requestData);
+      setTitle(requestData.title || '');
+      setDescription(requestData.description || '');
+      setDeadline(requestData.deadline || requestData.scheduledDate || '');
+      setSelectedTags(requestData.tags || []);
+      setSelectedCategory(requestData.category || null);
+      setStage('New');
+      setAssignments(
+        requestData.members && requestData.members.length > 0
+          ? requestData.members.map((m) => ({ memberId: String(m.id), memberDesc: m.memberDesc || '', budget: String(m.budget || '') }))
+          : [{ memberId: '', memberDesc: '', budget: '' }]
+      );
+      setPaymentEntries(
+        requestData.payments && requestData.payments.length > 0
+          ? requestData.payments.map((p) => ({ title: p.title, amount: String(p.amount) }))
+          : [{ title: '', amount: '' }]
+      );
+      setTaskBudgetAmount(requestData.taskBudgetAmount ? String(requestData.taskBudgetAmount) : '');
+      setTaskBudgetStatus(requestData.taskBudgetStatus || 'Unpaid');
+      setScribes(requestData.scribes || []);
+    }
+  }, [requestData]);
   
   // Custom tags and categories
   const [showAddTag, setShowAddTag] = useState(false);
@@ -459,6 +566,10 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   
   // Payment options
   const [paymentEntries, setPaymentEntries] = useState([{ title: '', amount: '' }]);
+
+  // Task Budget (separate from member budgets)
+  const [taskBudgetAmount, setTaskBudgetAmount] = useState('');
+  const [taskBudgetStatus, setTaskBudgetStatus] = useState('Unpaid'); // 'Paid' or 'Unpaid'
 
   // Scribe attachments
   const [scribes, setScribes] = useState([]);
@@ -473,6 +584,42 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   // Load from previous task
   const [showLoadPanel, setShowLoadPanel] = useState(false);
   const [loadSearch, setLoadSearch] = useState('');
+  
+  // Save form data to Firestore and navigate to Manage page
+  const saveFormDataAndNavigate = async () => {
+    if (!workspaceId) return;
+    
+    try {
+      const formData = {
+        title,
+        description,
+        deadline,
+        scheduledDate,
+        dateMode,
+        selectedTags,
+        selectedCategory,
+        stage,
+        assignments,
+        paymentEntries,
+        scribes,
+        savedAt: new Date().toISOString()
+      };
+      
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
+      await setDoc(doc(db, `workspaces/${workspaceId}/taskDrafts/current`), formData);
+      
+      console.log('? Task draft saved to Firestore');
+      
+      onClose();
+      if (onNavigateToManage) {
+        onNavigateToManage();
+      }
+    } catch (err) {
+      console.error('Failed to save task draft:', err);
+    }
+  };
 
   const loadFromTask = (t) => {
     setTitle(t.title || '');
@@ -482,12 +629,12 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
     setStage('New');
     setAssignments(
       t.members && t.members.length > 0
-        ? t.members.map(m => ({ memberId: String(m.id), memberDesc: m.memberDesc || '', budget: String(m.budget || '') }))
+        ? t.members.map((m) => ({ memberId: String(m.id), memberDesc: m.memberDesc || '', budget: String(m.budget || '') }))
         : [{ memberId: '', memberDesc: '', budget: '' }]
     );
     setPaymentEntries(
       t.payments && t.payments.length > 0
-        ? t.payments.map(p => ({ title: p.title, amount: String(p.amount) }))
+        ? t.payments.map((p) => ({ title: p.title, amount: String(p.amount) }))
         : [{ title: '', amount: '' }]
     );
     setShowLoadPanel(false);
@@ -518,17 +665,20 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   const removePaymentEntry = (i) => setPaymentEntries(prev => prev.filter((_, idx) => idx !== i));
   const updatePaymentEntry = (i, key, val) => setPaymentEntries(prev => prev.map((p, idx) => idx === i ? { ...p, [key]: val } : p));
 
-  const totalBudget = assignments.reduce((s, a) => s + (parseFloat(a.budget) || 0), 0);
+  // ? Total Budget = Team member budgets + Additional payment amounts
+  const memberBudgets = assignments.reduce((s, a) => s + (parseFloat(a.budget) || 0), 0);
+  const additionalPayments = paymentEntries.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const totalBudget = memberBudgets + additionalPayments;
 
   const toggleTag = (tag) => {
-    setSelectedTags(prev => prev.find(t => t.label === tag.label) ? prev.filter(t => t.label !== tag.label) : [...prev, tag]);
+    setSelectedTags(prev => prev.find((t) => t.label === tag.label) ? prev.filter((t) => t.label !== tag.label) : [...prev, tag]);
   };
 
   const addCustomTag = () => {
     if (!newTagLabel.trim()) return;
     const customTag = { 
       label: newTagLabel.trim(), 
-      emoji: '🏷️', 
+      emoji: 'ðŸ·ï¸', 
       color: '#6B7280', 
       bg: '#F3F4F6' 
     };
@@ -541,7 +691,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
     if (!newCategoryLabel.trim()) return;
     const customCategory = { 
       label: newCategoryLabel.trim(), 
-      emoji: '📁', 
+      emoji: 'ðŸ“', 
       color: '#6B7280', 
       bg: '#F3F4F6' 
     };
@@ -552,10 +702,16 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
 
   const addMember = () => {
     if (assignments.length >= 100) return;
-    setAssignments(prev => [...prev, { memberId: '', memberDesc: '', budget: '' }]);
+    setAssignments((prev) => [...prev, { memberId: '', memberDesc: '', budget: '' }]);
   };
-  const removeMember = (i) => setAssignments(prev => prev.filter((_, idx) => idx !== i));
-  const updateAssignment = (i, key, val) => setAssignments(prev => prev.map((a, idx) => idx === i ? { ...a, [key]: val } : a));
+  const removeMember = (i) => {
+    // In management mode, prevent removing the management user
+    if (managementMode && currentUser?.id && String(assignments[i].memberId) === String(currentUser.id)) {
+      return;
+    }
+    setAssignments((prev) => prev.filter((_, idx) => idx !== i));
+  };
+  const updateAssignment = (i, key, val) => setAssignments((prev) => prev.map((a, idx) => idx === i ? { ...a, [key]: val } : a));
 
 
   // Find the most recent task this member was assigned to (for pre-fill)
@@ -563,43 +719,124 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
     if (!memberId) return null;
     const mid = parseInt(memberId);
     const sorted = [...tasks]
-      .filter(t => t.members?.some(m => m.id === mid))
+      .filter((t) => t.members?.some((m) => String(m.id) === String(mid)))
       .sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+    
+    console.log('?? Load previous assignment:', {
+      memberId,
+      mid,
+      totalTasks: tasks.length,
+      filteredTasks: sorted.length,
+      mostRecentTask: sorted[0]?.id
+    });
+    
     if (!sorted.length) return null;
-    const member = sorted[0].members.find(m => m.id === mid);
+    const member = sorted[0].members.find((m) => String(m.id) === String(mid));
+    
+    console.log('? Found previous assignment:', {
+      taskId: sorted[0].id,
+      taskTitle: sorted[0].title,
+      memberBudget: member?.budget,
+      memberDesc: member?.memberDesc
+    });
+    
     return { budget: member?.budget ?? '', memberDesc: member?.memberDesc ?? '' };
   };
   const handleSubmitClick = () => {
+    // ? Validate required fields: title, deadline/scheduledDate, and category
     if (!title.trim() || (!deadline && !scheduledDate)) return;
+    if (!selectedCategory) {
+      notify.error('Please select a category for this task');
+      return;
+    }
     requestAdminPassword(scheduledDate ? 'schedule this task' : 'create this task', () => {
       const members = assignments
-        .filter(a => a.memberId)
-        .map(a => {
-          const m = teamMembers.find(t => t.id === parseInt(a.memberId));
-          return m ? { ...m, memberDesc: a.memberDesc, budget: parseFloat(a.budget) || 0, stage } : null;
+        .filter((a) => a.memberId)
+        .map((a) => {
+          // Try multiple comparison strategies to handle type mismatches
+          const m = teamMembers.find((t) => 
+            t.id === a.memberId || // Direct comparison
+            t.id === parseInt(a.memberId) || // String to number
+            String(t.id) === String(a.memberId) || // Both to string
+            t.id === Number(a.memberId) // Explicit number conversion
+          );
+          
+          if (!m) {
+            console.error(`? CreateTaskModal: Could not find team member with ID: ${a.memberId}`);
+            return null;
+          }
+          
+          return { ...m, memberDesc: a.memberDesc, budget: parseFloat(a.budget) || 0, stage };
         })
         .filter(Boolean);
 
+      console.log('?? Members being assigned to task:', members.map((m) => ({ 
+        id: m.id, 
+        name: m.name, 
+        avatar: m.avatar, 
+        color: m.color,
+        role: m.role 
+      })));
+
       const payments = paymentEntries
-        .filter(p => p.title.trim() || p.amount)
-        .map(p => ({ title: p.title.trim(), amount: parseFloat(p.amount) || 0 }));
+        .filter((p) => p.title.trim() || p.amount)
+        .map((p) => ({ title: p.title.trim(), amount: parseFloat(p.amount) || 0 }));
+
+      // Strip image data from tags and categories to reduce document size
+      const tagsForSave = selectedTags.map((tag) => ({
+        id: tag.id,
+        label: tag.label || tag.name,
+        color: tag.color,
+        bg: tag.bg
+      }));
+      
+      const categoryForSave = selectedCategory ? {
+        id: selectedCategory.id,
+        label: selectedCategory.label || selectedCategory.name,
+        color: selectedCategory.color,
+        bg: selectedCategory.bg
+      } : null;
+
+      console.log('ðŸ“ Scribes before creating taskData:', {
+        scribes,
+        scribesLength: scribes.length,
+        scribesArray: scribes
+      });
 
       const taskData = {
-        id: taskId, title, description,
+        id: taskId, 
+        title, 
+        description,
         deadline: deadline || scheduledDate,
         scheduledDate: scheduledDate || null,
-        tags: selectedTags, category: selectedCategory,
-        stage, totalBudget, members,
+        tags: tagsForSave, 
+        category: categoryForSave,
+        stage, 
+        totalBudget, 
+        members,
         payments: payments.length > 0 ? payments : null,
         scribes: scribes.length > 0 ? scribes : null,
+        taskBudgetAmount: taskBudgetAmount ? parseFloat(taskBudgetAmount) : null, // ? Save task budget
+        taskBudgetStatus: taskBudgetAmount ? taskBudgetStatus : null // ? Save task budget status
       };
+
+      console.log('?? Task data being created:', {
+        id: taskData.id,
+        title: taskData.title,
+        tagsCount: taskData.tags?.length || 0,
+        hasCategory: !!taskData.category,
+        membersCount: taskData.members?.length || 0,
+        totalBudget: taskData.totalBudget,
+        stage: taskData.stage
+      });
 
       const createdBy = requestData?._approvedBy
         ? { ...requestData._approvedBy, source: 'Approval Panel' }
         : currentUser ? { ...currentUser, source: null } : null;
 
       if (scheduledDate && !deadline) {
-        onSchedule && onSchedule(taskData);
+        // Include createdBy in scheduled task data
+        onSchedule && onSchedule({ ...taskData, createdBy });
       } else {
         onCreate(taskData, createdBy);
       }
@@ -635,39 +872,56 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     <input
                       autoFocus
                       value={loadSearch}
-                      onChange={e => setLoadSearch(e.target.value)}
-                      placeholder="Search by title or task ID…"
+                      onChange={(e) => setLoadSearch(e.target.value)}
+                      placeholder="Search by title or task ID"
                       style={{ width: '100%', padding: '8px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'}
-                      onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                      onFocus={(e) => e.target.style.borderColor = '#3B5BFC'}
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
                     />
                   </div>
                   {/* Task list */}
                   <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                     {(() => {
                       const q = loadSearch.trim().toLowerCase();
-                      const filtered = tasks.filter(t =>
+                      const filtered = tasks.filter((t) =>
                         !q ||
                         t.title?.toLowerCase().includes(q) ||
                         t.id?.toLowerCase().includes(q)
-                      ).slice(0, 20);
+                      ).slice(0, 3); // Load only 3 recent tasks
                       if (filtered.length === 0) return (
                         <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No tasks found</div>
                       );
-                      return filtered.map(t => (
+                      return filtered.map((t) => (
                         <button key={t.id} type="button" onClick={() => loadFromTask(t)}
                           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', textAlign: 'left' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
                         >
                           <div style={{ flexShrink: 0 }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: t.stage === 'Complete' ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: 0.5 }}>{t.id}</div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: t.stage === 'Complete' ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: 0.5 }}>#{t.id}</div>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                               <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 10, background: STAGE_BG[t.stage], color: STAGE_COLORS[t.stage] }}>{t.stage}</span>
-                              {t.category && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t.category.emoji} {t.category.label}</span>}
+                              {t.category && (
+                                <span style={{ 
+                                  fontSize: 10, 
+                                  padding: '3px 8px', 
+                                  borderRadius: 50, 
+                                  background: t.category.bg || '#F3F4F6', 
+                                  color: '#1A1D2E', 
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3
+                                }}>
+                                  {t.category.image && (
+                                    <img src={t.category.image} alt="" style={{ width: 10, height: 10, objectFit: 'contain' }} />
+                                  )}
+                                  {t.category.label}
+                                </span>
+                              )}
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>{t.members?.length || 0} member{t.members?.length !== 1 ? 's' : ''}</span>
                             </div>
                           </div>
@@ -699,23 +953,23 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           {/* Title */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Enter task title..."
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter task title..."
               style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
           {/* Description */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="General overview visible to all team members..." rows={3}
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="General overview visible to all team members..." rows={3}
               style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
-          {/* Date — toggle between Completion and Schedule */}
+          {/* Date ? toggle between Completion and Schedule */}
           <div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 10, background: 'var(--bg-subtle)', borderRadius: 10, padding: 4 }}>
-              {[{ label: 'Completion Date', key: 'completion' }, { label: 'Schedule Date', key: 'schedule' }].map(opt => (
+              {[{ label: 'Completion Date', key: 'completion' }, { label: 'Schedule Date', key: 'schedule' }].map((opt) => (
                 <button key={opt.key}
                   onClick={() => { setDateMode(opt.key); setDeadline(''); setScheduledDate(''); }}
                   style={{
@@ -731,18 +985,14 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
             <input type="date"
               value={dateMode === 'completion' ? deadline : scheduledDate}
               min={new Date().toISOString().split('T')[0]}
-              onChange={e => dateMode === 'completion' ? setDeadline(e.target.value) : setScheduledDate(e.target.value)}
+              onChange={(e) => dateMode === 'completion' ? setDeadline(e.target.value) : setScheduledDate(e.target.value)}
               style={{ width: '100%', padding: '11px 16px', border: `1.5px solid ${(deadline || scheduledDate) ? (dateMode === 'schedule' ? '#7C3AED' : '#3B5BFC') : 'var(--border)'}`, borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box', colorScheme: 'normal' }}
-              onFocus={e => e.target.style.borderColor = dateMode === 'schedule' ? '#7C3AED' : '#3B5BFC'}
-              onBlur={e => e.target.style.borderColor = (deadline || scheduledDate) ? (dateMode === 'schedule' ? '#7C3AED' : '#3B5BFC') : 'var(--border)'} />
+              onFocus={(e) => e.target.style.borderColor = dateMode === 'schedule' ? '#7C3AED' : '#3B5BFC'}
+              onBlur={(e) => e.target.style.borderColor = (deadline || scheduledDate) ? (dateMode === 'schedule' ? '#7C3AED' : '#3B5BFC') : 'var(--border)'} />
             {dateMode === 'schedule' && (
               <div style={{ marginTop: 8, padding: '10px 14px', background: '#F5F3FF', borderRadius: 10, border: '1.5px solid #DDD6FE', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Shield size={13} color="#7C3AED" strokeWidth={2.5} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED' }}>Admin-only — Scheduled Task</span>
-                </div>
                 <div style={{ fontSize: 11, color: '#6D28D9', lineHeight: 1.6 }}>
-                  This task is scheduled for creation. Only admin can see it until then.
+                  This task is scheduled for creation.
                 </div>
               </div>
             )}
@@ -751,7 +1001,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           {/* Stage */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Initial Stage</label>
-            <select value={stage} onChange={e => setStage(e.target.value)}
+            <select value={stage} onChange={(e) => setStage(e.target.value)}
               style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', cursor: 'pointer', boxSizing: 'border-box' }}>
               <option value="New">New (Default)</option>
               <option value="Start">Start (Begin immediately)</option>
@@ -762,15 +1012,33 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {TAGS.map(tag => {
-                const sel = selectedTags.find(t => t.label === tag.label);
+              {TAGS.map((tag) => {
+                // Normalize tag format (support both old and new format)
+                const tagData = {
+                  id: tag.id || tag.label,
+                  label: tag.name || tag.label,
+                  image: tag.image || tag.emoji || '???',
+                  color: tag.color || '#6B7280',
+                  bg: tag.color ? `${tag.color}15` : (tag.bg || '#F3F4F6')
+                };
+                const isImageUrl = tagData.image && (tagData.image.startsWith('data:') || tagData.image.startsWith('http'));
+                const sel = selectedTags.find((t) => (t.label || t.name) === tagData.label);
                 return (
-                  <button key={tag.label} onClick={() => toggleTag(tag)} style={{
+                  <button key={tagData.id} onClick={() => toggleTag(tagData)} style={{
                     padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1.5px solid ${sel ? tag.color : 'var(--border)'}`,
-                    background: sel ? tag.bg : 'var(--bg-surface)', color: sel ? tag.color : 'var(--text-secondary)', transition: 'all 0.15s',
+                    border: `1.5px solid ${sel ? '#3B5BFC' : 'var(--border)'}`,
+                    background: sel ? tagData.bg : 'var(--bg-surface)', 
+                    color: 'var(--text-secondary)', 
+                    transition: 'all 0.15s',
+                    boxShadow: sel ? `0 2px 8px ${tagData.color}30` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 6
                   }}>
-                    {tag.emoji} {tag.label}
+                    {isImageUrl ? (
+                      <img src={tagData.image} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                    ) : (
+                      <span>{tagData.image}</span>
+                    )}
+                    {tagData.label}
                   </button>
                 );
               })}
@@ -778,7 +1046,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
               {/* Add custom tag button */}
               {!showAddTag ? (
                 <button 
-                  onClick={() => setShowAddTag(true)} 
+                  onClick={saveFormDataAndNavigate} 
                   style={{
                     padding: '6px 14px', 
                     borderRadius: 20, 
@@ -799,8 +1067,8 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input 
                     value={newTagLabel}
-                    onChange={e => setNewTagLabel(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addCustomTag()}
+                    onChange={(e) => setNewTagLabel(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addCustomTag()}
                     placeholder="Tag name..."
                     autoFocus
                     style={{
@@ -851,18 +1119,33 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
               Category <span style={{ fontSize: 11, textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>(pick one)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CATEGORIES.map(cat => {
-                const sel = selectedCategory?.label === cat.label;
+              {CATEGORIES.map((cat) => {
+                // Normalize category format (support both old and new format)
+                const catData = {
+                  id: cat.id || cat.label,
+                  label: cat.name || cat.label,
+                  image: cat.icon || cat.emoji || '??',
+                  color: cat.color || '#6B7280',
+                  bg: cat.color ? `${cat.color}15` : (cat.bg || '#F3F4F6')
+                };
+                const isImageUrl = catData.image && (catData.image.startsWith('data:') || catData.image.startsWith('http'));
+                const sel = selectedCategory && (selectedCategory.label || selectedCategory.name) === catData.label;
                 return (
-                  <button key={cat.label} onClick={() => setSelectedCategory(sel ? null : cat)} style={{
+                  <button key={catData.id} onClick={() => setSelectedCategory(sel ? null : catData)} style={{
                     padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1.5px solid ${sel ? cat.color : 'var(--border)'}`,
-                    background: sel ? cat.bg : 'var(--bg-surface)',
-                    color: sel ? cat.color : 'var(--text-secondary)',
+                    border: `1.5px solid ${sel ? '#3B5BFC' : 'var(--border)'}`,
+                    background: sel ? catData.bg : 'var(--bg-surface)',
+                    color: 'var(--text-secondary)',
                     transition: 'all 0.15s',
-                    boxShadow: sel ? `0 2px 8px ${cat.color}30` : 'none',
+                    boxShadow: sel ? `0 2px 8px ${catData.color}30` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 6
                   }}>
-                    {cat.emoji} {cat.label}
+                    {isImageUrl ? (
+                      <img src={catData.image} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                    ) : (
+                      <span>{catData.image}</span>
+                    )}
+                    {catData.label}
                   </button>
                 );
               })}
@@ -870,7 +1153,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
               {/* Add custom category button */}
               {!showAddCategory ? (
                 <button 
-                  onClick={() => setShowAddCategory(true)} 
+                  onClick={saveFormDataAndNavigate} 
                   style={{
                     padding: '6px 14px', 
                     borderRadius: 20, 
@@ -891,8 +1174,8 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input 
                     value={newCategoryLabel}
-                    onChange={e => setNewCategoryLabel(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addCustomCategory()}
+                    onChange={(e) => setNewCategoryLabel(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addCustomCategory()}
                     placeholder="Category name..."
                     autoFocus
                     style={{
@@ -945,7 +1228,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                 <div key={i} style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px', border: '1.5px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Member {i + 1}</span>
-                    {assignments.length > 1 && (
+                    {assignments.length > 1 && !(managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)) && (
                       <button onClick={() => removeMember(i)} style={{ background: '#FEF2F2', border: 'none', borderRadius: 8, padding: '4px 10px', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Trash2 size={12} /> Remove
                       </button>
@@ -957,7 +1240,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {a.memberId && getPreviousAssignment(a.memberId) && (
                           <div style={{ position: 'relative', flexShrink: 0 }}
-                            onMouseEnter={e => {
+                            onMouseEnter={(e) => {
                               const t = e.currentTarget.querySelector('.prev-tip');
                               if (!t) return;
                               const rect = e.currentTarget.getBoundingClientRect();
@@ -965,7 +1248,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                               t.style.left = (rect.left + rect.width / 2) + 'px';
                               t.style.opacity = '1';
                             }}
-                            onMouseLeave={e => { const t = e.currentTarget.querySelector('.prev-tip'); if(t) t.style.opacity='0'; }}
+                            onMouseLeave={(e) => { const t = e.currentTarget.querySelector('.prev-tip'); if(t) t.style.opacity='0'; }}
                           >
                             <button type="button"
                               onClick={() => {
@@ -980,15 +1263,27 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                             </div>
                           </div>
                         )}
-                        <select value={a.memberId} onChange={e => updateAssignment(i, 'memberId', e.target.value)}
-                          style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', cursor: 'pointer', boxSizing: 'border-box' }}>
+                        <select value={a.memberId} onChange={(e) => updateAssignment(i, 'memberId', e.target.value)}
+                          disabled={managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)}
+                          style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: (managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)) ? 'var(--bg-subtle)' : 'var(--bg-surface)', cursor: (managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)) ? 'not-allowed' : 'pointer', opacity: (managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)) ? 0.6 : 1, boxSizing: 'border-box' }}>
                           <option value="">Select member...</option>
                           {(() => {
-                            const active = teamMembers.filter(m => m.status === 'Active');
-                            const roles = [...new Set(active.map(m => m.role))].sort();
-                            return roles.map(role => (
+                            // ? Get already selected member IDs (excluding current row)
+                            const selectedMemberIds = assignments
+                              .map((assignment, idx) => idx !== i ? assignment.memberId : null)
+                              .filter(Boolean);
+                            
+                            // ? Filter out already assigned members
+                            const active = teamMembers.filter((m) => 
+                              m.status === 'Active' && 
+                              m.role?.toLowerCase() !== 'admin' &&
+                              !selectedMemberIds.includes(String(m.id))
+                            );
+                            
+                            const roles = [...new Set(active.map((m) => m.role))].sort();
+                            return roles.map((role) => (
                               <optgroup key={role} label={role}>
-                                {active.filter(m => m.role === role).map(m => (
+                                {active.filter((m) => m.role === role).map((m) => (
                                   <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                               </optgroup>
@@ -999,18 +1294,18 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     </div>
                     {!hideBudget && (
                       <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Budget (₹)</label>
-                        <input type="number" value={a.budget} onChange={e => updateAssignment(i, 'budget', e.target.value)} placeholder="0.00"
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
+                        <input type="number" value={a.budget} onChange={(e) => updateAssignment(i, 'budget', e.target.value)} placeholder="0.00"
                           style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                          onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                          onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                       </div>
                     )}
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Instructions</label>
-                    <input value={a.memberDesc} onChange={e => updateAssignment(i, 'memberDesc', e.target.value)} placeholder="Instructions for this member..."
+                    <input value={a.memberDesc} onChange={(e) => updateAssignment(i, 'memberDesc', e.target.value)} placeholder="Instructions for this member..."
                       style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                      onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                   </div>
                 </div>
               ))}
@@ -1030,23 +1325,23 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Payment Title</label>
                     <input 
                       value={p.title} 
-                      onChange={e => updatePaymentEntry(i, 'title', e.target.value)} 
+                      onChange={(e) => updatePaymentEntry(i, 'title', e.target.value)} 
                       placeholder="Additional payment..."
                       style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} 
-                      onBlur={e => e.target.style.borderColor = 'var(--border)'} 
+                      onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} 
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
                     />
                   </div>
                   <div style={{ width: 140 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (₹)</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
                     <input 
                       type="number"
                       value={p.amount} 
-                      onChange={e => updatePaymentEntry(i, 'amount', e.target.value)} 
+                      onChange={(e) => updatePaymentEntry(i, 'amount', e.target.value)} 
                       placeholder="0.00"
                       style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} 
-                      onBlur={e => e.target.style.borderColor = 'var(--border)'} 
+                      onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} 
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
                     />
                   </div>
                   {paymentEntries.length > 1 && (
@@ -1099,23 +1394,24 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           </div>
           )}
 
-          {/* Scribe */}
+          {/* Scribe - Hidden when schedule mode is selected */}
+          {dateMode !== 'schedule' && (
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Scribe</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {scribes.map((s, i) => (
                 <div key={i}>
-                  {/* Edit mode — inline editor for this scribe */}
+                  {/* Edit mode - inline editor for this scribe */}
                   {editingScribeIdx === i ? (
                     <div style={{ background: 'var(--input-bg)', borderRadius: 12, padding: '10px 12px', border: '1.5px solid #7C3AED40', display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {/* Row 1: type + title + save + cancel */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {[{ key: 'note', color: '#7C3AED', bg: '#F5F3FF', label: 'Note', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
                           { key: 'sheet', color: '#12C479', bg: '#ECFDF5', label: 'Sheet', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> }
-                        ].map(opt => (
+                        ].map((opt) => (
                           <div key={opt.key} style={{ position: 'relative' }}
-                            onMouseEnter={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
-                            onMouseLeave={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
+                            onMouseEnter={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
                           >
                             <button type="button" onClick={() => setScribeType(opt.key)}
                               style={{ width: 28, height: 28, borderRadius: 7, border: `1.5px solid ${scribeType === opt.key ? opt.color : 'var(--border)'}`, background: scribeType === opt.key ? opt.bg : 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -1126,15 +1422,15 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                             </div>
                           </div>
                         ))}
-                        <input value={scribeTitle} onChange={e => setScribeTitle(e.target.value)} autoFocus
-                          placeholder="Title…"
+                        <input value={scribeTitle} onChange={(e) => setScribeTitle(e.target.value)} autoFocus
+                          placeholder="Title"
                           style={{ flex: 1, padding: '6px 10px', border: '1.5px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', minWidth: 0 }}
-                          onFocus={e => e.target.style.borderColor = '#7C3AED'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                          onFocus={(e) => e.target.style.borderColor = '#7C3AED'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                         {/* Save */}
                         <button type="button" disabled={!scribeTitle.trim()}
                           onClick={() => {
                             if (!scribeTitle.trim()) return;
-                            const allMemberIds = assignments.filter(a => a.memberId).map(a => String(a.memberId));
+                            const allMemberIds = assignments.filter((a) => a.memberId).map((a) => String(a.memberId));
                             const resolvedAssignees = scribeAssignMode === 'all'
                               ? allMemberIds
                               : scribeAssignees.length > 0 ? scribeAssignees : allMemberIds;
@@ -1153,10 +1449,10 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                           <X size={13} color="#9CA3AF" />
                         </button>
                       </div>
-                      {/* Row 2: Assign to — mode tabs + list (same as add picker) */}
+                      {/* Row 2: Assign to ? mode tabs + list (same as add picker) */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-                          {[{ key: 'all', label: 'All' }, { key: 'member', label: 'Member' }, { key: 'role', label: 'Role' }].map(mode => (
+                          {[{ key: 'all', label: 'All' }, { key: 'role', label: 'Role' }].map((mode) => (
                             <button key={mode.key} type="button"
                               onClick={() => { setScribeAssignMode(mode.key); setScribeAssignees([]); setScribeSelectedRole(''); }}
                               style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', background: scribeAssignMode === mode.key ? 'var(--bg-surface)' : 'transparent', color: scribeAssignMode === mode.key ? '#3B5BFC' : 'var(--text-muted)', boxShadow: scribeAssignMode === mode.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.15s' }}>
@@ -1167,16 +1463,16 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                         {scribeAssignMode === 'all' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#EEF2FF', borderRadius: 8, border: '1.5px solid #C7D4FF' }}>
                             <CheckCircle size={13} color="#3B5BFC" />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will receive this scribe</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will join this scribe</span>
                           </div>
                         )}
                         {scribeAssignMode === 'member' && (() => {
-                          const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
+                          const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
                           if (assignedMembers.length === 0) return <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>No members assigned yet</div>;
-                          const allPicked = assignedMembers.every(m => scribeAssignees.includes(String(m.id)));
+                          const allPicked = assignedMembers.every((m) => scribeAssignees.includes(String(m.id)));
                           return (
                             <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                              <button type="button" onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map(m => String(m.id)))}
+                              <button type="button" onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map((m) => String(m.id)))}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: allPicked ? '#EEF2FF' : 'var(--bg-subtle)', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}>
                                 <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allPicked ? '#3B5BFC' : '#C4C9D9'}`, background: allPicked ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {allPicked && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1188,7 +1484,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                                 const sel = scribeAssignees.includes(String(m.id));
                                 return (
                                   <button key={m.id} type="button"
-                                    onClick={() => setScribeAssignees(prev => sel ? prev.filter(id => id !== String(m.id)) : [...prev, String(m.id)])}
+                                    onClick={() => setScribeAssignees(prev => sel ? prev.filter((id) => id !== String(m.id)) : [...prev, String(m.id)])}
                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: sel ? '#F5F8FF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < assignedMembers.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                     <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? '#3B5BFC' : '#C4C9D9'}`, background: sel ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {sel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1206,19 +1502,19 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                           );
                         })()}
                         {scribeAssignMode === 'role' && (() => {
-                          const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
-                          const uniqueRoles = [...new Set(assignedMembers.map(m => m.role))];
+                          const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
+                          const uniqueRoles = [...new Set(assignedMembers.map((m) => m.role))];
                           if (uniqueRoles.length === 0) return <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>No members assigned yet</div>;
                           return (
                             <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                               {uniqueRoles.map((role, idx) => {
-                                const roleMembers = assignedMembers.filter(m => m.role === role);
-                                const roleMemberIds = roleMembers.map(m => String(m.id));
-                                const allSel = roleMemberIds.every(id => scribeAssignees.includes(id));
-                                const someSel = roleMemberIds.some(id => scribeAssignees.includes(id));
+                                const roleMembers = assignedMembers.filter((m) => m.role === role);
+                                const roleMemberIds = roleMembers.map((m) => String(m.id));
+                                const allSel = roleMemberIds.every((id) => scribeAssignees.includes(id));
+                                const someSel = roleMemberIds.some((id) => scribeAssignees.includes(id));
                                 return (
                                   <button key={role} type="button"
-                                    onClick={() => setScribeAssignees(allSel ? scribeAssignees.filter(id => !roleMemberIds.includes(id)) : [...new Set([...scribeAssignees, ...roleMemberIds])])}
+                                    onClick={() => setScribeAssignees(allSel ? scribeAssignees.filter((id) => !roleMemberIds.includes(id)) : [...new Set([...scribeAssignees, ...roleMemberIds])])}
                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: allSel ? '#F5F8FF' : someSel ? '#FAFBFF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < uniqueRoles.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                     <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allSel ? '#3B5BFC' : someSel ? '#93A8FF' : '#C4C9D9'}`, background: allSel ? '#3B5BFC' : someSel ? '#EEF2FF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {allSel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1227,7 +1523,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{role}</div>
                                       <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                                        {roleMembers.map(m => (
+                                        {roleMembers.map((m) => (
                                           <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
                                         ))}
                                         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 2 }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
@@ -1243,8 +1539,8 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                         {scribeAssignMode !== 'all' && scribeAssignees.length > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Selected:</span>
-                            {scribeAssignees.map(id => {
-                              const m = teamMembers.find(t => t.id === parseInt(id));
+                            {scribeAssignees.map((id) => {
+                              const m = teamMembers.find((t) => t.id === parseInt(id));
                               if (!m) return null;
                               return (
                                 <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 4px', background: '#EEF2FF', borderRadius: 20, border: '1px solid #C7D4FF' }}>
@@ -1272,7 +1568,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>All assigned members</div>
                       ) : s.assignees.length > 0 ? (
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {s.assignees.map(id => teamMembers.find(m => m.id === parseInt(id))?.name).filter(Boolean).join(', ')}
+                          {s.assignees.map((id) => teamMembers.find((m) => m.id === parseInt(id))?.name).filter(Boolean).join(', ')}
                         </div>
                       ) : null}
                     </div>
@@ -1306,10 +1602,10 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                   {/* Type toggle */}
                   {[{ key: 'note', color: '#7C3AED', bg: '#F5F3FF', label: 'Note', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
                     { key: 'sheet', color: '#12C479', bg: '#ECFDF5', label: 'Sheet', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> }
-                  ].map(opt => (
+                  ].map((opt) => (
                     <div key={opt.key} style={{ position: 'relative' }}
-                      onMouseEnter={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
+                      onMouseEnter={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
+                      onMouseLeave={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
                     >
                       <button type="button" onClick={() => setScribeType(opt.key)}
                         style={{ width: 28, height: 28, borderRadius: 7, border: `1.5px solid ${scribeType === opt.key ? opt.color : 'var(--border)'}`, background: scribeType === opt.key ? opt.bg : 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -1321,15 +1617,15 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     </div>
                   ))}
                   {/* Title */}
-                  <input value={scribeTitle} onChange={e => setScribeTitle(e.target.value)}
-                    placeholder="Title…" autoFocus
+                  <input value={scribeTitle} onChange={(e) => setScribeTitle(e.target.value)}
+                    placeholder="Title" autoFocus
                     style={{ flex: 1, padding: '6px 10px', border: '1.5px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', minWidth: 0 }}
-                    onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                    onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                   {/* Add */}
                   <button type="button" disabled={!scribeTitle.trim()}
                     onClick={() => {
                       if (!scribeTitle.trim()) return;
-                      const allMemberIds = assignments.filter(a => a.memberId).map(a => String(a.memberId));
+                      const allMemberIds = assignments.filter((a) => a.memberId).map((a) => String(a.memberId));
                       const resolvedAssignees = scribeAssignMode === 'all'
                         ? allMemberIds
                         : scribeAssignees.length > 0 ? scribeAssignees : allMemberIds;
@@ -1345,11 +1641,11 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     <X size={13} color="#9CA3AF" />
                   </button>
                   </div>
-                  {/* Row 2: Assign to — mode tabs + list */}
+                  {/* Row 2: Assign to ? mode tabs + list */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {/* Mode tabs: All / Member / Role */}
                     <div style={{ display: 'flex', gap: 4, background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-                      {[{ key: 'all', label: 'All' }, { key: 'member', label: 'Member' }, { key: 'role', label: 'Role' }].map(mode => (
+                      {[{ key: 'all', label: 'All' }, { key: 'role', label: 'Role' }].map((mode) => (
                         <button key={mode.key} type="button"
                           onClick={() => { setScribeAssignMode(mode.key); setScribeAssignees([]); setScribeSelectedRole(''); }}
                           style={{
@@ -1364,28 +1660,28 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                       ))}
                     </div>
 
-                    {/* All mode — just a label */}
+                    {/* All mode ? just a label */}
                     {scribeAssignMode === 'all' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#EEF2FF', borderRadius: 8, border: '1.5px solid #C7D4FF' }}>
                         <CheckCircle size={13} color="#3B5BFC" />
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will receive this scribe</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will join this scribe</span>
                       </div>
                     )}
 
-                    {/* Member mode — checklist of assigned members */}
+                    {/* Member mode ? checklist of assigned members */}
                     {scribeAssignMode === 'member' && (() => {
-                      const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
+                      const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
                       if (assignedMembers.length === 0) return (
                         <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>
                           No members assigned yet
                         </div>
                       );
-                      const allPicked = assignedMembers.every(m => scribeAssignees.includes(String(m.id)));
+                      const allPicked = assignedMembers.every((m) => scribeAssignees.includes(String(m.id)));
                       return (
                         <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                           {/* Select All row */}
                           <button type="button"
-                            onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map(m => String(m.id)))}
+                            onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map((m) => String(m.id)))}
                             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: allPicked ? '#EEF2FF' : 'var(--bg-subtle)', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}>
                             <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allPicked ? '#3B5BFC' : '#C4C9D9'}`, background: allPicked ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               {allPicked && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1398,7 +1694,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                             const sel = scribeAssignees.includes(String(m.id));
                             return (
                               <button key={m.id} type="button"
-                                onClick={() => setScribeAssignees(prev => sel ? prev.filter(id => id !== String(m.id)) : [...prev, String(m.id)])}
+                                onClick={() => setScribeAssignees(prev => sel ? prev.filter((id) => id !== String(m.id)) : [...prev, String(m.id)])}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: sel ? '#F5F8FF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < assignedMembers.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                 <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? '#3B5BFC' : '#C4C9D9'}`, background: sel ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {sel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1416,10 +1712,10 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                       );
                     })()}
 
-                    {/* Role mode — checklist of unique roles from assigned members */}
+                    {/* Role mode ? checklist of unique roles from assigned members */}
                     {scribeAssignMode === 'role' && (() => {
-                      const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
-                      const uniqueRoles = [...new Set(assignedMembers.map(m => m.role))];
+                      const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
+                      const uniqueRoles = [...new Set(assignedMembers.map((m) => m.role))];
                       if (uniqueRoles.length === 0) return (
                         <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>
                           No members assigned yet
@@ -1428,14 +1724,14 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                       return (
                         <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                           {uniqueRoles.map((role, idx) => {
-                            const roleMembers = assignedMembers.filter(m => m.role === role);
-                            const roleMemberIds = roleMembers.map(m => String(m.id));
-                            const allSel = roleMemberIds.every(id => scribeAssignees.includes(id));
-                            const someSel = roleMemberIds.some(id => scribeAssignees.includes(id));
+                            const roleMembers = assignedMembers.filter((m) => m.role === role);
+                            const roleMemberIds = roleMembers.map((m) => String(m.id));
+                            const allSel = roleMemberIds.every((id) => scribeAssignees.includes(id));
+                            const someSel = roleMemberIds.some((id) => scribeAssignees.includes(id));
                             return (
                               <button key={role} type="button"
                                 onClick={() => setScribeAssignees(allSel
-                                  ? scribeAssignees.filter(id => !roleMemberIds.includes(id))
+                                  ? scribeAssignees.filter((id) => !roleMemberIds.includes(id))
                                   : [...new Set([...scribeAssignees, ...roleMemberIds])]
                                 )}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: allSel ? '#F5F8FF' : someSel ? '#FAFBFF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < uniqueRoles.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
@@ -1446,7 +1742,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{role}</div>
                                   <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                                    {roleMembers.map(m => (
+                                    {roleMembers.map((m) => (
                                       <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
                                     ))}
                                     <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 2 }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
@@ -1464,8 +1760,8 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
                     {scribeAssignMode !== 'all' && scribeAssignees.length > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Selected:</span>
-                        {scribeAssignees.map(id => {
-                          const m = teamMembers.find(t => t.id === parseInt(id));
+                        {scribeAssignees.map((id) => {
+                          const m = teamMembers.find((t) => t.id === parseInt(id));
                           if (!m) return null;
                           return (
                             <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 4px', background: '#EEF2FF', borderRadius: 20, border: '1px solid #C7D4FF' }}>
@@ -1481,23 +1777,76 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
               ))}
             </div>
           </div>
+          )}
 
-          {/* Budget summary */}
+          {/* Task Budget */}
+          {!hideBudget && (
+          <div style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid var(--border)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Task Budget</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
+                <input 
+                  type="number"
+                  value={taskBudgetAmount} 
+                  onChange={(e) => setTaskBudgetAmount(e.target.value)} 
+                  placeholder="0.00"
+                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
+                  onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} 
+                  onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+              Overall task budget (separate from team member budgets). Payment status managed from Payment page.
+            </div>
+          </div>
+          )}
+
+          {/* Amount summary */}
           {!hideBudget && (
           <div style={{ background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid #C7D4FF' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Budget Summary</div>
-            {assignments.filter(a => a.memberId && a.budget).map((a, i) => {
-              const m = teamMembers.find(t => t.id === parseInt(a.memberId));
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Amount Summary</div>
+            
+            {/* Team member budgets */}
+            {assignments.filter((a) => a.memberId && a.budget).map((a, i) => {
+              const m = teamMembers.find((t) => String(t.id) === String(a.memberId));
               return m ? (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
                   <span>{m.name} <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({m.role})</span></span>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₹ {parseFloat(a.budget || 0).toLocaleString()}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₹{parseFloat(a.budget || 0).toLocaleString()}</span>
                 </div>
               ) : null;
             })}
+            
+            {/* Team Amount subtotal */}
+            {memberBudgets > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF' }}>
+                <span style={{ fontWeight: 600 }}>Team Amount</span>
+                <span style={{ fontWeight: 700 }}>₹{memberBudgets.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Additional Amount subtotal (without individual entries) */}
+            {additionalPayments > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF' }}>
+                <span style={{ fontWeight: 600 }}>Additional Amount</span>
+                <span style={{ fontWeight: 700 }}>₹{additionalPayments.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Task Budget (display only, not added to total) */}
+            {taskBudgetAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7C3AED', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF', background: '#F5F3FF', padding: '8px 12px', borderRadius: 8, marginLeft: -12, marginRight: -12 }}>
+                <span style={{ fontWeight: 600 }}>Task Budget</span>
+                <span style={{ fontWeight: 700 }}>₹{parseFloat(taskBudgetAmount).toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Total Amount */}
             <div style={{ borderTop: '1px solid #C7D4FF', marginTop: 8, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Budget</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: '#3B5BFC' }}>₹ {totalBudget.toLocaleString()}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Amount</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#3B5BFC' }}>₹{totalBudget.toLocaleString()}</span>
             </div>
           </div>
           )}
@@ -1522,28 +1871,121 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           onClose={handlePasswordCancel}
           onConfirm={handlePasswordConfirm}
           action={pendingAction?.actionName || 'perform this action'}
-          label={managementMode ? 'Management Password' : 'Admin Password'} label={managementMode ? 'Management Password' : 'Admin Password'}
+          label={managementMode ? 'Management Password' : 'Admin Password'}
         />
       )}
     </div>
   );
 }
 
-// ── Edit Task Modal ─────────────────────────────────────────────────────────
+// -- Edit Task Modal ---------------------------------------------------------
 function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = false, managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
-  const { tasks } = useApp();
+  const { tasks, TAGS, CATEGORIES, getPaymentsForTask, updatePaymentDetails, currentUser } = useApp();
+  
+  // ? Check if task is completed - if so, make modal read-only
+  const isCompleted = task.stage === 'Complete';
+  
+  // ? Detect if current user is management
+  const isManagementUser = managementMode || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager') || currentUser?.userRole === 'management';
+  
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
   const [deadline, setDeadline] = useState(task.deadline);
   const [selectedTags, setSelectedTags] = useState(task.tags || []);
   const [selectedCategory, setSelectedCategory] = useState(task.category);
   const [assignments, setAssignments] = useState(
-    task.members.map(m => ({ memberId: m.id.toString(), memberDesc: m.memberDesc || '', budget: m.budget || '' }))
+    task.members
+      .filter((m) => {
+        // Filter out management user in management mode
+        if (isManagementUser && currentUser?.id && String(m.id) === String(currentUser.id)) {
+          return false;
+        }
+        return true;
+      })
+      .map((m) => ({ memberId: m.id.toString(), memberDesc: m.memberDesc || '', budget: m.budget || '' }))
   );
-  const [paymentEntries, setPaymentEntries] = useState(
-    task.payments && task.payments.length > 0 ? task.payments : [{ title: '', amount: '' }]
-  );
+  
+  // Task Budget (separate from member budgets)
+  const [taskBudgetAmount, setTaskBudgetAmount] = useState(task.taskBudgetAmount || '');
+  const [taskBudgetStatus, setTaskBudgetStatus] = useState(task.taskBudgetStatus || 'Unpaid');
+  
+  // ? Load additional payments from Firebase (paymentType === 'additional' or 'investment')
+  const [additionalPayments, setAdditionalPayments] = useState([]);
+  const [isEditingAdditionalPayments, setIsEditingAdditionalPayments] = useState(false);
+  const [hasLoadedInitialPayments, setHasLoadedInitialPayments] = useState(false);
+  
+  // ? Store payment status info (to check if paid)
+  const [paymentStatusMap, setPaymentStatusMap] = useState({});
+  
+  // ? Load additional payments on mount ONLY (not on every task change)
+  useEffect(() => {
+    // Only load once when modal opens
+    if (hasLoadedInitialPayments) return;
+    
+    if (getPaymentsForTask) {
+      const taskPayments = getPaymentsForTask(task.id);
+      const additional = taskPayments.filter((p) => p.paymentType === 'additional' || p.paymentType === 'investment');
+      
+      // ? Build payment status map for all payments (member + additional)
+      const statusMap = {};
+      taskPayments.forEach((p) => {
+        if (p.paymentType === 'member') {
+          // Map by memberId for team member payments
+          statusMap[`member-${p.memberId}`] = {
+            isPaid: p.isPaid || false,
+            paidAmount: p.paidAmount || 0
+          };
+        } else if (p.paymentType === 'additional' || p.paymentType === 'investment') {
+          // Map by payment ID for additional payments
+          statusMap[`additional-${p.id}`] = {
+            isPaid: p.isPaid || false,
+            paidAmount: p.paidAmount || 0
+          };
+        }
+      });
+      
+      console.log('?? EditTaskModal - Loading additional payments for task:', task.id, {
+        allPayments: taskPayments.length,
+        additionalPayments: additional.length,
+        payments: additional.map((p) => ({ id: p.id, title: p.title, amount: p.amount, type: p.paymentType })),
+        statusMap
+      });
+      
+      setAdditionalPayments(additional.map((p) => ({
+        id: p.id,
+        title: p.title || '',
+        amount: p.amount || 0,
+      })));
+      setPaymentStatusMap(statusMap);
+      setHasLoadedInitialPayments(true);
+    }
+  }, [task.id, getPaymentsForTask, hasLoadedInitialPayments]);
+  
+  // ? Update additional payment locally (and in Firebase for existing payments)
+  const updateAdditionalPayment = (index, field, value) => {
+    const payment = additionalPayments[index];
+    
+    // Mark as editing to prevent useEffect from overwriting changes
+    setIsEditingAdditionalPayments(true);
+    
+    // Always update local state immediately for responsive UI
+    setAdditionalPayments(prev => prev.map((p, i) => 
+      i === index ? { ...p, [field]: value } : p
+    ));
+    
+    // Only update Firebase for existing payments (with ID)
+    // New payments (without ID) will be created when task is saved
+    if (payment && payment.id) {
+      // Debounce Firebase update to avoid lag on every keystroke
+      clearTimeout(window.additionalPaymentUpdateTimeout);
+      window.additionalPaymentUpdateTimeout = setTimeout(async () => {
+        const updates = { [field]: field === 'amount' ? parseFloat(value) || 0 : value };
+        await updatePaymentDetails(payment.id, updates);
+        console.log('? Additional payment updated in Firebase:', payment.id);
+      }, 1000); // Wait 1 second after user stops typing
+    }
+  };
 
   const [showAddTag, setShowAddTag] = useState(false);
   const [newTagLabel, setNewTagLabel] = useState('');
@@ -1591,30 +2033,30 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
     setSelectedCategory(t.category || null);
     setAssignments(
       t.members && t.members.length > 0
-        ? t.members.map(m => ({ memberId: String(m.id), memberDesc: m.memberDesc || '', budget: String(m.budget || '') }))
+        ? t.members.map((m) => ({ memberId: String(m.id), memberDesc: m.memberDesc || '', budget: String(m.budget || '') }))
         : [{ memberId: '', memberDesc: '', budget: '' }]
     );
     setPaymentEntries(
       t.payments && t.payments.length > 0
-        ? t.payments.map(p => ({ title: p.title, amount: String(p.amount) }))
+        ? t.payments.map((p) => ({ title: p.title, amount: String(p.amount) }))
         : [{ title: '', amount: '' }]
     );
     setShowLoadPanel(false);
     setLoadSearch('');
   };
-  const addPaymentEntry = () => setPaymentEntries(prev => [...prev, { title: '', amount: '' }]);
-  const removePaymentEntry = (i) => setPaymentEntries(prev => prev.filter((_, idx) => idx !== i));
-  const updatePaymentEntry = (i, key, val) => setPaymentEntries(prev => prev.map((p, idx) => idx === i ? { ...p, [key]: val } : p));
 
-  const totalBudget = assignments.reduce((s, a) => s + (parseFloat(a.budget) || 0), 0);
+  // ? Total Budget = Team member budgets + Additional payment amounts from Firebase
+  const memberBudgets = assignments.reduce((s, a) => s + (parseFloat(a.budget) || 0), 0);
+  const additionalPaymentsTotal = additionalPayments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const totalBudget = memberBudgets + additionalPaymentsTotal;
 
   const toggleTag = (tag) => {
-    setSelectedTags(prev => prev.find(t => t.label === tag.label) ? prev.filter(t => t.label !== tag.label) : [...prev, tag]);
+    setSelectedTags(prev => prev.find((t) => t.label === tag.label) ? prev.filter((t) => t.label !== tag.label) : [...prev, tag]);
   };
 
   const addCustomTag = () => {
     if (!newTagLabel.trim()) return;
-    const customTag = { label: newTagLabel.trim(), emoji: '🏷️', color: '#6B7280', bg: '#F3F4F6' };
+    const customTag = { label: newTagLabel.trim(), emoji: '???', color: '#6B7280', bg: '#F3F4F6' };
     setSelectedTags(prev => [...prev, customTag]);
     setNewTagLabel('');
     setShowAddTag(false);
@@ -1622,7 +2064,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
 
   const addCustomCategory = () => {
     if (!newCategoryLabel.trim()) return;
-    const customCategory = { label: newCategoryLabel.trim(), emoji: '📁', color: '#6B7280', bg: '#F3F4F6' };
+    const customCategory = { label: newCategoryLabel.trim(), emoji: '??', color: '#6B7280', bg: '#F3F4F6' };
     setSelectedCategory(customCategory);
     setNewCategoryLabel('');
     setShowAddCategory(false);
@@ -1640,40 +2082,321 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
     if (!memberId) return null;
     const mid = parseInt(memberId);
     const sorted = [...tasks]
-      .filter(t => t.id !== task.id && t.members?.some(m => m.id === mid))
+      .filter((t) => t.id !== task.id && t.members?.some((m) => String(m.id) === String(mid)))
       .sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+    
+    console.log('?? Load previous assignment (Edit):', {
+      memberId,
+      mid,
+      currentTaskId: task.id,
+      totalTasks: tasks.length,
+      filteredTasks: sorted.length,
+      mostRecentTask: sorted[0]?.id
+    });
+    
     if (!sorted.length) return null;
-    const member = sorted[0].members.find(m => m.id === mid);
+    const member = sorted[0].members.find((m) => String(m.id) === String(mid));
+    
+    console.log('? Found previous assignment (Edit):', {
+      taskId: sorted[0].id,
+      taskTitle: sorted[0].title,
+      memberBudget: member?.budget,
+      memberDesc: member?.memberDesc
+    });
+    
     return { budget: member?.budget ?? '', memberDesc: member?.memberDesc ?? '' };
   };
 
   const handleSubmitClick = () => {
     if (!title.trim() || !deadline) return;
-    requestAdminPassword('update this task', () => {
+    requestAdminPassword('update this task', async () => {
+      console.log('?? EditTaskModal - teamMembers available:', teamMembers.length);
+      console.log('?? EditTaskModal - teamMembers IDs and types:', teamMembers.map((m) => ({ 
+        id: m.id, 
+        idType: typeof m.id,
+        name: m.name 
+      })));
+      
       const members = assignments
-        .filter(a => a.memberId)
-        .map(a => {
-          const m = teamMembers.find(t => t.id === parseInt(a.memberId));
-          const existingMember = task.members.find(tm => tm.id === parseInt(a.memberId));
-          return m ? { ...m, memberDesc: a.memberDesc, budget: parseFloat(a.budget) || 0, stage: existingMember?.stage || 'New' } : null;
+        .filter((a) => a.memberId)
+        .map((a) => {
+          // Try multiple comparison strategies to handle type mismatches
+          const m = teamMembers.find((t) => 
+            t.id === a.memberId || // Direct string comparison
+            t.id === parseInt(a.memberId) || // String to number
+            String(t.id) === String(a.memberId) || // Both to string
+            t.id === Number(a.memberId) // Explicit number conversion
+          );
+          
+          if (!m) {
+            console.error(`? Could not find team member with ID: ${a.memberId}`);
+            console.log('Available team member IDs:', teamMembers.map((t) => t.id));
+            return null;
+          }
+          
+          console.log(`? Found member: ${m.name} (ID: ${m.id})`);
+          const existingMember = task.members.find((tm) => 
+            tm.id === a.memberId || 
+            tm.id === parseInt(a.memberId) ||
+            String(tm.id) === String(a.memberId)
+          );
+          
+          return { 
+            ...m, 
+            memberDesc: a.memberDesc, 
+            budget: parseFloat(a.budget) || 0, 
+            stage: existingMember?.stage || 'New' 
+          };
         })
         .filter(Boolean);
       
-      const payments = paymentEntries
-        .filter(p => p.title.trim() || p.amount)
-        .map(p => ({ title: p.title.trim(), amount: parseFloat(p.amount) || 0 }));
+      console.log('?? EditTaskModal - assignments:', assignments);
+      console.log('?? EditTaskModal - constructed members:', members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        avatar: m.avatar,
+        color: m.color,
+        role: m.role
+      })));
+      
+      // ? Sync payment entries with task changes
+      try {
+        const taskPayments = getPaymentsForTask(task.id);
+        console.log('?? EditTaskModal - Syncing payments for task:', task.id);
+        console.log('?? Current payments:', taskPayments.length);
+        
+        // 0?? Update task title in ALL payment entries if title changed
+        if (task.title !== title) {
+          console.log(`?? Task title changed: "${task.title}" ? "${title}"`);
+          for (const payment of taskPayments) {
+            if (payment.taskTitle !== title) {
+              console.log(`?? Updating taskTitle for payment ${payment.id}`);
+              await updatePaymentDetails(payment.id, {
+                taskTitle: title,
+                ...(payment.paymentType === 'task-budget' ? { title: title } : {})
+              });
+            }
+          }
+        }
+        
+        // 1?? Sync team member payments
+        for (const member of members) {
+          const existingPayment = taskPayments.find((p) => 
+            p.paymentType === 'member' && 
+            (String(p.memberId) === String(member.id))
+          );
+          
+          if (existingPayment) {
+            // Update existing payment - update amount, name, and assignedTo
+            const needsUpdate = 
+              existingPayment.amount !== member.budget ||
+              existingPayment.memberName !== member.name;
+              
+            if (needsUpdate) {
+              console.log(`?? Updating payment for member ${member.name}: ${existingPayment.amount} ? ${member.budget} (Paid: ${existingPayment.isPaid})`);
+              
+              // ? When updating amount, preserve paidAmount and recalculate status
+              const currentPaidAmount = existingPayment.paidAmount || 0;
+              const newAmount = member.budget;
+              const isNowFullyPaid = currentPaidAmount >= newAmount;
+              
+              await updatePaymentDetails(existingPayment.id, {
+                amount: newAmount,
+                memberName: member.name,
+                taskTitle: title,
+                memberId: member.id,
+                memberUid: member.uid || null,
+                assignedTo: [{
+                  id: member.id,
+                  name: member.name,
+                  uid: member.uid || null
+                }],
+                // ? Update status based on paidAmount vs new amount
+                isPaid: isNowFullyPaid,
+                status: isNowFullyPaid ? 'Paid' : 'Pending'
+              });
+              
+              console.log(`?? Payment updated - Amount: ₹${newAmount}, Paid: ₹${currentPaidAmount}, Pending: ₹${Math.max(0, newAmount - currentPaidAmount)}`);
+            }
+          } else {
+            // Create new payment entry for new member
+            console.log(`?? Creating new payment for member ${member.name}: ${member.budget}`);
+            
+            // Get proper user info for createdBy
+            const creatorName = currentUser?.name || 'Admin';
+            const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
+            const creatorUid = currentUser?.uid || null;
+            
+            console.log('?? Payment creator info:', { creatorName, creatorRole, creatorUid });
+            
+            await updatePaymentDetails(null, {
+              taskId: task.id,
+              taskTitle: title,
+              amount: member.budget,
+              memberId: member.id,
+              memberName: member.name,
+              memberUid: member.uid || null,
+              status: "Unpaid",
+              isPaid: false,
+              assignedTo: [{
+                id: member.id,
+                name: member.name,
+                uid: member.uid || null
+              }],
+              paymentType: 'member',
+              notes: '',
+              paidAt: null,
+              paidAmount: 0,
+              createdBy: {
+                name: creatorName,
+                role: creatorRole,
+                uid: creatorUid
+              }
+            });
+          }
+        }
+        
+        // 2?? Sync additional payments
+        for (const payment of additionalPayments) {
+          // Skip empty payments
+          if (!payment.title && !payment.amount) continue;
+          
+          if (payment.id) {
+            // Existing payment - ensure taskTitle is updated
+            const existingPayment = taskPayments.find((p) => p.id === payment.id);
+            if (existingPayment && existingPayment.taskTitle !== title) {
+              console.log(`?? Updating taskTitle for additional payment ${payment.id}`);
+              await updatePaymentDetails(payment.id, {
+                taskTitle: title
+              });
+            }
+          } else {
+            // New payment - create it now
+            console.log(`?? Creating new additional payment: ${payment.title} - ${payment.amount}`);
+            
+            // Get proper user info for createdBy
+            const creatorName = currentUser?.name || 'Admin';
+            const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
+            const creatorUid = currentUser?.uid || null;
+            
+            await updatePaymentDetails(null, {
+              taskId: task.id,
+              title: payment.title || title,
+              taskTitle: title,
+              amount: parseFloat(payment.amount) || 0,
+              memberId: null,
+              memberName: null,
+              memberUid: null,
+              status: 'Unpaid',
+              isPaid: false,
+              assignedTo: [],
+              paymentType: 'additional',
+              notes: '',
+              createdBy: {
+                name: creatorName,
+                role: creatorRole,
+                uid: creatorUid
+              }
+            });
+          }
+        }
+        
+        // 3?? Sync task budget payment
+        const taskBudgetPayment = taskPayments.find((p) => p.paymentType === 'task-budget');
+        const newTaskBudget = taskBudgetAmount ? parseFloat(taskBudgetAmount) : null;
+        
+        if (newTaskBudget && newTaskBudget > 0) {
+          if (taskBudgetPayment) {
+            // Update existing task budget payment
+            const needsUpdate = 
+              taskBudgetPayment.amount !== newTaskBudget ||
+              taskBudgetPayment.title !== title ||
+              taskBudgetPayment.taskTitle !== title;
+              
+            if (needsUpdate) {
+              console.log(`?? Updating task budget payment: ${taskBudgetPayment.amount} ? ${newTaskBudget}`);
+              
+              // ? Preserve paidAmount and recalculate status
+              const currentPaidAmount = taskBudgetPayment.paidAmount || 0;
+              const isNowFullyPaid = currentPaidAmount >= newTaskBudget;
+              
+              await updatePaymentDetails(taskBudgetPayment.id, {
+                amount: newTaskBudget,
+                title: title,
+                taskTitle: title,
+                // ? Update status based on paidAmount vs new amount
+                isPaid: isNowFullyPaid,
+                status: isNowFullyPaid ? 'Paid' : 'Pending'
+              });
+              
+              console.log(`?? Task budget updated - Amount: ₹${newTaskBudget}, Paid: ₹${currentPaidAmount}, Pending: ₹${Math.max(0, newTaskBudget - currentPaidAmount)}`);
+            }
+          } else {
+            // Create new task budget payment
+            console.log(`?? Creating new task budget payment: ${newTaskBudget}`);
+            
+            // Get proper user info for createdBy
+            const creatorName = currentUser?.name || 'Admin';
+            const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
+            const creatorUid = currentUser?.uid || null;
+            
+            await updatePaymentDetails(null, {
+              taskId: task.id,
+              title: title,
+              taskTitle: title,
+              amount: newTaskBudget,
+              memberId: null,
+              memberName: null,
+              memberUid: null,
+              status: 'Unpaid',
+              isPaid: false,
+              assignedTo: [],
+              paymentType: 'task-budget',
+              notes: 'Task budget payment',
+              paidAmount: 0,
+              paymentHistory: [],
+              createdBy: {
+                name: creatorName,
+                role: creatorRole,
+                uid: creatorUid
+              }
+            });
+          }
+        }
+        
+        console.log('? Payment sync completed - all entries updated');
+      } catch (error) {
+        console.error('? Failed to sync payments:', error);
+        // Don't block task update if payment sync fails
+      }
+      
+      // Strip image data from tags and categories to reduce document size
+      const tagsForSave = selectedTags.map((tag) => ({
+        id: tag.id,
+        label: tag.label || tag.name,
+        color: tag.color,
+        bg: tag.bg
+      }));
+      
+      const categoryForSave = selectedCategory ? {
+        id: selectedCategory.id,
+        label: selectedCategory.label || selectedCategory.name,
+        color: selectedCategory.color,
+        bg: selectedCategory.bg
+      } : null;
       
       const updatedTask = { 
         ...task,
         title, 
         description, 
         deadline, 
-        tags: selectedTags, 
-        category: selectedCategory, 
+        tags: tagsForSave, 
+        category: categoryForSave, 
         totalBudget, 
         members,
-        payments: payments.length > 0 ? payments : null,
         scribes: scribes.length > 0 ? scribes : null,
+        taskBudgetAmount: taskBudgetAmount ? parseFloat(taskBudgetAmount) : null, // ? Save task budget
+        taskBudgetStatus: taskBudgetAmount ? taskBudgetStatus : null // ? Save task budget status
       };
       
       onUpdate(task.id, updatedTask);
@@ -1687,72 +2410,21 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
         {/* Header */}
         <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--bg-surface)', zIndex: 10, borderRadius: '24px 24px 0 0' }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>Edit Task</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Update task details and assignments</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+              {isCompleted ? 'View Task' : 'Edit Task'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+              {isCompleted ? 'Task is completed - read-only mode' : 'Update task details and payments'}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Load Previous Task button */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => { setShowLoadPanel(v => !v); setLoadSearch(''); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: showLoadPanel ? '#EEF2FF' : 'var(--input-bg)', border: `1.5px solid ${showLoadPanel ? '#3B5BFC' : 'var(--border)'}`, borderRadius: 10, fontSize: 12, fontWeight: 700, color: showLoadPanel ? '#3B5BFC' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.15s' }}>
-                <RefreshCw size={13} strokeWidth={2.5} color={showLoadPanel ? '#3B5BFC' : 'var(--text-secondary)'} />
-                Load Previous
-              </button>
-              {showLoadPanel && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 340, background: 'var(--bg-surface)', borderRadius: 14, border: '1.5px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 200, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-light)' }}>
-                    <input
-                      autoFocus
-                      value={loadSearch}
-                      onChange={e => setLoadSearch(e.target.value)}
-                      placeholder="Search by title or task ID…"
-                      style={{ width: '100%', padding: '8px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'}
-                      onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                    />
-                  </div>
-                  <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                    {(() => {
-                      const q = loadSearch.trim().toLowerCase();
-                      const filtered = tasks.filter(t =>
-                        t.id !== task.id && (!q || t.title?.toLowerCase().includes(q) || t.id?.toLowerCase().includes(q))
-                      ).slice(0, 20);
-                      if (filtered.length === 0) return (
-                        <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No tasks found</div>
-                      );
-                      return filtered.map(t => (
-                        <button key={t.id} type="button" onClick={() => loadFromTask(t)}
-                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', textAlign: 'left' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                        >
-                          <div style={{ flexShrink: 0 }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: t.stage === 'Complete' ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: 0.5 }}>{t.id}</div>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 10, background: STAGE_BG[t.stage], color: STAGE_COLORS[t.stage] }}>{t.stage}</span>
-                              {t.category && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t.category.emoji} {t.category.label}</span>}
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>{t.members?.length || 0} member{t.members?.length !== 1 ? 's' : ''}</span>
-                            </div>
-                          </div>
-                        </button>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
             <button onClick={onClose} style={{ background: 'var(--input-bg)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <X size={16} color="var(--text-secondary)" />
             </button>
           </div>
         </div>
 
-        <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20, opacity: isCompleted ? 0.7 : 1, pointerEvents: isCompleted ? 'none' : 'auto' }}>
           {/* Task ID (read-only) */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Task ID</label>
@@ -1762,40 +2434,75 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           {/* Title */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Enter task title..."
-              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+            <input 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              placeholder="Enter task title..."
+              disabled={isCompleted}
+              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: isCompleted ? 'var(--bg-subtle)' : 'var(--input-bg)', boxSizing: 'border-box', cursor: isCompleted ? 'not-allowed' : 'text', opacity: isCompleted ? 0.7 : 1 }}
+              onFocus={(e) => !isCompleted && (e.target.style.borderColor = '#3B5BFC')} 
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
           {/* Description */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="General overview visible to all team members..." rows={3}
-              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+            <textarea 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)} 
+              placeholder="General overview visible to all team members..." 
+              rows={3}
+              disabled={isCompleted}
+              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: isCompleted ? 'var(--bg-subtle)' : 'var(--input-bg)', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', cursor: isCompleted ? 'not-allowed' : 'text', opacity: isCompleted ? 0.7 : 1 }}
+              onFocus={(e) => !isCompleted && (e.target.style.borderColor = '#3B5BFC')} 
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
           {/* Deadline */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Completion Date *</label>
-            <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
-              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box', colorScheme: 'normal' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+            <input 
+              type="date" 
+              value={deadline} 
+              onChange={(e) => setDeadline(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+              disabled={isCompleted}
+              style={{ width: '100%', padding: '11px 16px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-primary)', outline: 'none', background: isCompleted ? 'var(--bg-subtle)' : 'var(--input-bg)', boxSizing: 'border-box', colorScheme: 'normal', cursor: isCompleted ? 'not-allowed' : 'text', opacity: isCompleted ? 0.7 : 1 }}
+              onFocus={(e) => !isCompleted && (e.target.style.borderColor = '#3B5BFC')} 
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
           {/* Tags */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {TAGS.map(tag => {
-                const sel = selectedTags.find(t => t.label === tag.label);
+              {TAGS.map((tag) => {
+                // Normalize tag format (support both old and new format)
+                const tagData = {
+                  id: tag.id || tag.label,
+                  label: tag.name || tag.label,
+                  image: tag.image || tag.emoji || '???',
+                  color: tag.color || '#6B7280',
+                  bg: tag.color ? `${tag.color}15` : (tag.bg || '#F3F4F6')
+                };
+                const isImageUrl = tagData.image && (tagData.image.startsWith('data:') || tagData.image.startsWith('http'));
+                const sel = selectedTags.find((t) => (t.label || t.name) === tagData.label);
                 return (
-                  <button key={tag.label} onClick={() => toggleTag(tag)} style={{
+                  <button key={tagData.id} onClick={() => toggleTag(tagData)} style={{
                     padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1.5px solid ${sel ? tag.color : 'var(--border)'}`,
-                    background: sel ? tag.bg : 'var(--bg-surface)', color: sel ? tag.color : 'var(--text-secondary)', transition: 'all 0.15s',
+                    border: `1.5px solid ${sel ? '#3B5BFC' : 'var(--border)'}`,
+                    background: sel ? tagData.bg : 'var(--bg-surface)', 
+                    color: 'var(--text-secondary)', 
+                    transition: 'all 0.15s',
+                    boxShadow: sel ? `0 2px 8px ${tagData.color}30` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 6
                   }}>
-                    {tag.emoji} {tag.label}
+                    {isImageUrl ? (
+                      <img src={tagData.image} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                    ) : (
+                      <span>{tagData.image}</span>
+                    )}
+                    {tagData.label}
                   </button>
                 );
               })}
@@ -1806,7 +2513,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                 </button>
               ) : (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input value={newTagLabel} onChange={e => setNewTagLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustomTag()} placeholder="Tag name..." autoFocus
+                  <input value={newTagLabel} onChange={(e) => setNewTagLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCustomTag()} placeholder="Tag name..." autoFocus
                     style={{ padding: '6px 12px', border: '1.5px solid #3B5BFC', borderRadius: 10, fontSize: 12, outline: 'none', width: 120 }} />
                   <button onClick={addCustomTag} style={{ background: '#ECFDF5', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                     <CheckCircle size={14} color="#12C479" />
@@ -1825,29 +2532,44 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
               Category <span style={{ fontSize: 11, textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>(pick one)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CATEGORIES.map(cat => {
-                const sel = selectedCategory?.label === cat.label;
+              {CATEGORIES.map((cat) => {
+                // Normalize category format (support both old and new format)
+                const catData = {
+                  id: cat.id || cat.label,
+                  label: cat.name || cat.label,
+                  image: cat.icon || cat.emoji || '??',
+                  color: cat.color || '#6B7280',
+                  bg: cat.color ? `${cat.color}15` : (cat.bg || '#F3F4F6')
+                };
+                const isImageUrl = catData.image && (catData.image.startsWith('data:') || catData.image.startsWith('http'));
+                const sel = selectedCategory && (selectedCategory.label || selectedCategory.name) === catData.label;
                 return (
-                  <button key={cat.label} onClick={() => setSelectedCategory(sel ? null : cat)} style={{
+                  <button key={catData.id} onClick={() => setSelectedCategory(sel ? null : catData)} style={{
                     padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1.5px solid ${sel ? cat.color : 'var(--border)'}`,
-                    background: sel ? cat.bg : 'var(--bg-surface)',
-                    color: sel ? cat.color : 'var(--text-secondary)',
+                    border: `1.5px solid ${sel ? '#3B5BFC' : 'var(--border)'}`,
+                    background: sel ? catData.bg : 'var(--bg-surface)',
+                    color: 'var(--text-secondary)',
                     transition: 'all 0.15s',
-                    boxShadow: sel ? `0 2px 8px ${cat.color}30` : 'none',
+                    boxShadow: sel ? `0 2px 8px ${catData.color}30` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 6
                   }}>
-                    {cat.emoji} {cat.label}
+                    {isImageUrl ? (
+                      <img src={catData.image} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                    ) : (
+                      <span>{catData.image}</span>
+                    )}
+                    {catData.label}
                   </button>
                 );
               })}
               
-              {!showAddCategory ? (
+              {!showAddCategory && !isCompleted ? (
                 <button onClick={() => setShowAddCategory(true)} style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px dashed #C7D4FF', background: 'var(--bg-surface)', color: '#3B5BFC', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Plus size={14} /> Add Category
                 </button>
-              ) : (
+              ) : showAddCategory && !isCompleted ? (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input value={newCategoryLabel} onChange={e => setNewCategoryLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustomCategory()} placeholder="Category name..." autoFocus
+                  <input value={newCategoryLabel} onChange={(e) => setNewCategoryLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCustomCategory()} placeholder="Category name..." autoFocus
                     style={{ padding: '6px 12px', border: '1.5px solid #3B5BFC', borderRadius: 10, fontSize: 12, outline: 'none', width: 140 }} />
                   <button onClick={addCustomCategory} style={{ background: '#ECFDF5', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                     <CheckCircle size={14} color="#12C479" />
@@ -1856,7 +2578,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                     <X size={14} color="#EF4444" />
                   </button>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -1868,7 +2590,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                 <div key={i} style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px', border: '1.5px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Member {i + 1}</span>
-                    {assignments.length > 1 && (
+                    {assignments.length > 1 && !(managementMode && currentUser?.memberId && String(a.memberId) === String(currentUser.memberId)) && (
                       <button onClick={() => removeMember(i)} style={{ background: '#FEF2F2', border: 'none', borderRadius: 8, padding: '4px 10px', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Trash2 size={12} /> Remove
                       </button>
@@ -1880,7 +2602,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {a.memberId && getPreviousAssignment(a.memberId) && (
                           <div style={{ position: 'relative', flexShrink: 0 }}
-                            onMouseEnter={e => {
+                            onMouseEnter={(e) => {
                               const t = e.currentTarget.querySelector('.prev-tip');
                               if (!t) return;
                               const rect = e.currentTarget.getBoundingClientRect();
@@ -1888,7 +2610,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                               t.style.left = (rect.left + rect.width / 2) + 'px';
                               t.style.opacity = '1';
                             }}
-                            onMouseLeave={e => { const t = e.currentTarget.querySelector('.prev-tip'); if(t) t.style.opacity='0'; }}
+                            onMouseLeave={(e) => { const t = e.currentTarget.querySelector('.prev-tip'); if(t) t.style.opacity='0'; }}
                           >
                             <button type="button"
                               onClick={() => {
@@ -1903,15 +2625,27 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                             </div>
                           </div>
                         )}
-                        <select value={a.memberId} onChange={e => updateAssignment(i, 'memberId', e.target.value)}
+                        <select value={a.memberId} onChange={(e) => updateAssignment(i, 'memberId', e.target.value)}
                           style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', cursor: 'pointer', boxSizing: 'border-box' }}>
                           <option value="">Select member...</option>
                           {(() => {
-                            const active = teamMembers.filter(m => m.status === 'Active');
-                            const roles = [...new Set(active.map(m => m.role))].sort();
-                            return roles.map(role => (
+                            // ? Get already selected member IDs (excluding current row)
+                            const selectedMemberIds = assignments
+                              .map((assignment, idx) => idx !== i ? assignment.memberId : null)
+                              .filter(Boolean);
+                            
+                            // ? Filter out already assigned members and management user in management mode
+                            const active = teamMembers.filter((m) => 
+                              m.status === 'Active' && 
+                              m.role?.toLowerCase() !== 'admin' &&
+                              !selectedMemberIds.includes(String(m.id)) &&
+                              !(managementMode && currentUser?.memberId && String(m.id) === String(currentUser.memberId))
+                            );
+                            
+                            const roles = [...new Set(active.map((m) => m.role))].sort();
+                            return roles.map((role) => (
                               <optgroup key={role} label={role}>
-                                {active.filter(m => m.role === role).map(m => (
+                                {active.filter((m) => m.role === role).map((m) => (
                                   <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                               </optgroup>
@@ -1922,18 +2656,47 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                     </div>
                     {!hideBudget && (
                       <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Budget (₹)</label>
-                        <input type="number" value={a.budget} onChange={e => updateAssignment(i, 'budget', e.target.value)} placeholder="0.00"
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                          onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
+                        {(() => {
+                          // ? Check if this member's payment has been paid
+                          const paymentStatus = paymentStatusMap[`member-${a.memberId}`];
+                          const hasPaidAmount = paymentStatus && paymentStatus.paidAmount > 0;
+                          
+                          return (
+                            <>
+                              <input 
+                                type="number" 
+                                value={a.budget} 
+                                onChange={(e) => updateAssignment(i, 'budget', e.target.value)} 
+                                placeholder="0.00"
+                                disabled={hasPaidAmount}
+                                style={{ 
+                                  width: '100%', 
+                                  padding: '9px 12px', 
+                                  border: '1.5px solid var(--border)', 
+                                  borderRadius: 9, 
+                                  fontSize: 13, 
+                                  color: hasPaidAmount ? 'var(--text-muted)' : 'var(--text-primary)', 
+                                  outline: 'none', 
+                                  background: hasPaidAmount ? 'var(--bg-subtle)' : 'var(--bg-surface)', 
+                                  boxSizing: 'border-box',
+                                  cursor: hasPaidAmount ? 'not-allowed' : 'text',
+                                  opacity: hasPaidAmount ? 0.6 : 1
+                                }}
+                                onFocus={(e) => !hasPaidAmount && (e.target.style.borderColor = '#3B5BFC')} 
+                                onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
+                              />
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Instructions</label>
-                    <input value={a.memberDesc} onChange={e => updateAssignment(i, 'memberDesc', e.target.value)} placeholder="Instructions for this member..."
+                    <input value={a.memberDesc} onChange={(e) => updateAssignment(i, 'memberDesc', e.target.value)} placeholder="Instructions for this member..."
                       style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                      onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                   </div>
                 </div>
               ))}
@@ -1943,25 +2706,106 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
             </button>
           </div>
 
-          {/* Payment Options */}
-          {!hideBudget && <div style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid var(--border)' }}>
+          {/* Additional Payments from Firebase */}
+          {!hideBudget && (
+          <div style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid var(--border)' }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Additional Payments</div>
+            </div>
+            
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {paymentEntries.map((p, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              {additionalPayments.map((p, i) => (
+                <div key={p.id || i} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Payment Title</label>
-                    <input value={p.title} onChange={e => updatePaymentEntry(i, 'title', e.target.value)} placeholder="Additional payment..."
-                      style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                    <input 
+                      value={p.title} 
+                      onChange={(e) => updateAdditionalPayment(i, 'title', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault(); // Prevent form submission
+                          e.stopPropagation();
+                        }
+                      }}
+                      placeholder="Additional payment..."
+                      disabled={isCompleted}
+                      style={{ 
+                        width: '100%', 
+                        padding: '9px 12px', 
+                        border: '1.5px solid var(--border)', 
+                        borderRadius: 9, 
+                        fontSize: 13, 
+                        color: 'var(--text-primary)', 
+                        outline: 'none', 
+                        background: isCompleted ? 'var(--bg-subtle)' : 'var(--bg-surface)', 
+                        boxSizing: 'border-box',
+                        cursor: isCompleted ? 'not-allowed' : 'text',
+                        opacity: isCompleted ? 0.7 : 1
+                      }}
+                      onFocus={(e) => !isCompleted && (e.target.style.borderColor = '#3B5BFC')} 
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
+                    />
                   </div>
                   <div style={{ width: 140 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (₹)</label>
-                    <input type="number" value={p.amount} onChange={e => updatePaymentEntry(i, 'amount', e.target.value)} placeholder="0.00"
-                      style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
+                    {(() => {
+                      // ? Check if this additional payment has been paid
+                      const paymentStatus = p.id ? paymentStatusMap[`additional-${p.id}`] : null;
+                      const hasPaidAmount = paymentStatus && paymentStatus.paidAmount > 0;
+                      const isDisabled = isCompleted || hasPaidAmount;
+                      
+                      return (
+                        <div>
+                          <input 
+                            type="number" 
+                            value={p.amount} 
+                            onChange={(e) => updateAdditionalPayment(i, 'amount', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault(); // Prevent form submission
+                                e.stopPropagation();
+                              }
+                            }}
+                            placeholder="0.00"
+                            disabled={isDisabled}
+                            style={{ 
+                              width: '100%', 
+                              padding: '9px 12px', 
+                              border: '1.5px solid var(--border)', 
+                              borderRadius: 9, 
+                              fontSize: 13, 
+                              color: isDisabled ? 'var(--text-muted)' : 'var(--text-primary)', 
+                              outline: 'none', 
+                              background: isDisabled ? 'var(--bg-subtle)' : 'var(--bg-surface)', 
+                              boxSizing: 'border-box',
+                              cursor: isDisabled ? 'not-allowed' : 'text',
+                              opacity: isDisabled ? 0.6 : 1
+                            }}
+                            onFocus={(e) => !isDisabled && (e.target.style.borderColor = '#3B5BFC')} 
+                            onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
-                  {paymentEntries.length > 1 && (
-                    <button onClick={() => removePaymentEntry(i)} style={{ background: '#FEF2F2', border: 'none', borderRadius: 8, padding: '9px 12px', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', height: 38 }}>
+                  {additionalPayments.length > 1 && !isCompleted && !p.id && (
+                    <button 
+                      onClick={() => {
+                        // Remove from local state (only for new entries without Firebase ID)
+                        setAdditionalPayments(prev => prev.filter((_, idx) => idx !== i));
+                      }}
+                      style={{ 
+                        background: '#FEF2F2', 
+                        border: 'none', 
+                        borderRadius: 8, 
+                        padding: '9px 12px', 
+                        color: '#EF4444', 
+                        fontSize: 12, 
+                        fontWeight: 600, 
+                        cursor: 'pointer',
+                        height: 38,
+                      }}
+                    >
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -1969,33 +2813,57 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
               ))}
             </div>
 
-            <button onClick={addPaymentEntry} style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--bg-surface)', border: '1.5px dashed #C7D4FF', borderRadius: 10, fontSize: 12, fontWeight: 600, color: '#3B5BFC', cursor: 'pointer', width: '100%', justifyContent: 'center' }}>
-              <Plus size={13} /> Add Payment Entry
-            </button>
+            {!isCompleted && (
+              <button 
+                onClick={() => {
+                  // Add new empty payment entry
+                  setAdditionalPayments(prev => [...prev, { id: null, title: '', amount: 0 }]);
+                }}
+                style={{ 
+                  marginTop: 10, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6, 
+                  padding: '8px 14px', 
+                  background: 'var(--bg-surface)', 
+                  border: '1.5px dashed #C7D4FF', 
+                  borderRadius: 10, 
+                  fontSize: 12, 
+                  fontWeight: 600, 
+                  color: '#3B5BFC', 
+                  cursor: 'pointer', 
+                  width: '100%', 
+                  justifyContent: 'center' 
+                }}
+              >
+                <Plus size={13} /> Add Payment Entry
+              </button>
+            )}
 
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
               Additional payment details for this task
             </div>
-          </div>}
+          </div>
+          )}
 
 
-          {/* Scribe */}
-          <div>
+          {/* Scribe - Hidden in Edit Task Modal */}
+          <div style={{ display: 'none' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Scribe</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {scribes.map((s, i) => (
                 <div key={i}>
-                  {/* Edit mode — inline editor for this scribe */}
+                  {/* Edit mode - inline editor for this scribe */}
                   {editingScribeIdx === i ? (
                     <div style={{ background: 'var(--input-bg)', borderRadius: 12, padding: '10px 12px', border: '1.5px solid #7C3AED40', display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {/* Row 1: type + title + save + cancel */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {[{ key: 'note', color: '#7C3AED', bg: '#F5F3FF', label: 'Note', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
                           { key: 'sheet', color: '#12C479', bg: '#ECFDF5', label: 'Sheet', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> }
-                        ].map(opt => (
+                        ].map((opt) => (
                           <div key={opt.key} style={{ position: 'relative' }}
-                            onMouseEnter={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
-                            onMouseLeave={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
+                            onMouseEnter={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
                           >
                             <button type="button" onClick={() => setScribeType(opt.key)}
                               style={{ width: 28, height: 28, borderRadius: 7, border: `1.5px solid ${scribeType === opt.key ? opt.color : 'var(--border)'}`, background: scribeType === opt.key ? opt.bg : 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -2006,15 +2874,15 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                             </div>
                           </div>
                         ))}
-                        <input value={scribeTitle} onChange={e => setScribeTitle(e.target.value)} autoFocus
-                          placeholder="Title…"
+                        <input value={scribeTitle} onChange={(e) => setScribeTitle(e.target.value)} autoFocus
+                          placeholder="Title"
                           style={{ flex: 1, padding: '6px 10px', border: '1.5px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', minWidth: 0 }}
-                          onFocus={e => e.target.style.borderColor = '#7C3AED'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                          onFocus={(e) => e.target.style.borderColor = '#7C3AED'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                         {/* Save */}
                         <button type="button" disabled={!scribeTitle.trim()}
                           onClick={() => {
                             if (!scribeTitle.trim()) return;
-                            const allMemberIds = assignments.filter(a => a.memberId).map(a => String(a.memberId));
+                            const allMemberIds = assignments.filter((a) => a.memberId).map((a) => String(a.memberId));
                             const resolvedAssignees = scribeAssignMode === 'all'
                               ? allMemberIds
                               : scribeAssignees.length > 0 ? scribeAssignees : allMemberIds;
@@ -2033,10 +2901,10 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                           <X size={13} color="#9CA3AF" />
                         </button>
                       </div>
-                      {/* Row 2: Assign to — mode tabs + list (same as add picker) */}
+                      {/* Row 2: Assign to ? mode tabs + list (same as add picker) */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-                          {[{ key: 'all', label: 'All' }, { key: 'member', label: 'Member' }, { key: 'role', label: 'Role' }].map(mode => (
+                          {[{ key: 'all', label: 'All' }, { key: 'role', label: 'Role' }].map((mode) => (
                             <button key={mode.key} type="button"
                               onClick={() => { setScribeAssignMode(mode.key); setScribeAssignees([]); setScribeSelectedRole(''); }}
                               style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', background: scribeAssignMode === mode.key ? 'var(--bg-surface)' : 'transparent', color: scribeAssignMode === mode.key ? '#3B5BFC' : 'var(--text-muted)', boxShadow: scribeAssignMode === mode.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.15s' }}>
@@ -2047,16 +2915,16 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                         {scribeAssignMode === 'all' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#EEF2FF', borderRadius: 8, border: '1.5px solid #C7D4FF' }}>
                             <CheckCircle size={13} color="#3B5BFC" />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will receive this scribe</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will join this scribe</span>
                           </div>
                         )}
                         {scribeAssignMode === 'member' && (() => {
-                          const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
+                          const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
                           if (assignedMembers.length === 0) return <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>No members assigned yet</div>;
-                          const allPicked = assignedMembers.every(m => scribeAssignees.includes(String(m.id)));
+                          const allPicked = assignedMembers.every((m) => scribeAssignees.includes(String(m.id)));
                           return (
                             <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                              <button type="button" onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map(m => String(m.id)))}
+                              <button type="button" onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map((m) => String(m.id)))}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: allPicked ? '#EEF2FF' : 'var(--bg-subtle)', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}>
                                 <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allPicked ? '#3B5BFC' : '#C4C9D9'}`, background: allPicked ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {allPicked && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -2068,7 +2936,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                                 const sel = scribeAssignees.includes(String(m.id));
                                 return (
                                   <button key={m.id} type="button"
-                                    onClick={() => setScribeAssignees(prev => sel ? prev.filter(id => id !== String(m.id)) : [...prev, String(m.id)])}
+                                    onClick={() => setScribeAssignees(prev => sel ? prev.filter((id) => id !== String(m.id)) : [...prev, String(m.id)])}
                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: sel ? '#F5F8FF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < assignedMembers.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                     <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? '#3B5BFC' : '#C4C9D9'}`, background: sel ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {sel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -2086,19 +2954,19 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                           );
                         })()}
                         {scribeAssignMode === 'role' && (() => {
-                          const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
-                          const uniqueRoles = [...new Set(assignedMembers.map(m => m.role))];
+                          const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
+                          const uniqueRoles = [...new Set(assignedMembers.map((m) => m.role))];
                           if (uniqueRoles.length === 0) return <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>No members assigned yet</div>;
                           return (
                             <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                               {uniqueRoles.map((role, idx) => {
-                                const roleMembers = assignedMembers.filter(m => m.role === role);
-                                const roleMemberIds = roleMembers.map(m => String(m.id));
-                                const allSel = roleMemberIds.every(id => scribeAssignees.includes(id));
-                                const someSel = roleMemberIds.some(id => scribeAssignees.includes(id));
+                                const roleMembers = assignedMembers.filter((m) => m.role === role);
+                                const roleMemberIds = roleMembers.map((m) => String(m.id));
+                                const allSel = roleMemberIds.every((id) => scribeAssignees.includes(id));
+                                const someSel = roleMemberIds.some((id) => scribeAssignees.includes(id));
                                 return (
                                   <button key={role} type="button"
-                                    onClick={() => setScribeAssignees(allSel ? scribeAssignees.filter(id => !roleMemberIds.includes(id)) : [...new Set([...scribeAssignees, ...roleMemberIds])])}
+                                    onClick={() => setScribeAssignees(allSel ? scribeAssignees.filter((id) => !roleMemberIds.includes(id)) : [...new Set([...scribeAssignees, ...roleMemberIds])])}
                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: allSel ? '#F5F8FF' : someSel ? '#FAFBFF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < uniqueRoles.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                     <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allSel ? '#3B5BFC' : someSel ? '#93A8FF' : '#C4C9D9'}`, background: allSel ? '#3B5BFC' : someSel ? '#EEF2FF' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {allSel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -2107,7 +2975,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{role}</div>
                                       <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                                        {roleMembers.map(m => (
+                                        {roleMembers.map((m) => (
                                           <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
                                         ))}
                                         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 2 }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
@@ -2123,8 +2991,8 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                         {scribeAssignMode !== 'all' && scribeAssignees.length > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Selected:</span>
-                            {scribeAssignees.map(id => {
-                              const m = teamMembers.find(t => t.id === parseInt(id));
+                            {scribeAssignees.map((id) => {
+                              const m = teamMembers.find((t) => t.id === parseInt(id));
                               if (!m) return null;
                               return (
                                 <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 4px', background: '#EEF2FF', borderRadius: 20, border: '1px solid #C7D4FF' }}>
@@ -2152,7 +3020,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>All assigned members</div>
                       ) : s.assignees.length > 0 ? (
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {s.assignees.map(id => teamMembers.find(m => m.id === parseInt(id))?.name).filter(Boolean).join(', ')}
+                          {s.assignees.map((id) => teamMembers.find((m) => m.id === parseInt(id))?.name).filter(Boolean).join(', ')}
                         </div>
                       ) : null}
                     </div>
@@ -2186,10 +3054,10 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                   {/* Type toggle */}
                   {[{ key: 'note', color: '#7C3AED', bg: '#F5F3FF', label: 'Note', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
                     { key: 'sheet', color: '#12C479', bg: '#ECFDF5', label: 'Sheet', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> }
-                  ].map(opt => (
+                  ].map((opt) => (
                     <div key={opt.key} style={{ position: 'relative' }}
-                      onMouseEnter={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
+                      onMouseEnter={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '1'}
+                      onMouseLeave={(e) => e.currentTarget.querySelector('.scribe-tip').style.opacity = '0'}
                     >
                       <button type="button" onClick={() => setScribeType(opt.key)}
                         style={{ width: 28, height: 28, borderRadius: 7, border: `1.5px solid ${scribeType === opt.key ? opt.color : 'var(--border)'}`, background: scribeType === opt.key ? opt.bg : 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -2201,15 +3069,15 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                     </div>
                   ))}
                   {/* Title */}
-                  <input value={scribeTitle} onChange={e => setScribeTitle(e.target.value)}
-                    placeholder="Title…" autoFocus
+                  <input value={scribeTitle} onChange={(e) => setScribeTitle(e.target.value)}
+                    placeholder="Title" autoFocus
                     style={{ flex: 1, padding: '6px 10px', border: '1.5px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-surface)', minWidth: 0 }}
-                    onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                    onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
                   {/* Add */}
                   <button type="button" disabled={!scribeTitle.trim()}
                     onClick={() => {
                       if (!scribeTitle.trim()) return;
-                      const allMemberIds = assignments.filter(a => a.memberId).map(a => String(a.memberId));
+                      const allMemberIds = assignments.filter((a) => a.memberId).map((a) => String(a.memberId));
                       const resolvedAssignees = scribeAssignMode === 'all'
                         ? allMemberIds
                         : scribeAssignees.length > 0 ? scribeAssignees : allMemberIds;
@@ -2225,11 +3093,11 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                     <X size={13} color="#9CA3AF" />
                   </button>
                   </div>
-                  {/* Row 2: Assign to — mode tabs + list */}
+                  {/* Row 2: Assign to ? mode tabs + list */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {/* Mode tabs: All / Member / Role */}
                     <div style={{ display: 'flex', gap: 4, background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-                      {[{ key: 'all', label: 'All' }, { key: 'member', label: 'Member' }, { key: 'role', label: 'Role' }].map(mode => (
+                      {[{ key: 'all', label: 'All' }, { key: 'role', label: 'Role' }].map((mode) => (
                         <button key={mode.key} type="button"
                           onClick={() => { setScribeAssignMode(mode.key); setScribeAssignees([]); setScribeSelectedRole(''); }}
                           style={{
@@ -2244,28 +3112,28 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                       ))}
                     </div>
 
-                    {/* All mode — just a label */}
+                    {/* All mode ? just a label */}
                     {scribeAssignMode === 'all' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#EEF2FF', borderRadius: 8, border: '1.5px solid #C7D4FF' }}>
                         <CheckCircle size={13} color="#3B5BFC" />
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will receive this scribe</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All assigned members will join this scribe</span>
                       </div>
                     )}
 
-                    {/* Member mode — checklist of assigned members */}
+                    {/* Member mode ? checklist of assigned members */}
                     {scribeAssignMode === 'member' && (() => {
-                      const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
+                      const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
                       if (assignedMembers.length === 0) return (
                         <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>
                           No members assigned yet
                         </div>
                       );
-                      const allPicked = assignedMembers.every(m => scribeAssignees.includes(String(m.id)));
+                      const allPicked = assignedMembers.every((m) => scribeAssignees.includes(String(m.id)));
                       return (
                         <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                           {/* Select All row */}
                           <button type="button"
-                            onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map(m => String(m.id)))}
+                            onClick={() => setScribeAssignees(allPicked ? [] : assignedMembers.map((m) => String(m.id)))}
                             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: allPicked ? '#EEF2FF' : 'var(--bg-subtle)', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}>
                             <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allPicked ? '#3B5BFC' : '#C4C9D9'}`, background: allPicked ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               {allPicked && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -2278,7 +3146,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                             const sel = scribeAssignees.includes(String(m.id));
                             return (
                               <button key={m.id} type="button"
-                                onClick={() => setScribeAssignees(prev => sel ? prev.filter(id => id !== String(m.id)) : [...prev, String(m.id)])}
+                                onClick={() => setScribeAssignees(prev => sel ? prev.filter((id) => id !== String(m.id)) : [...prev, String(m.id)])}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: sel ? '#F5F8FF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < assignedMembers.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
                                 <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? '#3B5BFC' : '#C4C9D9'}`, background: sel ? '#3B5BFC' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {sel && <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -2296,10 +3164,10 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                       );
                     })()}
 
-                    {/* Role mode — checklist of unique roles from assigned members */}
+                    {/* Role mode ? checklist of unique roles from assigned members */}
                     {scribeAssignMode === 'role' && (() => {
-                      const assignedMembers = assignments.filter(a => a.memberId).map(a => teamMembers.find(t => t.id === parseInt(a.memberId))).filter(Boolean);
-                      const uniqueRoles = [...new Set(assignedMembers.map(m => m.role))];
+                      const assignedMembers = assignments.filter((a) => a.memberId).map((a) => teamMembers.find((t) => String(t.id) === String(a.memberId))).filter(Boolean);
+                      const uniqueRoles = [...new Set(assignedMembers.map((m) => m.role))];
                       if (uniqueRoles.length === 0) return (
                         <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: 8, textAlign: 'center' }}>
                           No members assigned yet
@@ -2308,14 +3176,14 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                       return (
                         <div style={{ border: '1.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                           {uniqueRoles.map((role, idx) => {
-                            const roleMembers = assignedMembers.filter(m => m.role === role);
-                            const roleMemberIds = roleMembers.map(m => String(m.id));
-                            const allSel = roleMemberIds.every(id => scribeAssignees.includes(id));
-                            const someSel = roleMemberIds.some(id => scribeAssignees.includes(id));
+                            const roleMembers = assignedMembers.filter((m) => m.role === role);
+                            const roleMemberIds = roleMembers.map((m) => String(m.id));
+                            const allSel = roleMemberIds.every((id) => scribeAssignees.includes(id));
+                            const someSel = roleMemberIds.some((id) => scribeAssignees.includes(id));
                             return (
                               <button key={role} type="button"
                                 onClick={() => setScribeAssignees(allSel
-                                  ? scribeAssignees.filter(id => !roleMemberIds.includes(id))
+                                  ? scribeAssignees.filter((id) => !roleMemberIds.includes(id))
                                   : [...new Set([...scribeAssignees, ...roleMemberIds])]
                                 )}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: allSel ? '#F5F8FF' : someSel ? '#FAFBFF' : 'var(--bg-surface)', border: 'none', borderBottom: idx < uniqueRoles.length - 1 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
@@ -2326,7 +3194,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{role}</div>
                                   <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                                    {roleMembers.map(m => (
+                                    {roleMembers.map((m) => (
                                       <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
                                     ))}
                                     <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 2 }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
@@ -2344,8 +3212,8 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                     {scribeAssignMode !== 'all' && scribeAssignees.length > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Selected:</span>
-                        {scribeAssignees.map(id => {
-                          const m = teamMembers.find(t => t.id === parseInt(id));
+                        {scribeAssignees.map((id) => {
+                          const m = teamMembers.find((t) => t.id === parseInt(id));
                           if (!m) return null;
                           return (
                             <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 4px', background: '#EEF2FF', borderRadius: 20, border: '1px solid #C7D4FF' }}>
@@ -2363,34 +3231,103 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           </div>
 
 
-          {/* Budget summary */}
+          {/* Task Budget */}
+          {!hideBudget && (
+          <div style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid var(--border)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Task Budget</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Amount (?)</label>
+                <input 
+                  type="number"
+                  value={taskBudgetAmount} 
+                  onChange={(e) => setTaskBudgetAmount(e.target.value)} 
+                  placeholder="0.00"
+                  disabled={isCompleted}
+                  style={{ 
+                    width: '100%', 
+                    padding: '9px 12px', 
+                    border: '1.5px solid var(--border)', 
+                    borderRadius: 9, 
+                    fontSize: 13, 
+                    color: 'var(--text-primary)', 
+                    outline: 'none', 
+                    background: isCompleted ? 'var(--bg-subtle)' : 'var(--bg-surface)', 
+                    boxSizing: 'border-box',
+                    cursor: isCompleted ? 'not-allowed' : 'text',
+                    opacity: isCompleted ? 0.7 : 1
+                  }}
+                  onFocus={(e) => !isCompleted && (e.target.style.borderColor = '#3B5BFC')} 
+                  onBlur={(e) => e.target.style.borderColor = 'var(--border)'} 
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+              Overall task budget (separate from team member budgets). Payment status managed from Payment page.
+            </div>
+          </div>
+          )}
+
+          {/* Amount summary */}
           {!hideBudget && <div style={{ background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid #C7D4FF' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Budget Summary</div>
-            {assignments.filter(a => a.memberId && a.budget).map((a, i) => {
-              const m = teamMembers.find(t => t.id === parseInt(a.memberId));
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Amount Summary</div>
+            
+            {/* Team member budgets */}
+            {assignments.filter((a) => a.memberId && a.budget).map((a, i) => {
+              const m = teamMembers.find((t) => String(t.id) === String(a.memberId));
               return m ? (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
                   <span>{m.name} <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({m.role})</span></span>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₹ {parseFloat(a.budget || 0).toLocaleString()}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₹{parseFloat(a.budget || 0).toLocaleString()}</span>
                 </div>
               ) : null;
             })}
+            
+            {/* Team Amount subtotal */}
+            {memberBudgets > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF' }}>
+                <span style={{ fontWeight: 600 }}>Team Amount</span>
+                <span style={{ fontWeight: 700 }}>₹{memberBudgets.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Additional Amount subtotal (without individual entries) */}
+            {additionalPaymentsTotal > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF' }}>
+                <span style={{ fontWeight: 600 }}>Additional Amount</span>
+                <span style={{ fontWeight: 700 }}>₹{additionalPaymentsTotal.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Task Budget (display only, not added to total) */}
+            {taskBudgetAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7C3AED', marginTop: 8, paddingTop: 8, borderTop: '1px solid #E0E7FF', background: '#F5F3FF', padding: '8px 12px', borderRadius: 8, marginLeft: -12, marginRight: -12 }}>
+                <span style={{ fontWeight: 600 }}>Task Budget</span>
+                <span style={{ fontWeight: 700 }}>₹{parseFloat(taskBudgetAmount).toLocaleString()}</span>
+              </div>
+            )}
+            
+            {/* Total Amount */}
             <div style={{ borderTop: '1px solid #C7D4FF', marginTop: 8, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Budget</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: '#3B5BFC' }}>₹ {totalBudget.toLocaleString()}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Amount</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#3B5BFC' }}>₹{totalBudget.toLocaleString()}</span>
             </div>
           </div>}
         </div>
 
         {/* Footer */}
         <div style={{ padding: '16px 28px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '11px 22px', background: 'var(--input-bg)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSubmitClick} disabled={!title.trim() || !deadline} style={{
-            padding: '11px 28px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: title.trim() && deadline ? 'pointer' : 'default',
-            background: title.trim() && deadline ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)',
-            color: title.trim() && deadline ? '#fff' : 'var(--text-muted)',
-            boxShadow: title.trim() && deadline ? '0 6px 20px #3B5BFC40' : 'none',
-          }}>Update Task</button>
+          <button onClick={onClose} style={{ padding: '11px 22px', background: 'var(--input-bg)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            {isCompleted ? 'Close' : 'Cancel'}
+          </button>
+          {!isCompleted && (
+            <button onClick={handleSubmitClick} disabled={!title.trim() || !deadline} style={{
+              padding: '11px 28px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: title.trim() && deadline ? 'pointer' : 'default',
+              background: title.trim() && deadline ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)',
+              color: title.trim() && deadline ? '#fff' : 'var(--text-muted)',
+              boxShadow: title.trim() && deadline ? '0 6px 20px #3B5BFC40' : 'none',
+            }}>Update Task</button>
+          )}
         </div>
       </div>
       {showPasswordModal && (
@@ -2404,12 +3341,87 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
   );
 }
 
-// ── Admin Task Detail Modal (same as Dashboard) ─────────────────────────────
-export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineClick, hideBudget = false, onCreateScheduled = null, onCancelScheduled = null, managementMode = false, onNavigateToTask = null }) {
-  const { tasks, STAGE_COLORS, STAGE_BG, STAGES, updateTaskStage, deleteTask, markTaskPaid, updateTask, pauseTask, resumeTask, fmt, adminPassword } = useApp();
+// -- Admin Task Detail Modal (same as Dashboard) -----------------------------
+export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineClick, hideBudget = false, onCreateScheduled = null, onCancelScheduled = null, managementMode = false, onNavigateToTask = null, currentUser: propCurrentUser = null }) {
+  const { tasks, STAGE_COLORS, STAGE_BG, STAGES, updateTaskStage, deleteTask, markTaskPaid, updateTask, pauseTask, resumeTask, fmt, adminPassword, TAGS, CATEGORIES, getPaymentsForTask, currentUser: contextCurrentUser, notes: globalNotes } = useApp();
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
+  
+  // Use prop currentUser if provided (for management mode), otherwise use context currentUser
+  const currentUser = propCurrentUser || contextCurrentUser;
 
-  const t = tasks.find(t => t.id === initialTask.id) || initialTask;
+  // ? CRITICAL: Always use the task from context (tasks array) to get enriched member data with real-time updates
+  // Use useMemo to ensure this updates when tasks array changes OR when initialTask changes
+  const t = useMemo(() => {
+    const foundTask = tasks.find((task) => task.id === initialTask.id);
+    
+    // Deep comparison of member stages
+    const initialStages = initialTask.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
+    const foundStages = foundTask?.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
+    
+    console.log('?? AdminTaskModal - Task data comparison:', {
+      taskId: initialTask.id,
+      found: !!foundTask,
+      initialStages,
+      foundStages,
+      stagesMatch: initialStages === foundStages,
+      willUse: foundTask ? 'foundTask (from context)' : 'initialTask (fallback)',
+      initialTaskMembers: initialTask.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage })),
+      foundTaskMembers: foundTask?.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage }))
+    });
+    
+    // Always prefer foundTask if it exists, as it has the latest data from Firestore
+    return foundTask || initialTask;
+  }, [tasks, initialTask]);
+  
+  // ? Check if current management user is on hold for this task
+  // In management mode, currentUser is the displayMember (team member object), so use currentUser.id
+  // Also detect management mode by checking user role if prop is not set correctly
+  const isManagementUser = managementMode || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager') || currentUser?.userRole === 'management';
+  
+  console.log('?? AdminTaskModal - currentUser check:', {
+    managementMode,
+    isManagementUser,
+    currentUser,
+    currentUserId: currentUser?.id,
+    currentUserIdType: typeof currentUser?.id,
+    currentUserRole: currentUser?.role,
+    taskMembers: t.members?.map((m) => ({ id: m.id, idType: typeof m.id, name: m.name }))
+  });
+  
+  // Try multiple comparison strategies to handle type mismatches
+  const currentUserMember = isManagementUser && currentUser?.id 
+    ? t.members?.find((m) => 
+        m.id === currentUser.id || 
+        String(m.id) === String(currentUser.id) ||
+        Number(m.id) === Number(currentUser.id) ||
+        parseInt(m.id) === parseInt(currentUser.id)
+      )
+    : null;
+  const isCurrentUserOnHold = currentUserMember?.isOnHold || false;
+  
+  console.log('?? AdminTaskModal - currentUserMember found:', {
+    found: !!currentUserMember,
+    currentUserMember: currentUserMember ? { id: currentUserMember.id, name: currentUserMember.name, stage: currentUserMember.stage } : null
+  });
+  
+  // Log task member data for debugging
+  useEffect(() => {
+    console.log('?? AdminTaskModal - Task member data updated:', {
+      taskId: t.id,
+      membersCount: t.members?.length || 0,
+      members: t.members?.map((m) => ({
+        id: m.id,
+        name: m.name,
+        avatar: m.avatar,
+        role: m.role,
+        color: m.color,
+        stage: m.stage,
+        budget: m.budget,
+        avatarImg: m.avatarImg
+      })),
+      usingEnrichedData: tasks.some((task) => task.id === initialTask.id)
+    });
+  }, [t, tasks, initialTask.id]);
 
   const [stageSelect, setStageSelect]     = useState('');
   const [updateNote, setUpdateNote]       = useState('');
@@ -2421,6 +3433,14 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   const [deleting, setDeleting]           = useState(false);
   const [confirmPause, setConfirmPause]   = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  
+  // ? CRITICAL: Reset memberStage state when task data changes
+  // This ensures dropdowns show the correct current stage after updates
+  useEffect(() => {
+    console.log('?? AdminTaskModal: Task data changed, resetting memberStage state');
+    setMemberStage({});
+    setMemberUpdateNote({});
+  }, [t.id, t.members?.map((m) => `${m.id}:${m.stage}`).join('-')]);
   const [adminPwd, setAdminPwd]           = useState('');
   const [pwdError, setPwdError]           = useState(false);
   const [showCreateDate, setShowCreateDate] = useState(false);
@@ -2439,7 +3459,6 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
       setAdminPwd('');
     }
   }
-  const [showExtendDate, setShowExtendDate] = useState(false);
   const [extendDateVal, setExtendDateVal]   = useState(t.extendedDeadline || '');
 
   const today      = new Date();
@@ -2447,44 +3466,55 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   const overdueFlag = new Date(displayDeadline) < today && t.stage !== 'Complete';
   const isComplete  = t.stage === 'Complete';
   const days        = Math.ceil((new Date(displayDeadline) - today) / (1000 * 60 * 60 * 24));
+  
+  // Log management user hold check after isComplete is defined
+  console.log('?? Management user hold check:', {
+    managementMode,
+    isManagementUser,
+    currentUserId: currentUser?.id,
+    currentUserMember: currentUserMember ? { id: currentUserMember.id, name: currentUserMember.name, isOnHold: currentUserMember.isOnHold, stage: currentUserMember.stage } : null,
+    isCurrentUserOnHold,
+    willShowSelfCard: isManagementUser && currentUserMember && !isComplete
+  });
 
   function handleStageUpdate() {
-    if (!stageSelect) return;
-    requestAdminPassword('update task stage', () => {
-      setUpdating(true);
-      setTimeout(() => { 
-        if (stageSelect === 'Update' && updateNote) {
-          updateTask(t.id, { updateNote });
-        }
-        updateTaskStage(t.id, stageSelect); 
-        setUpdating(false); 
-        setStageSelect(''); 
-        setUpdateNote('');
-      }, 700);
-    });
+    if (!stageSelect || t.paused || t.isPaused || isCurrentUserOnHold) return;
+    // ? No admin password required for stage updates
+    setUpdating(true);
+    setTimeout(() => { 
+      // ? If moving all to Update stage with a note, apply to all members
+      if (stageSelect === 'Update' && updateNote) {
+        // Apply the same update note to all members being moved to Update
+        updateTaskStage(t.id, stageSelect, null, null, null, updateNote);
+      } else {
+        updateTaskStage(t.id, stageSelect);
+      }
+      setUpdating(false); 
+      setStageSelect(''); 
+      setUpdateNote('');
+    }, 700);
   }
 
   function handleMemberStageUpdate(memberId) {
     const key = `${t.id}-${memberId}`;
-    if (!memberStage[key]) return;
+    const newStage = memberStage[key];
+    if (!newStage) return;
     
-    // Check if member is on hold
-    const member = t.members.find(m => m.id === memberId);
-    if (member?.isOnHold) return;
+    // Check if member is on hold OR task is paused OR management user is on hold
+    const member = t.members.find((m) => m.id === memberId);
+    if (member?.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) return;
     
-    requestAdminPassword('update member stage', () => {
-      setUpdatingMember(key);
-      setTimeout(() => {
-        // If updating to "Update" stage and there's a note, save it
-        if (memberStage[key] === 'Update' && memberUpdateNote[key]) {
-          updateTask(t.id, { updateNote: memberUpdateNote[key] });
-        }
-        updateTaskStage(t.id, memberStage[key], memberId);
-        setUpdatingMember(null);
-        setMemberStage(prev => { const n = { ...prev }; delete n[key]; return n; });
-        setMemberUpdateNote(prev => { const n = { ...prev }; delete n[key]; return n; });
-      }, 600);
-    });
+    // ? No admin password required for member stage updates
+    setUpdatingMember(key);
+    setTimeout(() => {
+      // Pass update note to updateTaskStage for member-specific storage
+      const updateNoteForMember = newStage === 'Update' ? memberUpdateNote[key] : null;
+      updateTaskStage(t.id, newStage, memberId, null, null, updateNoteForMember);
+      setUpdatingMember(null);
+      // Clear the selection so dropdown shows current stage after update
+      setMemberStage(prev => { const n = { ...prev }; delete n[key]; return n; });
+      setMemberUpdateNote(prev => { const n = { ...prev }; delete n[key]; return n; });
+    }, 600);
   }
 
   function handleDelete() {
@@ -2493,7 +3523,9 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   }
 
   function handleHoldTaskClick() {
+    console.log('?? Hold button clicked for task:', t.id);
     requestAdminPassword('hold this task', () => {
+      console.log('?? Admin password confirmed, calling pauseTask');
       pauseTask(t.id);
       setConfirmPause(false);
     });
@@ -2514,10 +3546,11 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   function handleMemberHoldToggle(memberId, currentHoldStatus) {
     const actionText = currentHoldStatus ? 'activate this member' : 'hold this member';
     requestAdminPassword(actionText, () => {
-      const updatedMembers = t.members.map(member => 
+      const updatedMembers = t.members.map((member) => 
         member.id === memberId ? { ...member, isOnHold: !member.isOnHold } : member
       );
-      updateTask(t.id, { members: updatedMembers });
+      // ⭐ Pass complete task data to avoid false change detection
+      updateTask(t.id, { ...t, members: updatedMembers });
     });
   }
 
@@ -2536,7 +3569,7 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                 onClick={(e) => { e.stopPropagation(); if (onTimelineClick) onTimelineClick(t); }}
                 style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 8px', borderRadius: 5, cursor: onTimelineClick ? 'pointer' : 'default' }}
               >
-                {t.id}
+                #{t.id}
               </span>
               <span 
                 className="task-title-hover"
@@ -2570,61 +3603,77 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: STAGE_BG[t.stage], color: STAGE_COLORS[t.stage] }}>{t.stage}</span>
               <span style={{ fontSize: 11, color: overdueFlag ? '#EF4444' : days <= 2 ? '#F97316' : 'var(--text-secondary)', fontWeight: 600 }}>
-                {isComplete ? '✅ Completed' : overdueFlag ? `⚠ ${Math.abs(days)}d overdue` : days === 0 ? '🔥 Due today' : days === 1 ? '⏰ Due tomorrow' : `${t.extendedDeadline ? 'Extended: ' : 'Due '}${new Date(displayDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                {isComplete ? '' : overdueFlag ? `? ${Math.abs(days)}d overdue` : days === 0 ? '?? Due today' : days === 1 ? 'Tomorrow' : `${t.extendedDeadline ? 'Extended: ' : 'Due '}${new Date(displayDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
               </span>
               {t.isScheduled && (
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#3B5BFC', background: '#EEF2FF', padding: '3px 10px', borderRadius: 20, border: '1.5px solid #3B5BFC' }}>
-                  📅 Scheduled
+                  Scheduled
                 </span>
               )}
-              {t.category && (
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: t.category.bg, color: t.category.color, fontWeight: 700, border: `1px solid ${t.category.color}30` }}>{t.category.emoji} {t.category.label}</span>
-              )}
-              {t.tags.map(tag => <span key={tag.label} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: tag.bg, color: tag.color, fontWeight: 600 }}>{tag.emoji} {tag.label}</span>)}
+              {t.category && (() => {
+                // Find full category data from CATEGORIES to get image
+                const fullCategory = CATEGORIES.find((c) => (c.id || c.label) === t.category.id || (c.name || c.label) === t.category.label);
+                const categoryImage = fullCategory?.icon || fullCategory?.image || t.category.image;
+                const isImageUrl = categoryImage && (categoryImage.startsWith('data:') || categoryImage.startsWith('http'));
+                
+                return (
+                  <span style={{ 
+                    fontSize: 10, 
+                    padding: '4px 10px', 
+                    borderRadius: 50, 
+                    background: t.category.bg || '#F3F4F6', 
+                    color: '#1A1D2E', 
+                    fontWeight: 700, 
+                    border: `1px solid ${t.category.color || '#E5E7EB'}30`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    {isImageUrl && (
+                      <img src={categoryImage} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                    )}
+                    {t.category.label}
+                  </span>
+                );
+              })()}
+              {t.tags.map((tag) => {
+                // Find full tag data from TAGS to get image
+                const fullTag = TAGS.find((t) => (t.id || t.label) === tag.id || (t.name || t.label) === tag.label);
+                const tagImage = fullTag?.image || tag.image;
+                const isImageUrl = tagImage && (tagImage.startsWith('data:') || tagImage.startsWith('http'));
+                
+                return (
+                  <span key={tag.label} style={{ 
+                    fontSize: 10, 
+                    padding: '4px 10px', 
+                    borderRadius: 50, 
+                    background: tag.bg || '#F3F4F6', 
+                    color: '#1A1D2E', 
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    border: '1px solid rgba(0,0,0,0.08)'
+                  }}>
+                    {isImageUrl && (
+                      <img src={tagImage} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                    )}
+                    {tag.label}
+                  </span>
+                );
+              })}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {t.isScheduled ? (
-              showCreateDate ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="date" value={createDate} min={todayStr}
-                    onChange={e => setCreateDate(e.target.value)}
-                    style={{ padding: '5px 10px', borderRadius: 8, border: '1.5px solid #C7D4FF', fontSize: 12, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', colorScheme: 'normal' }}
-                    onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = '#C7D4FF'} />
-                  <button
-                    disabled={!createDate}
-                    onClick={() => { onCreateScheduled && onCreateScheduled({ ...t, deadline: createDate, scheduledDate: null, isScheduled: false }); onClose(); }}
-                    style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: createDate ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', color: createDate ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: createDate ? 'pointer' : 'default' }}>
-                    Confirm
-                  </button>
-                  <button onClick={() => { setShowCreateDate(false); setCreateDate(''); }}
-                    style={{ padding: '6px 8px', borderRadius: 8, border: 'none', background: 'var(--bg-subtle)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <button onClick={() => setShowCreateDate(true)}
-                    style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    Create
-                  </button>
-                  <button onClick={() => { onCancelScheduled && onCancelScheduled(t.id); onClose(); }}
-                    style={{ padding: '6px 14px', borderRadius: 8, border: '1.5px solid #FED7D7', background: '#FFF5F5', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                </>
-              )
-            ) : (
-              onEdit && (
-                <button onClick={() => onEdit(t)}
-                  style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#EEF2FF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#C7D4FF'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#EEF2FF'}>
-                  <Edit2 size={14} color="#3B5BFC" />
-                </button>
-              )
+            {!t.isScheduled && onEdit && !isCurrentUserOnHold && (
+              <button onClick={() => onEdit(t)}
+                style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#EEF2FF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#C7D4FF'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#EEF2FF'}>
+                <Edit2 size={14} color="#3B5BFC" />
+              </button>
             )}
-            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: 'var(--text-secondary)' }}>✕</button>
+            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: 'var(--text-secondary)' }}><X size={16} /></button>
           </div>
         </div>
 
@@ -2633,55 +3682,243 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
 
           {/* Stats row */}
           <div style={{ display: 'flex', gap: 10 }}>
-            {!hideBudget && (
-              <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total Budget</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#12C479' }}>₹ {t.totalBudget?.toLocaleString()}</div>
-              </div>
-            )}
-            <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Payment</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: t.paid ? '#12C479' : '#F97316' }}>{t.paid ? '✅ Paid' : '⏳ Pending'}</div>
-            </div>
+            {!hideBudget && (() => {
+              // Calculate team budget (sum of member budgets)
+              const teamBudget = t.members?.reduce((sum, m) => sum + (parseFloat(m.budget) || 0), 0) || 0;
+              
+              // Calculate additional payments (investment/additional type payments for this task)
+              const taskPayments = getPaymentsForTask ? getPaymentsForTask(t.id) : [];
+              const additionalAmount = taskPayments
+                .filter((p) => p.paymentType === 'investment' || p.paymentType === 'additional')
+                .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+              
+              // Check if ALL payments for this task are paid
+              const allPaid = taskPayments.length > 0 && taskPayments.every((p) => p.isPaid === true || p.status === 'Paid');
+              
+              return (
+                <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total Amount</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#12C479' }}>₹{teamBudget.toLocaleString()}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: allPaid ? '#12C479' : '#F97316' }}>
+                      {allPaid ? '✓ Paid' : 'Pending'}
+                    </div>
+                  </div>
+                  {additionalAmount > 0 && (
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginTop: 2 }}>
+                      + ₹{additionalAmount.toLocaleString()} additional
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {!hideBudget && (() => {
+              // Get task budget payment
+              const taskPayments = getPaymentsForTask ? getPaymentsForTask(t.id) : [];
+              const taskBudgetPayment = taskPayments.find((p) => p.paymentType === 'task-budget');
+              
+              if (!taskBudgetPayment) {
+                // Show hyphen if no task budget
+                return (
+                  <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Task Budget</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-muted)' }}>—</div>
+                  </div>
+                );
+              }
+              
+              const totalBudget = taskBudgetPayment.amount || 0;
+              const paidAmount = taskBudgetPayment.paidAmount || 0;
+              const isPaid = taskBudgetPayment.isPaid || taskBudgetPayment.status === 'Paid';
+              const pendingAmount = totalBudget - paidAmount;
+              const profitAmount = taskBudgetPayment.profitAmount || 0;
+              
+              return (
+                <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Task Budget</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: isPaid ? '#12C479' : '#F97316' }}>₹{totalBudget.toLocaleString()}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: isPaid ? '#12C479' : '#F97316' }}>
+                      {isPaid ? '✓ Paid' : 'Pending'}
+                    </div>
+                  </div>
+                  {!isPaid && paidAmount > 0 && (
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#F97316', marginTop: 2 }}>
+                      Pending: ₹{pendingAmount.toLocaleString()}
+                    </div>
+                  )}
+                  {profitAmount > 0 && (
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#12C479', marginTop: 2 }}>
+                      +₹{profitAmount.toLocaleString()} profit
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div style={{ flex: 1, background: 'var(--bg-subtle)', borderRadius: 12, padding: '12px 14px' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Members</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{t.members.length} assigned</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{t.members?.length || 0} assigned</div>
             </div>
           </div>
 
           {/* Stage progress */}
           <div style={{ padding: '14px 16px', background: 'var(--bg-subtle)', borderRadius: 12, border: '1.5px solid var(--border-light)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 12 }}>Stage Progress</div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              {STAGES.map((s, i, arr) => {
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {STAGES.map((s, i) => {
                 const curIdx = STAGES.indexOf(t.stage);
                 const sIdx   = STAGES.indexOf(s);
                 const isPast = sIdx < curIdx;
                 const isCur  = s === t.stage;
+                const isComplete = s === 'Complete' && isCur; // Check if current stage is Complete
+                const isActive = isPast || isCur;
+                
                 return (
-                  <div key={s} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPast ? '#12C479' : isCur ? '#3B5BFC' : 'var(--bg-surface)', border: `2px solid ${isPast ? '#12C479' : isCur ? '#3B5BFC' : 'var(--border)'}`, fontSize: 10, fontWeight: 800, color: isPast || isCur ? '#fff' : 'var(--text-muted)' }}>
-                        {isPast ? '✓' : i + 1}
-                      </div>
-                      <span style={{ fontSize: 9, fontWeight: isCur ? 800 : 500, color: isCur ? '#3B5BFC' : 'var(--text-muted)', marginTop: 4, whiteSpace: 'nowrap' }}>{s}</span>
+                  <div key={s} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                    <div style={{ 
+                      width: 32, 
+                      height: 32, 
+                      borderRadius: '50%', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      background: isActive ? (isPast || isComplete ? '#12C479' : '#3B5BFC') : 'var(--bg-surface)',
+                      border: `2px solid ${isActive ? (isPast || isComplete ? '#12C479' : '#3B5BFC') : 'var(--border)'}`,
+                      fontSize: 11, 
+                      fontWeight: 800, 
+                      color: isActive ? '#fff' : 'var(--text-muted)',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      {isPast || isComplete ? '✓' : i + 1}
                     </div>
-                    {i < arr.length - 1 && <div style={{ flex: 1, height: 2, background: isPast ? '#12C479' : 'var(--border-light)', marginBottom: 16, minWidth: 8 }} />}
+                    <span style={{ 
+                      fontSize: 9, 
+                      fontWeight: isCur ? 800 : 500, 
+                      color: isCur ? (isComplete ? '#12C479' : '#3B5BFC') : isPast ? '#12C479' : 'var(--text-muted)', 
+                      marginTop: 6, 
+                      whiteSpace: 'nowrap',
+                      textAlign: 'center'
+                    }}>
+                      {s}
+                    </span>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Issue Note - Read Only */}
-          {t.issueNote && (
-            <div style={{ padding: '14px 16px', background: '#FEF2F2', borderRadius: 12, border: '1.5px solid #FED7D7' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <AlertCircle size={16} color="#EF4444" strokeWidth={2.5} />
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reported Issue</div>
+          {/* Issue Note - Read Only - Show member's issue note if their stage is Issue */}
+          {(() => {
+            const memberWithIssue = t.members?.find((m) => m.stage === 'Issue' && m.issueNote);
+            if (!memberWithIssue) return null;
+            
+            return (
+              <div style={{ padding: '14px 16px', background: '#FEF2F2', borderRadius: 12, border: '1.5px solid #FED7D7' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <AlertCircle size={16} color="#EF4444" strokeWidth={2.5} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Reported Issue by {memberWithIssue.name}
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #FED7D7' }}>
+                  {memberWithIssue.issueNote}
+                </div>
               </div>
-              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #FED7D7' }}>
-                {t.issueNote}
+            );
+          })()}
+
+          {/* Scribes Section - Moved before Team */}
+          {!t.isScheduled && t.scribes && t.scribes.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>Scribes</div>
+              <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
+                {t.scribes.map((s, i) => {
+                  // Determine if current user has access to this scribe
+                  const isAdmin = !managementMode;
+                  const currentMemberId = null; // admin view ? show all
+                  const hasAccess = isAdmin || s.assignMode === 'all' || (s.assignees || []).includes(String(currentMemberId));
+                  if (!hasAccess) return null;
+                  
+                  // Truncate title if too long
+                  const maxTitleLength = 25;
+                  const displayTitle = s.title.length > maxTitleLength 
+                    ? s.title.substring(0, maxTitleLength) + '...' 
+                    : s.title;
+                  
+                  return (
+                    <button key={i} type="button"
+                      onClick={() => { onClose(); if (onNavigateToTask) onNavigateToTask(t.id); }}
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: 'row',
+                        alignItems: 'center', 
+                        gap: 12, 
+                        padding: '12px 14px', 
+                        background: 'var(--bg-surface)', 
+                        borderRadius: 11, 
+                        border: '1.5px solid var(--border)', 
+                        cursor: 'pointer', 
+                        textAlign: 'left', 
+                        flex: '1 1 calc(50% - 5px)',
+                        minWidth: 180,
+                        maxWidth: 'calc(50% - 5px)',
+                        boxSizing: 'border-box',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = s.type === 'sheet' ? '#12C479' : '#7C3AED';
+                        e.currentTarget.style.background = s.type === 'sheet' ? '#F0FDF4' : '#F5F3FF';
+                        e.currentTarget.style.transform = 'translateX(2px)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border)';
+                        e.currentTarget.style.background = 'var(--bg-surface)';
+                        e.currentTarget.style.transform = 'translateX(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      {/* Left: Icon only */}
+                      <div style={{ 
+                        width: 36, 
+                        height: 36, 
+                        borderRadius: 9, 
+                        background: s.type === 'sheet' ? '#ECFDF5' : '#F5F3FF', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        flexShrink: 0,
+                        border: `1.5px solid ${s.type === 'sheet' ? '#BBF7D0' : '#DDD6FE'}`
+                      }}>
+                        {s.type === 'sheet'
+                          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        }
+                      </div>
+                      
+                      {/* Middle: Title + Member Count */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: 700, 
+                          color: 'var(--text-primary)', 
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          lineHeight: 1.3
+                        }} title={s.title}>
+                          {displayTitle}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+                          {s.assignMode === 'all' ? 'All members' : `${(s.assignees || []).length} member${(s.assignees || []).length !== 1 ? 's' : ''}`}
+                        </div>
+                      </div>
+                      
+                      {/* Right: Arrow */}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={s.type === 'sheet' ? '#12C479' : '#7C3AED'} strokeWidth="2.5" style={{ flexShrink: 0 }}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2689,14 +3926,38 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
           {/* Team — per-member stage controls */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Team</div>
+            
+            {/* ? Scheduled tasks: Hide team member controls */}
+            {t.isScheduled && (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: 12, border: '1.5px solid var(--border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>This task is scheduled for creation.</div>
+              </div>
+            )}
+            
+            {/* Other team members - Show FIRST */}
+            {!t.isScheduled && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {t.members.map(m => {
+              {(t.members && t.members.length > 0) ? t.members
+                .filter((m) => {
+                  // Filter out the current management user if they have a self-update card
+                  if (isManagementUser && currentUserMember && String(m.id) === String(currentUserMember.id)) {
+                    return false;
+                  }
+                  return true;
+                })
+                .map((m) => {
                 const key = `${t.id}-${m.id}`;
                 const isUpdatingThis = updatingMember === key;
                 return (
                   <div key={m.id} style={{ background: 'var(--bg-subtle)', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: '10px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{m.avatar}</div>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: m.avatarImg ? 'transparent' : m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+                        {m.avatarImg ? (
+                          <img src={m.avatarImg} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          m.avatar
+                        )}
+                      </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{m.name}</div>
                         <div 
@@ -2729,35 +3990,38 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        {!hideBudget && <div style={{ fontSize: 13, fontWeight: 800, color: '#12C479' }}>₹ {m.budget?.toLocaleString()}</div>}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: m.isOnHold ? '#FFF7ED' : STAGE_BG[m.stage], color: m.isOnHold ? '#F97316' : STAGE_COLORS[m.stage] }}>
-                          {m.isOnHold ? 'On Hold' : m.stage}
-                        </span>
+                        {!hideBudget && <div style={{ fontSize: 13, fontWeight: 800, color: '#12C479' }}>₹{m.budget?.toLocaleString()}</div>}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <UserCheck size={11} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                         <select 
-                          value={memberStage[key] !== undefined ? memberStage[key] : m.stage} 
-                          onChange={e => setMemberStage(prev => ({ ...prev, [key]: e.target.value }))}
-                          disabled={m.isOnHold}
-                          style={{ flex: 1, height: 32, borderRadius: 8, border: `1.5px solid ${m.isOnHold ? '#F97316' : memberStage[key] ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 11, fontWeight: 600, color: m.isOnHold ? '#F97316' : 'var(--text-primary)', background: m.isOnHold ? '#FFF7ED' : 'var(--bg-surface)', cursor: m.isOnHold ? 'not-allowed' : 'pointer', outline: 'none' }}>
-                          {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                          value={memberStage[key] !== undefined ? memberStage[key] : (m.stage || 'New')} 
+                          onChange={(e) => setMemberStage(prev => ({ ...prev, [key]: e.target.value }))}
+                          disabled={m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold}
+                          style={{ flex: 1, height: 32, borderRadius: 8, border: `1.5px solid ${(m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : isComplete ? '#12C479' : (memberStage[key] && memberStage[key] !== m.stage) ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 11, fontWeight: 600, color: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : isComplete ? '#12C479' : 'var(--text-primary)', background: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#FFF7ED' : isComplete ? '#ECFDF5' : 'var(--bg-surface)', cursor: (m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold) ? 'not-allowed' : 'pointer', outline: 'none' }}>
+                          {STAGES.map((s) => {
+                            // Clean the stage value to ensure no duplicates
+                            const cleanCurrentStage = (m.stage || 'New').trim();
+                            const isCurrent = s === cleanCurrentStage;
+                            return <option key={s} value={s}>{s}{isCurrent ? ' (Current)' : ''}</option>;
+                          })}
                         </select>
-                        {!m.isOnHold && (
+                        {!m.isOnHold && !isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
                           <button disabled={!memberStage[key] || memberStage[key] === m.stage || isUpdatingThis} onClick={() => handleMemberStageUpdate(m.id)}
                             style={{ height: 32, padding: '0 14px', borderRadius: 8, border: 'none', background: (memberStage[key] && memberStage[key] !== m.stage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', color: (memberStage[key] && memberStage[key] !== m.stage) ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: (memberStage[key] && memberStage[key] !== m.stage) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, transition: 'all 0.15s' }}>
                             {isUpdatingThis ? <><RefreshCw size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving</> : 'Apply'}
                           </button>
                         )}
-                        <button 
-                          onClick={() => handleMemberHoldToggle(m.id, m.isOnHold)}
-                          style={{ 
-                            height: 32, 
-                            padding: '0 12px', 
-                            borderRadius: 8, 
-                            border: 'none', 
+                        {!isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
+                          <button 
+                            onClick={() => handleMemberHoldToggle(m.id, m.isOnHold)}
+                            style={{ 
+                              height: 32, 
+                              padding: '0 12px', 
+                              borderRadius: 8, 
+                              border: 'none', 
                             background: m.isOnHold ? '#12C479' : '#F97316', 
                             color: '#fff', 
                             fontSize: 11, 
@@ -2774,13 +4038,14 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                         >
                           {m.isOnHold ? 'Activate' : 'Hold'}
                         </button>
+                        )}
                       </div>
                       
                       {/* Update Note Field - Show when Update stage is selected for this member */}
-                      {memberStage[key] === 'Update' && (
+                      {memberStage[key] === 'Update' && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
                         <textarea
                           value={memberUpdateNote[key] || ''}
-                          onChange={e => setMemberUpdateNote(prev => ({ ...prev, [key]: e.target.value }))}
+                          onChange={(e) => setMemberUpdateNote(prev => ({ ...prev, [key]: e.target.value }))}
                           placeholder="Describe what this member needs to update..."
                           rows={2}
                           style={{ 
@@ -2798,21 +4063,104 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                         />
                       )}
                       
-                      {/* Show existing update note if member is in Update stage (read-only for team members) */}
-                      {m.stage === 'Update' && t.updateNote && (
+                      {/* Show existing update note if member is in Update stage - member-specific */}
+                      {m.stage === 'Update' && m.updateNote && (
                         <div style={{ padding: '8px 10px', background: '#FFFBEB', borderRadius: 6, border: '1.5px solid #FDE68A' }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: '#D97706', marginBottom: 3 }}>Update Instructions:</div>
-                          <div style={{ fontSize: 11, color: '#92400E', lineHeight: 1.4 }}>{t.updateNote}</div>
+                          <div style={{ fontSize: 11, color: '#92400E', lineHeight: 1.4 }}>{m.updateNote}</div>
                         </div>
                       )}
                     </div>
                   </div>
                 );
-              })}
+              }) : (
+                <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: 12, border: '1.5px dashed var(--border)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>No members assigned</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Edit this task to assign team members</div>
+                </div>
+              )}
             </div>
+            )}
+            
+            {/* ? Management User Self-Update Card - Show AFTER other team members */}
+            {!t.isScheduled && isManagementUser && currentUserMember && !isComplete && (
+              <div style={{ background: '#EEF2FF', border: '1.5px solid #C7D4FF', borderRadius: 12, padding: '14px 16px', marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: currentUserMember.avatarImg ? 'transparent' : currentUserMember.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+                    {currentUserMember.avatarImg ? (
+                      <img src={currentUserMember.avatarImg} alt={currentUserMember.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      currentUserMember.avatar
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{currentUserMember.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currentUserMember.role}</div>
+                  </div>
+                </div>
+                
+                {/* Instruction field for management user */}
+                {currentUserMember.memberDesc && (
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fff', borderRadius: 8, border: '1.5px solid #E8EAEF' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Instructions</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{currentUserMember.memberDesc}</div>
+                  </div>
+                )}
+                
+                {/* Show existing update note if management user is in Update stage */}
+                {currentUserMember.stage === 'Update' && currentUserMember.updateNote && (
+                  <div style={{ marginBottom: 12, padding: '8px 10px', background: '#FFFBEB', borderRadius: 6, border: '1.5px solid #FDE68A' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#D97706', marginBottom: 3 }}>Update Instructions:</div>
+                    <div style={{ fontSize: 11, color: '#92400E', lineHeight: 1.4 }}>{currentUserMember.updateNote}</div>
+                  </div>
+                )}
+                
+                {!isCurrentUserOnHold ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                    <select 
+                      value={memberStage[`${t.id}-${currentUserMember.id}`] || currentUserMember.stage || 'New'} 
+                      onChange={(e) => setMemberStage((prev) => ({ ...prev, [`${t.id}-${currentUserMember.id}`]: e.target.value }))}
+                      style={{ flex: 1, height: 38, borderRadius: 9, border: '1.5px solid #3B5BFC', padding: '0 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', background: '#fff', cursor: 'pointer', outline: 'none' }}>
+                      {['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update'].map((s) => {
+                        const isCurrent = s === (currentUserMember.stage || 'New');
+                        return <option key={s} value={s}>{s}{isCurrent ? ' (Current)' : ''}</option>;
+                      })}
+                    </select>
+                    <button 
+                      disabled={!memberStage[`${t.id}-${currentUserMember.id}`] || memberStage[`${t.id}-${currentUserMember.id}`] === currentUserMember.stage || updatingMember === `${t.id}-${currentUserMember.id}`}
+                      onClick={() => handleMemberStageUpdate(currentUserMember.id)}
+                      style={{ 
+                        height: 38, 
+                        padding: '0 20px', 
+                        borderRadius: 9, 
+                        border: 'none', 
+                        background: (memberStage[`${t.id}-${currentUserMember.id}`] && memberStage[`${t.id}-${currentUserMember.id}`] !== currentUserMember.stage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', 
+                        color: (memberStage[`${t.id}-${currentUserMember.id}`] && memberStage[`${t.id}-${currentUserMember.id}`] !== currentUserMember.stage) ? '#fff' : 'var(--text-muted)', 
+                        fontSize: 12, 
+                        fontWeight: 700, 
+                        cursor: (memberStage[`${t.id}-${currentUserMember.id}`] && memberStage[`${t.id}-${currentUserMember.id}`] !== currentUserMember.stage) ? 'pointer' : 'default', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: 6,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap'
+                      }}>
+                      {updatingMember === `${t.id}-${currentUserMember.id}` ? <><RefreshCw size={12} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving</> : 'Update Stage'}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#FFF7ED', borderRadius: 9, border: '1.5px solid #F97316' }}>
+                    <Clock size={16} color="#F97316" />
+                    <div style={{ fontSize: 12, color: '#C2410C' }}>You are on hold. Cannot update stage.</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Task Management Controls */}
+          {!t.isScheduled && (
           <div style={{ padding: '14px 16px', background: 'var(--bg-subtle)', borderRadius: 12, border: '1.5px solid var(--border-light)' }}>
             
             {!isComplete && (
@@ -2822,24 +4170,25 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 1 }}>Move all members to stage</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Overrides all individual member stages</div>
                   </div>
-                  <select value={stageSelect} onChange={e => setStageSelect(e.target.value)}
-                    style={{ height: 36, borderRadius: 9, border: `1.5px solid ${stageSelect ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', background: 'var(--bg-surface)', cursor: 'pointer', outline: 'none', minWidth: 140 }}>
-                    <option value="">Select stage…</option>
-                    {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                  <select value={stageSelect} onChange={(e) => setStageSelect(e.target.value)}
+                    disabled={t.paused || t.isPaused || isCurrentUserOnHold}
+                    style={{ height: 36, borderRadius: 9, border: `1.5px solid ${(t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : stageSelect ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 12, fontWeight: 600, color: (t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : 'var(--text-primary)', background: (t.paused || t.isPaused || isCurrentUserOnHold) ? '#FFF7ED' : 'var(--bg-surface)', cursor: (t.paused || t.isPaused || isCurrentUserOnHold) ? 'not-allowed' : 'pointer', outline: 'none', minWidth: 140 }}>
+                    <option value="">Select stage</option>
+                    {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <button disabled={!stageSelect || updating} onClick={handleStageUpdate}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 9, border: 'none', background: stageSelect ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', color: stageSelect ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: stageSelect ? 'pointer' : 'default', boxShadow: stageSelect ? '0 4px 12px rgba(59,91,252,0.3)' : 'none', transition: 'all 0.15s', flexShrink: 0 }}>
-                    {updating ? <><RefreshCw size={12} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</> : 'Apply All'}
+                  <button disabled={!stageSelect || updating || t.paused || t.isPaused || isCurrentUserOnHold} onClick={handleStageUpdate}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 9, border: 'none', background: (stageSelect && !t.paused && !t.isPaused && !isCurrentUserOnHold) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', color: (stageSelect && !t.paused && !t.isPaused && !isCurrentUserOnHold) ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: (stageSelect && !t.paused && !t.isPaused && !isCurrentUserOnHold) ? 'pointer' : 'default', boxShadow: (stageSelect && !t.paused && !t.isPaused && !isCurrentUserOnHold) ? '0 4px 12px rgba(59,91,252,0.3)' : 'none', transition: 'all 0.15s', flexShrink: 0 }}>
+                    {updating ? <><RefreshCw size={12} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving</> : 'Apply All'}
                   </button>
                 </div>
                 
-                {/* Update Note Field - Only show when Update stage is selected */}
-                {stageSelect === 'Update' && (
+                {/* Update Note Field - Show when Update stage is selected for bulk update */}
+                {stageSelect === 'Update' && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Update Instructions (Required)</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Update Instructions (for all members)</label>
                     <textarea
                       value={updateNote}
-                      onChange={e => setUpdateNote(e.target.value)}
+                      onChange={(e) => setUpdateNote(e.target.value)}
                       placeholder="Describe what needs to be updated..."
                       rows={3}
                       style={{ 
@@ -2857,117 +4206,212 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                     />
                   </div>
                 )}
-                
-                {/* Show existing update note if task is in Update stage */}
-                {t.stage === 'Update' && t.updateNote && (
-                  <div style={{ padding: '10px 12px', background: '#FFFBEB', borderRadius: 8, border: '1.5px solid #FDE68A' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#D97706', marginBottom: 4 }}>Update Instructions:</div>
-                    <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.5 }}>{t.updateNote}</div>
-                  </div>
-                )}
               </div>
             )}
 
             {/* Extend Date */}
             {!isComplete && (
               <div style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showExtendDate ? 8 : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Extend Date</div>
-                    {t.extendedDeadline && !showExtendDate && (
+                    {t.extendedDeadline && (
                       <div style={{ fontSize: 11, color: '#F97316', fontWeight: 600 }}>Extended to {new Date(t.extendedDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                     )}
                   </div>
-                  <button onClick={() => { setShowExtendDate(p => !p); setExtendDateVal(t.extendedDeadline || ''); }}
-                    style={{ padding: '5px 12px', borderRadius: 8, border: `1.5px solid ${t.extendedDeadline ? '#F97316' : 'var(--border)'}`, background: t.extendedDeadline ? '#FFF7ED' : 'var(--bg-surface)', color: t.extendedDeadline ? '#F97316' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                    {showExtendDate ? 'Cancel' : t.extendedDeadline ? 'Edit' : 'Set'}
-                  </button>
                 </div>
-                {showExtendDate && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="date" value={extendDateVal} onChange={e => setExtendDateVal(e.target.value)}
-                      min={t.deadline}
-                      style={{ flex: 1, height: 36, borderRadius: 9, border: '1.5px solid #F97316', padding: '0 10px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', background: 'var(--bg-surface)', outline: 'none' }} />
-                    <button onClick={() => requestAdminPassword('extend task deadline', () => { updateTask(t.id, { ...t, extendedDeadline: extendDateVal || null }); setShowExtendDate(false); })}
-                      disabled={!extendDateVal}
-                      style={{ height: 36, padding: '0 16px', borderRadius: 9, border: 'none', background: extendDateVal ? 'linear-gradient(135deg, #F97316, #EA6C00)' : 'var(--border)', color: extendDateVal ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: extendDateVal ? 'pointer' : 'default', flexShrink: 0 }}>
-                      Apply
-                    </button>
-                    {t.extendedDeadline && (
-                      <button onClick={() => requestAdminPassword('clear extended deadline', () => { updateTask(t.id, { ...t, extendedDeadline: null }); setShowExtendDate(false); })}
-                        style={{ height: 36, padding: '0 12px', borderRadius: 9, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', fontSize: 11, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                        Clear
-                      </button>
-                    )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input 
+                    type="date" 
+                    value={extendDateVal} 
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setExtendDateVal(newDate);
+                      if (newDate) {
+                        requestAdminPassword('extend task deadline', () => { 
+                          updateTask(t.id, { ...t, extendedDeadline: newDate }); 
+                        });
+                      }
+                    }}
+                    disabled={t.paused || t.isPaused || isCurrentUserOnHold}
+                    min={t.extendedDeadline || t.deadline}
+                    style={{ flex: 1, height: 36, borderRadius: 9, border: `1.5px solid ${(t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : t.extendedDeadline ? '#F97316' : 'var(--border)'}`, padding: '0 10px', fontSize: 12, fontWeight: 600, color: (t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : 'var(--text-primary)', background: (t.paused || t.isPaused || isCurrentUserOnHold) ? '#FFF7ED' : 'var(--bg-surface)', cursor: (t.paused || t.isPaused || isCurrentUserOnHold) ? 'not-allowed' : 'auto', outline: 'none' }} 
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Scribes - Show after stage process, only if user has access */}
+            {(() => {
+              if (!t.scribes || t.scribes.length === 0) {
+                console.log('📝 AdminTaskModal - No scribes on task:', { taskId: t.id, hasScribes: !!t.scribes, scribesLength: t.scribes?.length });
+                return null;
+              }
+              
+              console.log('📝 AdminTaskModal - Filtering scribes:', { 
+                taskId: t.id, 
+                totalScribes: t.scribes.length, 
+                managementMode, 
+                currentUser: currentUser ? { id: currentUser.id, memberId: currentUser.memberId, role: currentUser.role } : null,
+                globalNotesCount: globalNotes?.length || 0
+              });
+              
+              // Filter scribes based on user access
+              const accessibleScribes = t.scribes.filter((s) => {
+                const isAdmin = !managementMode;
+                
+                // Admin users see all scribes
+                if (isAdmin) {
+                  console.log('📝 AdminTaskModal - Admin user, showing scribe:', { title: s.title, type: s.type });
+                  return true;
+                }
+                
+                // For management/team users, check if they're assigned
+                const currentMemberId = currentUser?.memberId || currentUser?.id;
+                if (!currentMemberId) {
+                  console.log('📝 AdminTaskModal - No currentMemberId, hiding scribe:', { title: s.title });
+                  return false;
+                }
+                
+                // Check if user has access based on assignMode
+                if (s.assignMode === 'all') {
+                  console.log('📝 AdminTaskModal - Scribe assigned to all, showing:', { title: s.title });
+                  return true;
+                }
+                if (s.assignees && s.assignees.some(id => String(id) === String(currentMemberId))) {
+                  console.log('📝 AdminTaskModal - User is assignee, showing scribe:', { title: s.title, currentMemberId });
+                  return true;
+                }
+                
+                console.log('📝 AdminTaskModal - User not assigned, hiding scribe:', { title: s.title, currentMemberId, assignees: s.assignees });
+                return false;
+              });
+              
+              console.log('📝 AdminTaskModal - Accessible scribes:', { count: accessibleScribes.length, scribes: accessibleScribes.map(s => ({ title: s.title, type: s.type })) });
+              
+              // Don't show section if no accessible scribes
+              if (accessibleScribes.length === 0) {
+                console.log('📝 AdminTaskModal - No accessible scribes, hiding section');
+                return null;
+              }
+              
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Scribes</div>
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    {accessibleScribes.map((s, i) => {
+                      const maxTitleLength = 25;
+                      const displayTitle = s.title.length > maxTitleLength 
+                        ? s.title.substring(0, maxTitleLength) + '...' 
+                        : s.title;
+                      
+                      return (
+                        <button key={i} type="button"
+                          onClick={() => { 
+                            console.log('🖱️ Scribe card clicked (AdminTaskModal):', { title: s.title, type: s.type, taskId: t.id });
+                            // Find the actual note ID from globalNotes by matching title and taskId
+                            const actualNote = (globalNotes || []).find(n => 
+                              n.taskId === t.id && 
+                              n.title === s.title && 
+                              n.type === s.type
+                            );
+                            const noteId = actualNote?.id;
+                            console.log('📝 Found note ID:', noteId);
+                            onClose();
+                            if (onNavigateToTask && noteId) {
+                              console.log('📞 Calling onNavigateToTask with ID:', noteId);
+                              onNavigateToTask(t.id, noteId);
+                            }
+                          }}
+                          style={{ 
+                            display: 'flex', 
+                            flexDirection: 'row',
+                            alignItems: 'center', 
+                            gap: 10, 
+                            padding: '10px 12px', 
+                            background: 'var(--bg-surface)', 
+                            borderRadius: 10, 
+                            border: '1.5px solid var(--border)', 
+                            cursor: 'pointer', 
+                            textAlign: 'left', 
+                            flex: '1 1 calc(50% - 4px)',
+                            minWidth: 160,
+                            maxWidth: 'calc(50% - 4px)',
+                            boxSizing: 'border-box',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = s.type === 'sheet' ? '#12C479' : '#7C3AED';
+                            e.currentTarget.style.background = s.type === 'sheet' ? '#F0FDF4' : '#F5F3FF';
+                            e.currentTarget.style.transform = 'translateX(2px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--border)';
+                            e.currentTarget.style.background = 'var(--bg-surface)';
+                            e.currentTarget.style.transform = 'translateX(0)';
+                          }}
+                        >
+                          <div style={{ 
+                            width: 32, 
+                            height: 32, 
+                            borderRadius: 8, 
+                            background: s.type === 'sheet' ? '#ECFDF5' : '#F5F3FF', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            flexShrink: 0,
+                            border: `1.5px solid ${s.type === 'sheet' ? '#BBF7D0' : '#DDD6FE'}`
+                          }}>
+                            {s.type === 'sheet'
+                              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            }
+                          </div>
+                          
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
+                            <div style={{ 
+                              fontSize: 12, 
+                              fontWeight: 700, 
+                              color: 'var(--text-primary)', 
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1.3
+                            }} title={s.title}>
+                              {displayTitle}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+                              {s.assignMode === 'all' ? 'All members' : `${(s.assignees || []).length} member${(s.assignees || []).length !== 1 ? 's' : ''}`}
+                            </div>
+                          </div>
+                          
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={s.type === 'sheet' ? '#12C479' : '#7C3AED'} strokeWidth="2.5" style={{ flexShrink: 0 }}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
 
 
-          {/* Scribes */}
-          {t.scribes && t.scribes.length > 0 && (
-            <div style={{ background: 'var(--bg-subtle)', borderRadius: 12, padding: '14px 16px', border: '1.5px solid var(--border-light)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Scribes</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {t.scribes.map((s, i) => {
-                  // Determine if current user has access to this scribe
-                  const isAdmin = !managementMode;
-                  const currentMemberId = null; // admin view � show all
-                  const hasAccess = isAdmin || s.assignMode === 'all' || (s.assignees || []).includes(String(currentMemberId));
-                  if (!hasAccess) return null;
-                  return (
-                    <button key={i} type="button"
-                      onClick={() => { onClose(); if (onNavigateToTask) onNavigateToTask(t.id); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 10, border: '1.5px solid var(--border)', cursor: 'pointer', textAlign: 'left', width: '100%' }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                    >
-                      <div style={{ width: 28, height: 28, borderRadius: 8, background: s.type === 'sheet' ? '#ECFDF5' : '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {s.type === 'sheet'
-                          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-                          : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        }
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {s.assignMode === 'all' ? 'All assigned members' : `${(s.assignees || []).length} member${(s.assignees || []).length !== 1 ? 's' : ''}`}
-                        </div>
-                      </div>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-            {!t.paid && isComplete && (
-              <button onClick={() => { markTaskPaid(t.id); onClose(); }}
-                style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #12C479, #059669)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(18,196,121,0.3)', marginBottom: 10 }}>
-                <Wallet size={14} /> Mark as Paid — ₹ {t.totalBudget?.toLocaleString()}
-              </button>
-            )}
-
-            {isComplete && t.paid && (
+            {isComplete && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F0FDF4', borderRadius: 10, border: '1.5px solid #BBF7D0', marginBottom: 10 }}>
                 <CheckCircle size={16} color="#12C479" strokeWidth={2.5} />
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#12C479' }}>Task completed & paid</div>
-                  <div style={{ fontSize: 11, color: '#6B7280' }}>₹ {t.totalBudget?.toLocaleString()} processed to team</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#12C479' }}>Task completed</div>
                 </div>
               </div>
             )}
 
             {/* Hold / Activate */}
-            {!isComplete && !t.paused && !confirmPause && (
-              <button onClick={handleHoldTaskClick}
+            {!managementMode && !isComplete && !t.paused && !confirmPause && !isCurrentUserOnHold && (
+              <button onClick={() => setConfirmPause(true)}
                 style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #FDE68A', background: '#FFFBEB', color: '#D97706', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 }}>
                 <Hourglass size={13} /> Hold Task
               </button>
             )}
-            {!isComplete && !t.paused && confirmPause && (
+            {!managementMode && !isComplete && !t.paused && confirmPause && !isCurrentUserOnHold && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#FFFBEB', borderRadius: 10, border: '1.5px solid #FDE68A', marginBottom: 8 }}>
                 <AlertCircle size={14} color="#D97706" />
                 <span style={{ fontSize: 12, fontWeight: 600, color: '#D97706', flex: 1 }}>Place "{t.title}" on hold? Progress will be held.</span>
@@ -2979,12 +4423,11 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                   style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
               </div>
             )}
-            {t.paused && (
+            {!managementMode && t.paused && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#FFFBEB', borderRadius: 10, border: '1.5px solid #FDE68A', marginBottom: 8 }}>
                 <Hourglass size={15} color="#D97706" />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#D97706' }}>Task On Hold</div>
-                  {t.pausedOn && <div style={{ fontSize: 10, color: '#92400E' }}>Since {new Date(t.pausedOn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#D97706' }}>Task Hold</div>
                 </div>
                 <button onClick={handleActivateTaskClick}
                   style={{ padding: '7px 16px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(59,91,252,0.3)', flexShrink: 0 }}>
@@ -2993,24 +4436,55 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
               </div>
             )}
 
-            {!confirmDelete ? (
-              <button onClick={handleRemoveTaskClick}
-                style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                <Trash2 size={13} /> Remove Task
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#FEF2F2', borderRadius: 10, border: '1.5px solid #FCA5A5' }}>
-                <AlertCircle size={14} color="#EF4444" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#EF4444', flex: 1 }}>Remove "{t.title}"? This cannot be undone.</span>
-                <button onClick={handleRemoveTaskClick} disabled={deleting}
-                  style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {deleting ? <><RefreshCw size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> Removing</> : 'Remove'}
+            {t.stage === 'New' && (
+              !confirmDelete ? (
+                <button onClick={handleRemoveTaskClick}
+                  style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                  <Trash2 size={13} /> Remove Task
                 </button>
-                <button onClick={() => setConfirmDelete(false)}
-                  style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#FEF2F2', borderRadius: 10, border: '1.5px solid #FCA5A5' }}>
+                  <AlertCircle size={14} color="#EF4444" />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#EF4444', flex: 1 }}>Remove "{t.title}"? This cannot be undone.</span>
+                  <button onClick={handleRemoveTaskClick} disabled={deleting}
+                    style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {deleting ? <><RefreshCw size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> Removing</> : 'Remove'}
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                </div>
+              )
             )}
           </div>
+          )}
+          
+          {/* Scheduled Task Actions - Bottom of modal */}
+          {t.isScheduled && (
+            <div style={{ display: 'flex', gap: 10, paddingTop: 14, borderTop: '1.5px solid var(--border-light)' }}>
+              <button onClick={() => {
+                requestAdminPassword('create task from scheduled task', () => {
+                  if (onCreateScheduled) {
+                    onCreateScheduled(t);
+                  }
+                  onClose();
+                });
+              }}
+                style={{ flex: 1, padding: '12px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(59,91,252,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <CheckCircle size={14} strokeWidth={2.5} />
+                Create Task
+              </button>
+              <button onClick={() => {
+                requestAdminPassword('remove scheduled task', () => {
+                  onCancelScheduled && onCancelScheduled(t.id);
+                  onClose();
+                });
+              }}
+                style={{ flex: 1, padding: '12px 20px', borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Trash2 size={14} />
+                Remove Task
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {showPasswordModal && (
@@ -3035,11 +4509,294 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   );
 }
 
-// ── Main Tasks Page ─────────────────────────────────────────────────────────
-export default function TasksPage({ hideBudget = false, hideTimeline = false, currentUser: propCurrentUser = null, managementMode = false, openCreateOnMount = false, onCreateMounted = null, onNavigateToNotes = null }) {
-  const { tasks, team, createTask, taskRequests, approveTaskRequest, completeTaskRequest, updateTask, updateTaskNote, scheduledTasks, addScheduledTask, removeScheduledTask, currentUser: contextCurrentUser } = useApp();
+// -- Helper function to create scribes for a task ---------------------------
+function createScribesForTask(task, teamMembers, currentUser, addNote) {
+  const currentUid = currentUser?.uid;
+  
+  console.log('ðŸ“ createScribesForTask called with:', {
+    hasTask: !!task,
+    taskId: task?.id,
+    hasScribes: !!task?.scribes,
+    scribesLength: task?.scribes?.length,
+    hasCurrentUser: !!currentUser,
+    currentUid,
+    currentUserName: currentUser?.name,
+    hasAddNote: !!addNote,
+    teamMembersCount: teamMembers?.length
+  });
+  
+  if (!task.scribes || task.scribes.length === 0 || !currentUid) {
+    console.warn('âš ï¸ Cannot create scribes:', {
+      hasScribes: !!task.scribes,
+      scribesLength: task.scribes?.length,
+      hasCurrentUid: !!currentUid
+    });
+    return;
+  }
+  
+  if (!addNote) {
+    console.error('âŒ addNote function is not available!');
+    return;
+  }
+  
+  console.log('ðŸ“ Creating scribes for task:', {
+    taskId: task.id,
+    taskTitle: task.title,
+    scribesCount: task.scribes.length,
+    currentUid
+  });
+  
+  task.scribes.forEach((scribe, index) => {
+    console.log(`ðŸ“ Processing scribe ${index + 1}/${task.scribes.length}:`, scribe);
+    
+    // Generate unique scribe ID
+    const scribeId = `scribe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Determine accessList based on assignMode
+    let accessList = [currentUid]; // Creator always has access
+    let memberIds = []; // Array of member IDs for display
+    
+    if (scribe.assignMode === 'all') {
+      // All task members get access
+      console.log('ðŸ“ Processing "all" mode - task.members:', task.members.map(m => ({
+        id: m.id,
+        memberId: m.memberId,
+        name: m.name,
+        hasUid: !!m.uid,
+        uid: m.uid
+      })));
+      
+      console.log('ðŸ“ Available teamMembers for UID lookup:', teamMembers.map(t => ({
+        id: t.id,
+        name: t.name,
+        uid: t.uid,
+        hasUid: !!t.uid
+      })));
+      
+      const memberUids = task.members
+        .map((m) => {
+          // Try to get UID from task member first
+          if (m.uid) {
+            console.log(`  ✅ Member ${m.memberId || m.id} (${m.name}) has UID in task.members:`, m.uid);
+            return m.uid;
+          }
+          
+          // Fallback: look up UID from teamMembers using multiple ID fields
+          const memberId = m.memberId || m.id;
+          
+          // Try multiple matching strategies
+          const teamMember = teamMembers.find((t) => 
+            String(t.id) === String(memberId) ||
+            String(t.id) === String(m.id) ||
+            (m.memberId && String(t.id) === String(m.memberId))
+          );
+          
+          if (teamMember?.uid) {
+            console.log(`  ✅ Found UID for member ${memberId} (${m.name}) in teamMembers:`, teamMember.uid);
+            return teamMember.uid;
+          } else {
+            console.error(`  âŒ Could not find UID for member ${memberId} (${m.name})`, {
+              searchingFor: memberId,
+              taskMemberId: m.id,
+              taskMemberMemberId: m.memberId,
+              teamMembersIds: teamMembers.map(t => ({ id: t.id, uid: t.uid }))
+            });
+            return null;
+          }
+        })
+        .filter(Boolean);
+      
+      accessList = [...new Set([...accessList, ...memberUids])];
+      
+      // Get member IDs for display
+      memberIds = task.members
+        .map((m) => m.memberId || m.id)
+        .filter(Boolean);
+      
+      console.log('ðŸ“ Scribe "all" mode - adding all members:', {
+        scribeTitle: scribe.title,
+        membersCount: task.members.length,
+        uidsFound: memberUids.length,
+        memberIdsFound: memberIds.length,
+        finalAccessList: accessList,
+        memberIds
+      });
+    } else if (scribe.assignMode === 'member' && scribe.assignees && scribe.assignees.length > 0) {
+      // Only selected members get access
+      console.log('ðŸ“ Processing "member" mode - assignees:', scribe.assignees);
+      console.log('ðŸ“ task.members:', task.members.map(m => ({ id: m.id, memberId: m.memberId, name: m.name, uid: m.uid, hasUid: !!m.uid })));
+      console.log('ðŸ“ teamMembers:', teamMembers.map(t => ({ id: t.id, name: t.name, uid: t.uid, hasUid: !!t.uid })));
+      
+      const selectedMemberData = scribe.assignees
+        .map((assigneeId) => {
+          // First try to find in task.members (which has UIDs)
+          const taskMember = task.members.find((m) => 
+            String(m.memberId || m.id) === String(assigneeId) ||
+            String(m.id) === String(assigneeId)
+          );
+          
+          if (taskMember?.uid) {
+            console.log(`  ✅ Found member ${assigneeId} in task.members with uid:`, taskMember.uid);
+            return { uid: taskMember.uid, memberId: taskMember.memberId || taskMember.id };
+          }
+          
+          // Fallback to teamMembers with multiple matching strategies
+          const teamMember = teamMembers.find((t) => 
+            String(t.id) === String(assigneeId) ||
+            String(t.id) === String(taskMember?.id) ||
+            String(t.id) === String(taskMember?.memberId)
+          );
+          
+          if (teamMember?.uid) {
+            console.log(`  ✅ Found UID for member ${assigneeId} in teamMembers:`, teamMember.uid);
+            return { uid: teamMember.uid, memberId: teamMember.id };
+          } else {
+            console.error(`  âŒ Could not find UID for member ${assigneeId}`, {
+              searchingFor: assigneeId,
+              taskMembersIds: task.members.map(m => ({ id: m.id, memberId: m.memberId })),
+              teamMembersIds: teamMembers.map(t => t.id)
+            });
+            return null;
+          }
+        })
+        .filter(Boolean);
+      
+      accessList = [...new Set([...accessList, ...selectedMemberData.map(m => m.uid)])];
+      memberIds = selectedMemberData.map(m => m.memberId);
+      
+      console.log('ðŸ“ Scribe "member" mode - adding selected members:', {
+        scribeTitle: scribe.title,
+        selectedCount: scribe.assignees.length,
+        uidsFound: selectedMemberData.length,
+        finalAccessList: accessList,
+        memberIds
+      });
+    } else if (scribe.assignMode === 'role' && scribe.assignees && scribe.assignees.length > 0) {
+      // Members with selected roles get access
+      console.log('ðŸ“ Processing "role" mode:', {
+        selectedRoles: scribe.assignees,
+        taskMembers: task.members.map(m => ({ id: m.id, memberId: m.memberId, name: m.name, role: m.role, hasUid: !!m.uid, uid: m.uid }))
+      });
+      
+      const roleBasedMembers = task.members
+        .filter((m) => {
+          const matches = scribe.assignees.includes(m.role);
+          console.log(`  Checking member ${m.name} (${m.role}): ${matches ? '✅ MATCH' : 'âŒ NO MATCH'}`);
+          return matches;
+        });
+      
+      console.log('ðŸ“ Role-based members found:', roleBasedMembers.length, roleBasedMembers.map(m => ({ name: m.name, role: m.role, id: m.id, memberId: m.memberId })));
+      
+      const roleBasedUids = roleBasedMembers
+        .map((m) => {
+          // Try to get UID from task member first
+          if (m.uid) {
+            console.log(`  ✅ Member ${m.memberId || m.id} (${m.name}) has UID in task.members:`, m.uid);
+            return m.uid;
+          }
+          
+          // Fallback: look up UID from teamMembers using multiple ID fields
+          const memberId = m.memberId || m.id;
+          const teamMember = teamMembers.find((t) => 
+            String(t.id) === String(memberId) ||
+            String(t.id) === String(m.id) ||
+            (m.memberId && String(t.id) === String(m.memberId))
+          );
+          
+          if (teamMember?.uid) {
+            console.log(`  ✅ Found UID for role member ${memberId} (${m.name}) in teamMembers:`, teamMember.uid);
+            return teamMember.uid;
+          } else {
+            console.error(`  âŒ Could not find UID for role member ${memberId} (${m.name})`, {
+              searchingFor: memberId,
+              taskMemberId: m.id,
+              taskMemberMemberId: m.memberId,
+              teamMembersIds: teamMembers.map(t => ({ id: t.id, uid: t.uid }))
+            });
+            return null;
+          }
+        })
+        .filter(Boolean);
+      
+      memberIds = roleBasedMembers
+        .map((m) => m.memberId || m.id)
+        .filter(Boolean);
+      
+      accessList = [...new Set([...accessList, ...roleBasedUids])];
+      
+      console.log('ðŸ“ Scribe "role" mode - adding members by role:', {
+        scribeTitle: scribe.title,
+        selectedRoles: scribe.assignees,
+        roleBasedMembersCount: roleBasedMembers.length,
+        uidsFound: roleBasedUids.length,
+        memberIdsFound: memberIds.length,
+        finalAccessList: accessList,
+        memberIds
+      });
+    }
+    
+    // Create scribe document
+    const scribeDocument = {
+      id: scribeId,
+      title: scribe.title || 'Untitled',
+      type: scribe.type, // 'note' or 'sheet'
+      content: scribe.type === 'note' ? '' : null,
+      sheetData: scribe.type === 'sheet' ? {} : null,
+      taskId: task.id, // Link to task
+      taskTitle: task.title, // Store task title for reference
+      accessList: accessList,
+      members: memberIds, // Array of member IDs for display
+      createdBy: {
+        uid: currentUser.uid,
+        name: currentUser.name || 'User',
+        role: currentUser.role || 'User',
+        avatar: currentUser.avatar || currentUser.name?.[0]?.toUpperCase() || 'U',
+        color: currentUser.color || '#3B5BFC',
+        avatarImg: currentUser.avatarImg || null,
+        memberId: currentUser.memberId || null
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: [], // Initialize empty tags array
+      tagColors: {}, // Initialize empty tag colors object
+      category: '', // Initialize empty category
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), // Initialize date
+      joinCode: Math.random().toString(36).slice(2, 8).toUpperCase() // Generate join code
+    };
+    
+    console.log('ðŸ“ Creating scribe document:', {
+      scribeId,
+      title: scribeDocument.title,
+      type: scribeDocument.type,
+      taskId: scribeDocument.taskId,
+      accessListCount: scribeDocument.accessList.length,
+      accessList: scribeDocument.accessList,
+      membersCount: scribeDocument.members.length,
+      members: scribeDocument.members,
+      fullDocument: scribeDocument
+    });
+    
+    try {
+      // Save scribe using addNote from AppContext
+      console.log('ðŸ“ Calling addNote with scribe document...');
+      addNote(scribeDocument);
+      console.log('✅ Scribe created successfully:', scribeId);
+    } catch (error) {
+      console.error('âŒ Error creating scribe:', error);
+    }
+  });
+  
+  console.log('✅ All scribes processed for task:', task.id);
+}
+
+// -- Main Tasks Page ---------------------------------------------------------
+export default function TasksPage({ hideBudget = false, hideTimeline = false, currentUser: propCurrentUser = null, managementMode = false, openCreateOnMount = false, onCreateMounted = null, onNavigateToNotes = null, onNavigateToManage = null, setPageFilteredData = null, filterToTaskId = null }) {
+  const { tasks, team, createTask, taskRequests, approveTaskRequest, completeTaskRequest, updateTask, updateTaskNote, scheduledTasks, addScheduledTask, removeScheduledTask, currentUser: contextCurrentUser, TAGS, CATEGORIES, payments, getPaymentsForTask, addNote, currentUid } = useApp();
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const currentUser = propCurrentUser || contextCurrentUser;
+  
+  console.log('?? TasksPage props:', { managementMode, propCurrentUser, currentUser });
+  
   const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Administrator';
   const isManagement = currentUser?.userRole === 'management' || currentUser?.role?.includes('Management') || currentUser?.role?.includes('Manager');
   const canViewScheduled = isAdmin || isManagement;
@@ -3064,6 +4821,47 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
   const [noteTooltip, setNoteTooltip] = useState(null); // { note, x, y }
   const [chatTask, setChatTask] = useState(null);
 
+  // ? CRITICAL: Update viewTask when tasks array changes (real-time updates)
+  // This ensures the modal shows the latest member stages when team members update from Team Dashboard
+  useEffect(() => {
+    if (viewTask) {
+      const updatedTask = tasks.find((t) => t.id === viewTask.id);
+      if (updatedTask) {
+        // Check if the task data has actually changed by comparing member stages
+        const currentStages = viewTask.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
+        const updatedStages = updatedTask.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
+        
+        // Check member budgets
+        const currentBudgets = viewTask.members?.map((m) => `${m.id}:${m.budget || 0}`).sort().join(',') || '';
+        const updatedBudgets = updatedTask.members?.map((m) => `${m.id}:${m.budget || 0}`).sort().join(',') || '';
+        
+        // Also check other fields that might have changed
+        const hasChanges = currentStages !== updatedStages || 
+                          currentBudgets !== updatedBudgets ||
+                          viewTask.stage !== updatedTask.stage ||
+                          viewTask.title !== updatedTask.title ||
+                          viewTask.note !== updatedTask.note ||
+                          viewTask.deadline !== updatedTask.deadline ||
+                          viewTask.totalBudget !== updatedTask.totalBudget ||
+                          viewTask.category?.label !== updatedTask.category?.label;
+        
+        if (hasChanges) {
+          console.log('?? TasksPage: Updating viewTask with latest data', {
+            taskId: updatedTask.id,
+            currentStages,
+            updatedStages,
+            currentBudgets,
+            updatedBudgets,
+            currentTotalBudget: viewTask.totalBudget,
+            updatedTotalBudget: updatedTask.totalBudget,
+            members: updatedTask.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage, budget: m.budget }))
+          });
+          setViewTask(updatedTask);
+        }
+      }
+    }
+  }, [tasks]); // Re-run whenever tasks array changes
+
   // Hide note tooltip on scroll
   useEffect(() => {
     const handler = () => setNoteTooltip(null);
@@ -3087,7 +4885,6 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
       setRequestToApprove({ ...request, _approvedBy: currentUser });
       setShowRequests(false);
       setShowCreate(true);
-      completeTaskRequest(request.id, currentUser);
       notify.requestApproved(request.title);
     });
   };
@@ -3099,18 +4896,52 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     });
   };
 
+  // Wrapper for createTask that marks request as complete if it came from a request
+  const handleCreateTask = (task) => {
+    console.log('ðŸ” handleCreateTask called with task:', {
+      taskId: task.id,
+      hasScribes: !!task.scribes,
+      scribesCount: task.scribes?.length || 0,
+      scribes: task.scribes,
+      currentUid,
+      hasAddNote: !!addNote,
+      teamCount: team.length
+    });
+    
+    // Create scribes if any are defined
+    if (task.scribes && task.scribes.length > 0) {
+      console.log('ðŸ” Calling createScribesForTask...');
+      createScribesForTask(task, team, currentUser, addNote);
+    } else {
+      console.log('âš ï¸ No scribes to create or scribes array is empty');
+    }
+    
+    createTask(task);
+    
+    // If this task was created from a request, mark it as complete
+    if (requestToApprove && requestToApprove.id) {
+      completeTaskRequest(requestToApprove.id, currentUser);
+    }
+    
+    // If this task was created from a scheduled task, remove the scheduled task
+    if (requestToApprove && requestToApprove.scheduledTaskId) {
+      console.log('✅ Task created from scheduled task, removing scheduled task:', requestToApprove.scheduledTaskId);
+      removeScheduledTask(requestToApprove.scheduledTaskId);
+    }
+  };
+
   const handleCreateTaskClick = () => {
     setShowCreate(true);
   };
 
   // Get unique categories and tags from tasks
-  const categories = [...new Set(tasks.filter(t => t.category).map(t => t.category.label))];
-  const allTags = [...new Set(tasks.flatMap(t => t.tags || []).map(tag => tag.label))];
+  const categories = [...new Set(tasks.filter((t) => t.category).map((t) => t.category.label))];
+  const allTags = [...new Set(tasks.flatMap(t => t.tags || []).map((tag) => tag.label))];
 
   const toggleCategory = (category) => {
     setSelectedCategories(prev => 
       prev.includes(category) 
-        ? prev.filter(c => c !== category)
+        ? prev.filter((c) => c !== category)
         : [...prev, category]
     );
   };
@@ -3118,25 +4949,135 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
   const toggleTag = (tag) => {
     setSelectedTags(prev => 
       prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
+        ? prev.filter((t) => t !== tag)
         : [...prev, tag]
     );
   };
 
-  const filtered = stageFilter === 'Scheduled' ? scheduledTasks : tasks.filter(t => {
-    // Stage filter
-    const matchesStage = stageFilter === 'All' || t.stage === stageFilter;
+  // Calculate visible scheduled tasks count based on user role
+  const visibleScheduledTasksCount = useMemo(() => {
+    const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
+    const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
+    
+    if (isAdmin) {
+      return scheduledTasks.length;
+    } else if (isManagement) {
+      return scheduledTasks.filter((t) => {
+        const createdByUid = t.createdBy?.uid;
+        const createdByMemberId = t.createdBy?.memberId;
+        const currentUid = currentUser?.uid;
+        const currentMemberId = currentUser?.memberId || currentUser?.id;
+        
+        return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
+      }).length;
+    } else {
+      return 0;
+    }
+  }, [scheduledTasks, currentUser]);
+
+  let filtered = (stageFilter === 'Scheduled' ? scheduledTasks.filter((t) => {
+    // Scheduled tasks visibility:
+    // 1. Admin users can see all scheduled tasks
+    // 2. Management users can only see their own scheduled tasks
+    const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
+    const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
+    
+    console.log('🔍 Checking scheduled task in Scheduled filter:', {
+      taskId: t.id,
+      isAdmin,
+      isManagement,
+      currentUserRole: currentUser?.role,
+      currentUserUserRole: currentUser?.userRole
+    });
+    
+    if (isAdmin) {
+      // Admin can see all scheduled tasks
+      return true;
+    } else if (isManagement) {
+      // Management can only see their own scheduled tasks
+      const createdByUid = t.createdBy?.uid;
+      const createdByMemberId = t.createdBy?.memberId;
+      const currentUid = currentUser?.uid;
+      const currentMemberId = currentUser?.memberId || currentUser?.id;
+      
+      console.log('🔍 Scheduled task visibility check:', {
+        taskId: t.id,
+        taskTitle: t.title,
+        createdByUid,
+        createdByMemberId,
+        currentUid,
+        currentMemberId,
+        currentUserKeys: Object.keys(currentUser || {}),
+        uidMatch: createdByUid === currentUid,
+        memberIdMatch: String(createdByMemberId) === String(currentMemberId),
+        willShow: createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId)
+      });
+      
+      return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
+    } else {
+      // Regular members cannot see scheduled tasks
+      return false;
+    }
+  }) : [...tasks, ...scheduledTasks.filter((t) => {
+    // Include scheduled tasks in "All" filter with same visibility rules
+    const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
+    const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
+    
+    console.log('🔍 Checking scheduled task for All filter inclusion:', {
+      taskId: t.id,
+      isAdmin,
+      isManagement,
+      hasCreatedBy: !!t.createdBy
+    });
+    
+    if (isAdmin) {
+      return true;
+    } else if (isManagement) {
+      const createdByUid = t.createdBy?.uid;
+      const createdByMemberId = t.createdBy?.memberId;
+      const currentUid = currentUser?.uid;
+      const currentMemberId = currentUser?.memberId || currentUser?.id;
+      
+      console.log('🔍 Scheduled task visibility check (All filter):', {
+        taskId: t.id,
+        taskTitle: t.title,
+        createdByUid,
+        createdByMemberId,
+        currentUid,
+        currentMemberId,
+        uidMatch: createdByUid === currentUid,
+        memberIdMatch: String(createdByMemberId) === String(currentMemberId),
+        willShow: createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId)
+      });
+      
+      return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
+    } else {
+      return false;
+    }
+  })].filter((t) => {
+    // Stage filter - scheduled tasks only appear in "All" and "Scheduled" filters
+    const matchesStage = stageFilter === 'All' || (t.isScheduled ? false : t.stage === stageFilter);
+    
+    if (t.isScheduled) {
+      console.log('🔍 Stage filter check for scheduled task:', {
+        taskId: t.id,
+        stageFilter,
+        isScheduled: t.isScheduled,
+        matchesStage,
+        willPassFilter: matchesStage
+      });
+    }
     
     // Category filter
     const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(t.category?.label);
     
     // Tag filter
-    const matchesTag = selectedTags.length === 0 || (t.tags && t.tags.some(tag => selectedTags.includes(tag.label)));
+    const matchesTag = selectedTags.length === 0 || (t.tags && t.tags.some((tag) => selectedTags.includes(tag.label)));
     
     // Date range filter
     let matchesDate = true;
     if (dateFrom || dateTo) {
-      const taskDate = new Date(t.deadline);
+      const taskDate = new Date(t.deadline || t.scheduledDate);
       taskDate.setHours(0, 0, 0, 0);
       
       if (dateFrom) {
@@ -3153,13 +5094,30 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     }
     
     return matchesStage && matchesCategory && matchesTag && matchesDate;
+  })).sort((a, b) => {
+    // Sort by deadline (due date) - latest first
+    const dateA = new Date(a.deadline || a.scheduledDate);
+    const dateB = new Date(b.deadline || b.scheduledDate);
+    return dateB - dateA;
   });
+  
+  // Apply search filter if filterToTaskId is provided (show only that task)
+  if (filterToTaskId) {
+    filtered = filtered.filter(t => t.id === filterToTaskId);
+  }
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedTasks = filtered.slice(startIndex, endIndex);
+
+  // Update filtered data for search - use FULL filtered data, not just paginated
+  useEffect(() => {
+    if (setPageFilteredData) {
+      setPageFilteredData({ tasks: filtered }); // Search all filtered tasks, not just current page
+    }
+  }, [filtered.length, stageFilter, selectedCategories.length, selectedTags.length, dateFrom, dateTo, filterToTaskId, setPageFilteredData]);
 
   // Reset to page 1 when filters change
   const resetPagination = () => setCurrentPage(1);
@@ -3184,7 +5142,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Stage filters */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {['All', ...STAGES].map(s => (
+            {['All', ...STAGES].map((s) => (
               <button key={s} onClick={() => { setStageFilter(s); resetPagination(); }} style={{
                 padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 border: stageFilter === s ? 'none' : '1.5px solid var(--border)',
@@ -3192,7 +5150,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                 color: stageFilter === s ? '#fff' : 'var(--text-secondary)', transition: 'all 0.15s',
               }}>
                 {s}
-                {s !== 'All' && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({tasks.filter(t => t.stage === s).length})</span>}
+                {s !== 'All' && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({tasks.filter((t) => t.stage === s).length})</span>}
               </button>
             ))}
             {canViewScheduled && (
@@ -3202,7 +5160,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                 background: stageFilter === 'Scheduled' ? '#7C3AED' : 'var(--bg-surface)',
                 color: stageFilter === 'Scheduled' ? '#fff' : 'var(--text-secondary)', transition: 'all 0.15s',
               }}>
-                Scheduled <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({scheduledTasks.length})</span>
+                Scheduled <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({visibleScheduledTasksCount})</span>
               </button>
             )}
           </div>
@@ -3231,13 +5189,13 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                 <div style={{ padding: '8px' }}>
                   {categories.length === 0 ? (
                     <div style={{ padding: '8px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No categories</div>
-                  ) : categories.map(cat => (
+                  ) : categories.map((cat) => (
                     <label key={cat} style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
                       cursor: 'pointer', borderRadius: 8, transition: 'background 0.15s',
                     }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <input
                         type="checkbox"
@@ -3289,13 +5247,13 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                 <div style={{ padding: '8px' }}>
                   {allTags.length === 0 ? (
                     <div style={{ padding: '8px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No tags</div>
-                  ) : allTags.map(tag => (
+                  ) : allTags.map((tag) => (
                     <label key={tag} style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
                       cursor: 'pointer', borderRadius: 8, transition: 'background 0.15s',
                     }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <input
                         type="checkbox"
@@ -3340,7 +5298,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
               {(dateFrom || dateTo) && (
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#3B5BFC' }}>
                   {dateFrom && new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  {dateFrom && dateTo && ' – '}
+                  {dateFrom && dateTo && ' — '}
                   {dateTo && new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
               )}
@@ -3354,12 +5312,12 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>From</span>
-                  <input type="date" value={tempDateFrom} onChange={e => setTempDateFrom(e.target.value)}
+                  <input type="date" value={tempDateFrom} onChange={(e) => setTempDateFrom(e.target.value)}
                     style={{ padding: '6px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 12, color: 'var(--text-primary)', background: 'var(--bg-subtle)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>To</span>
-                  <input type="date" value={tempDateTo} onChange={e => setTempDateTo(e.target.value)}
+                  <input type="date" value={tempDateTo} onChange={(e) => setTempDateTo(e.target.value)}
                     style={{ padding: '6px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 12, color: 'var(--text-primary)', background: 'var(--bg-subtle)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -3383,14 +5341,14 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setShowRequests(true)} style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px',
-            background: taskRequests.filter(r => r.status === 'pending').length > 0 ? '#FFF7ED' : 'var(--bg-surface)',
-            color: taskRequests.filter(r => r.status === 'pending').length > 0 ? '#F97316' : 'var(--text-secondary)',
-            border: `1.5px solid ${taskRequests.filter(r => r.status === 'pending').length > 0 ? '#F97316' : 'var(--border)'}`,
+            background: taskRequests.filter((r) => r.status === 'pending').length > 0 ? '#FFF7ED' : 'var(--bg-surface)',
+            color: taskRequests.filter((r) => r.status === 'pending').length > 0 ? '#F97316' : 'var(--text-secondary)',
+            border: `1.5px solid ${taskRequests.filter((r) => r.status === 'pending').length > 0 ? '#F97316' : 'var(--border)'}`,
             borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
             position: 'relative',
           }}>
             <ClipboardCheck size={15} />
-            {taskRequests.filter(r => r.status === 'pending').length > 0 && (
+            {taskRequests.filter((r) => r.status === 'pending').length > 0 && (
               <span style={{ 
                 position: 'absolute', 
                 top: -6, 
@@ -3407,7 +5365,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                 fontWeight: 800,
                 border: '2px solid var(--bg-main)',
               }}>
-                {taskRequests.filter(r => r.status === 'pending').length}
+                {taskRequests.filter((r) => r.status === 'pending').length}
               </span>
             )}
             Approve Tasks
@@ -3427,7 +5385,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
       <div style={{ flex: 1, background: 'var(--bg-surface)', borderRadius: 16, border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', background: 'var(--bg-subtle)', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: hideBudget ? '110px 1fr 160px 120px 150px 130px 110px' : '110px 1fr 160px 120px 150px 130px 110px 100px' }}>
-            {['Task ID', 'Title & Progress', 'Note', 'Category', 'Tags', 'Stage', 'Date', ...(hideBudget ? [] : ['Budget'])].map(h => (
+            {['Task ID', 'Title & Progress', 'Note', 'Category', 'Tags', 'Stage', 'Date', ...(hideBudget ? [] : ['Budget'])].map((h) => (
               h === 'Title & Progress' ? (
                 <div key={h} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</span>
@@ -3456,7 +5414,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
           {pageLoading ? (
             // Skeleton loading for pagination
             <>
-              {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => (
+              {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map((i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: hideBudget ? '110px 1fr 160px 120px 150px 130px 110px' : '110px 1fr 160px 120px 150px 130px 110px 100px', padding: '14px 20px', borderBottom: '1px solid var(--border-light)', alignItems: 'center' }}>
                   <div className="skeleton" style={{ width: 75, height: 16, borderRadius: 6 }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -3496,69 +5454,83 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
             </div>
           ) : paginatedTasks.map((task, i) => {
             const overdue = new Date(task.deadline) < new Date() && task.stage !== 'Complete';
-            const reviewMembers = task.members.filter(m => m.stage === 'Review').length;
+            const reviewMembers = task.members.filter((m) => m.stage === 'Review').length;
+            // Create a unique key that includes member stages to force re-render when stages change
+            const taskKey = `${task.id}-${task._stageUpdateTimestamp || 0}-${task.members?.map((m) => `${m.id}:${m.stage}`).join('-') || 'no-members'}`;
             return (
-              <div key={task.id}
-                onClick={() => setViewTask(task)}
-                style={{ display: 'grid', gridTemplateColumns: hideBudget ? '110px 1fr 160px 120px 150px 130px 110px' : '110px 1fr 160px 120px 150px 130px 110px 100px', padding: '14px 20px', borderBottom: i < filtered.length - 1 ? '1px solid var(--border-light)' : 'none', alignItems: 'start', cursor: 'pointer', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              <div key={taskKey}
+                data-task-id={task.id}
+                onClick={() => {
+                  // ? Mark task as seen by admin when clicked
+                  if (task.createdBy?.userRole === 'management' && !task.seenByAdmin) {
+                    updateTask(task.id, { seenByAdmin: true });
+                  }
+                  setViewTask(task);
+                }}
+                style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: hideBudget ? '110px 1fr 160px 120px 150px 130px 110px' : '110px 1fr 160px 120px 150px 130px 110px 100px', 
+                  padding: '14px 20px', 
+                  borderBottom: i < filtered.length - 1 ? '1px solid var(--border-light)' : 'none', 
+                  alignItems: 'start', 
+                  cursor: 'pointer', 
+                  transition: 'background 0.15s',
+                  // ? Light blue background for new management tasks
+                  background: task.createdBy?.userRole === 'management' && !task.seenByAdmin ? '#EFF6FF' : 'transparent'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = task.createdBy?.userRole === 'management' && !task.seenByAdmin ? '#DBEAFE' : 'var(--bg-subtle)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = task.createdBy?.userRole === 'management' && !task.seenByAdmin ? '#EFF6FF' : 'transparent'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {(() => {
-                    let unread = 0;
-                    try {
-                      const msgs = JSON.parse(localStorage.getItem(`task_chat_${task.id}`) || '[]');
-                      const readAt = parseInt(localStorage.getItem(`task_chat_read_${task.id}`) || '0');
-                      unread = msgs.filter(m => m.id > readAt).length;
-                    } catch {}
-                    return (
-                      <button
-                        onClick={e => { e.stopPropagation(); setChatTask(task); }}
-                        title="Open chat"
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer', padding: 3,
-                          borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0,
-                          color: '#3B5BFC', position: 'relative',
-                        }}
-                      >
-                        <MessageSquare size={13} />
-                        {unread > 0 && (
-                          <span style={{
-                            position: 'absolute', top: -4, right: -4,
-                            background: '#EF4444', color: '#fff',
-                            borderRadius: '50%', width: 14, height: 14,
-                            fontSize: 8, fontWeight: 800,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            border: '1.5px solid var(--bg-surface)',
-                            lineHeight: 1,
-                          }}>
-                            {unread > 9 ? '9+' : unread}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })()}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (!task.isScheduled) setChatTask(task); }}
+                    title={task.isScheduled ? "Chat not available for scheduled tasks" : "Open chat"}
+                    style={{
+                      background: 'none', border: 'none', cursor: task.isScheduled ? 'not-allowed' : 'pointer', padding: 3,
+                      borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0,
+                      color: task.isScheduled ? 'var(--text-muted)' : '#3B5BFC', position: 'relative', transition: 'all 0.2s',
+                      opacity: task.isScheduled ? 0.5 : 1,
+                    }}
+                    onMouseEnter={(e) => { if (!task.isScheduled) { e.currentTarget.style.color = '#3B5BFC'; e.currentTarget.querySelector('svg').style.fill = '#3B5BFC'; } }}
+                    onMouseLeave={(e) => { if (!task.isScheduled) { e.currentTarget.style.color = '#3B5BFC'; e.currentTarget.querySelector('svg').style.fill = 'none'; } }}
+                  >
+                    <MessageSquare size={13} style={{ transition: 'fill 0.2s' }} />
+                    {/* Unread indicator dot */}
+                    {task.unreadCount > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: '#EF4444',
+                        border: '1px solid var(--bg-surface)',
+                      }} />
+                    )}
+                  </button>
                   <span
                     onClick={hideTimeline ? undefined : (e) => { e.stopPropagation(); setTimelineTask(task); }}
-                    style={{ fontFamily: 'monospace', fontSize: 12, color: '#3B5BFC', fontWeight: 700, cursor: hideTimeline ? 'default' : 'pointer' }}
+                    style={{ fontFamily: 'monospace', fontSize: 12, color: '#3B5BFC', fontWeight: 700, cursor: hideTimeline ? 'default' : 'pointer', transition: 'text-decoration 0.15s' }}
+                    onMouseEnter={(e) => { if (!hideTimeline) e.currentTarget.style.textDecoration = 'underline'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
                   >
-                    {task.id}
+                    #{task.id}
                   </span>
                 </div>
                 <div style={{ paddingRight: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{task.title}</div>
-                  <StageFlow current={task.stage} members={task.members} paid={task.paid} history={task.history || []} />
+                  <StageFlow current={task.stage} members={task.members} paid={task.paid} history={task.history || []} taskId={task.id} getPaymentsForTask={getPaymentsForTask} />
                 </div>
                 {/* Note cell */}
-                <div onClick={e => e.stopPropagation()} style={{ paddingRight: 8 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ paddingRight: 8 }}>
                   {editingNote?.taskId === task.id ? (
                     <textarea
                       autoFocus
                       value={editingNote.value}
-                      onChange={e => setEditingNote(prev => ({ ...prev, value: e.target.value }))}
+                      onChange={(e) => setEditingNote(prev => ({ ...prev, value: e.target.value }))}
                       onBlur={() => { updateTaskNote(task.id, editingNote.value); setEditingNote(null); }}
-                      onKeyDown={e => { if (e.key === 'Escape') setEditingNote(null); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); updateTaskNote(task.id, editingNote.value); setEditingNote(null); } }}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setEditingNote(null); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); updateTaskNote(task.id, editingNote.value); setEditingNote(null); } }}
                       style={{
                         width: '100%', minHeight: 56, resize: 'vertical',
                         padding: '6px 8px', borderRadius: 8,
@@ -3584,7 +5556,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                       }}
-                      onMouseEnter={e => {
+                      onMouseEnter={(e) => {
                         e.currentTarget.style.border = '1.5px solid var(--border)';
                         e.currentTarget.style.background = 'var(--bg-subtle)';
                         if (task.note) {
@@ -3592,29 +5564,75 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                           setNoteTooltip({ note: task.note, x: rect.left + rect.width / 2, y: rect.top });
                         }
                       }}
-                      onMouseLeave={e => {
+                      onMouseLeave={(e) => {
                         e.currentTarget.style.border = '1.5px solid transparent';
                         e.currentTarget.style.background = task.note ? 'var(--bg-subtle)' : 'transparent';
                         setNoteTooltip(null);
                       }}
                     >
-                      {task.note || 'Add note…'}
+                      {task.note || 'Add note'}
                     </div>
                   )}
                 </div>
                 <div>
-                  {task.category ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: task.category.bg, color: task.category.color, border: `1px solid ${task.category.color}30`, display: 'inline-block' }}>{task.category.emoji} {task.category.label}</span>
-                  ) : (
+                  {task.category ? (() => {
+                    // Find full category data from CATEGORIES to get image
+                    const fullCategory = CATEGORIES.find((c) => (c.id || c.label) === task.category.id || (c.name || c.label) === task.category.label);
+                    const categoryImage = fullCategory?.icon || fullCategory?.image || task.category.image;
+                    const isImageUrl = categoryImage && (categoryImage.startsWith('data:') || categoryImage.startsWith('http'));
+                    
+                    return (
+                      <span style={{ 
+                        fontSize: 11, 
+                        fontWeight: 700, 
+                        padding: '4px 10px', 
+                        borderRadius: 50, 
+                        background: task.category.bg || '#F3F4F6', 
+                        color: '#1A1D2E', 
+                        border: `1px solid ${task.category.color || '#E5E7EB'}30`, 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: 4 
+                      }}>
+                        {isImageUrl && (
+                          <img src={categoryImage} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                        )}
+                        {task.category.label}
+                      </span>
+                    );
+                  })() : (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingTop: 2 }}>
                   {task.tags && task.tags.length > 0
-                    ? task.tags.map(t => (
-                        <span key={t.label} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: t.bg, color: t.color }}>{t.emoji} {t.label}</span>
-                      ))
-                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
+                    ? task.tags.map((t) => {
+                        // Find full tag data from TAGS to get image
+                        const fullTag = TAGS.find((tag) => (tag.id || tag.label) === t.id || (tag.name || tag.label) === t.label);
+                        const tagImage = fullTag?.image || t.image;
+                        const isImageUrl = tagImage && (tagImage.startsWith('data:') || tagImage.startsWith('http'));
+                        
+                        return (
+                          <span key={t.label} style={{ 
+                            fontSize: 11, 
+                            fontWeight: 600, 
+                            padding: '4px 10px', 
+                            borderRadius: 50, 
+                            background: t.bg || '#F3F4F6', 
+                            color: '#1A1D2E', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: 4,
+                            border: '1px solid rgba(0,0,0,0.08)'
+                          }}>
+                            {isImageUrl && (
+                              <img src={tagImage} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                            )}
+                            {t.label}
+                          </span>
+                        );
+                      })
+                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>?</span>
                   }
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
@@ -3631,13 +5649,32 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                     const displayDate = task.extendedDeadline || task.deadline;
                     const dateStr = new Date(displayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                     return <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {overdue ? `⚠ ${dateStr}` : dateStr}
+                      {dateStr}
                       {task.extendedDeadline && <span style={{ fontSize: 10, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '1px 6px', borderRadius: 5, alignSelf: 'flex-start' }}>Extended</span>}
                       {task.scheduledDate && <span style={{ fontSize: 10, fontWeight: 600, color: '#3B5BFC' }}>Scheduled: {new Date(task.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                     </div>;
                   })()}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: task.stage === 'Complete' ? '#12C479' : 'var(--text-primary)' }}>{hideBudget ? null : `₹ ${task.totalBudget.toLocaleString()}`}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: (() => {
+                  // Check if ALL payments for this task are paid (from payments collection only)
+                  const taskPayments = getPaymentsForTask ? getPaymentsForTask(task.id) : [];
+                  
+                  // Show green only if there are payments AND all are paid (check both isPaid and status)
+                  const allPaymentsPaid = taskPayments.length > 0 && taskPayments.every((p) => p.isPaid === true || p.status === 'Paid');
+                  return allPaymentsPaid ? '#12C479' : 'var(--text-primary)';
+                })() }}>{hideBudget ? null : (() => {
+                  // Calculate team budget (sum of member budgets)
+                  const teamBudget = task.members?.reduce((sum, m) => sum + (parseFloat(m.budget) || 0), 0) || 0;
+                  
+                  // Calculate additional payments (investment/additional type payments for this task)
+                  const taskPayments = getPaymentsForTask ? getPaymentsForTask(task.id) : [];
+                  const additionalAmount = taskPayments
+                    .filter((p) => p.paymentType === 'investment' || p.paymentType === 'additional')
+                    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+                  
+                  const totalWithAdditional = teamBudget + additionalAmount;
+                  return `₹${totalWithAdditional.toLocaleString()}`;
+                })()}</span>
               </div>
             );
           })}
@@ -3645,9 +5682,16 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
       </div>
 
       {showRequests && <TaskRequestsModal onClose={() => setShowRequests(false)} onApprove={handleApproveRequest} onComplete={handleCompleteRequest} requests={taskRequests} />}
-      {showCreate && <CreateTaskModal onClose={() => { setShowCreate(false); setRequestToApprove(null); }} onCreate={createTask} onSchedule={addScheduledTask} teamMembers={team} requestData={requestToApprove} hideBudget={hideBudget} currentUser={currentUser} managementMode={managementMode} />}
+      {showCreate && <CreateTaskModal onClose={() => { setShowCreate(false); setRequestToApprove(null); }} onCreate={handleCreateTask} onSchedule={addScheduledTask} teamMembers={team} requestData={requestToApprove} hideBudget={hideBudget} currentUser={currentUser} managementMode={managementMode} onNavigateToManage={onNavigateToManage} />}
       {editTask && <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onUpdate={updateTask} teamMembers={team} hideBudget={hideBudget} managementMode={managementMode} />}
-      {viewTask && <AdminTaskModal task={viewTask} onClose={() => setViewTask(null)} onEdit={(task) => { setEditTask(task); setViewTask(null); }} onTimelineClick={(task) => { setTimelineTask(task); setViewTask(null); }} hideBudget={hideBudget} onCreateScheduled={(task) => { createTask(task); removeScheduledTask(task.id); }} onCancelScheduled={(id) => removeScheduledTask(id)} managementMode={managementMode} onNavigateToTask={() => { setViewTask(null); if (onNavigateToNotes) onNavigateToNotes(); }} />}
+      {viewTask && <AdminTaskModal key={`${viewTask.id}-${viewTask.members?.map((m) => `${m.id}:${m.stage}`).join('-')}`} task={viewTask} onClose={() => setViewTask(null)} onEdit={(task) => { setEditTask(task); setViewTask(null); }} onTimelineClick={(task) => { setTimelineTask(task); setViewTask(null); }} hideBudget={hideBudget} onCreateScheduled={(scheduledTask) => { 
+        // Open Create Task Modal with scheduled task data pre-filled
+        // Store the scheduled task ID to remove it after task creation
+        setRequestToApprove({ ...scheduledTask, scheduledTaskId: scheduledTask.id }); 
+        setShowCreate(true); 
+        setViewTask(null);
+        // DON'T remove scheduled task here - wait until task is fully created
+      }} onCancelScheduled={(id) => removeScheduledTask(id)} managementMode={managementMode} currentUser={currentUser} onNavigateToTask={(taskId, scribeId) => { setViewTask(null); if (onNavigateToNotes) onNavigateToNotes(scribeId); }} />}
       {timelineTask && <TaskTimelinePanel task={timelineTask} onClose={() => setTimelineTask(null)} />}
       {chatTask && <TaskChatPanel task={chatTask} onClose={() => setChatTask(null)} currentUser={currentUser} team={team} />}
       {showPasswordModal && (
@@ -3658,7 +5702,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
         label={managementMode ? 'Management Password' : 'Admin Password'} />
       )}
 
-      {/* Fixed Note Tooltip — renders above overflow:hidden containers */}
+      {/* Fixed Note Tooltip ? renders above overflow:hidden containers */}
       {noteTooltip && (
         <div style={{
           position: 'fixed',
@@ -3697,4 +5741,17 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 

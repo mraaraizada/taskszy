@@ -2,8 +2,8 @@ import { Search, X, Zap } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 
-export default function MemberHeader({ member, searchAllTasks = false }) {
-  const { tasks, isPlanActive } = useApp();
+export default function MemberHeader({ member, searchAllTasks = false, currentPage = 'home', onSearchResultClick = null, pageFilteredData = {} }) {
+  const { tasks, isPlanActive, workspaceName, workspaceSub, workspaceLogo } = useApp();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
@@ -13,13 +13,99 @@ export default function MemberHeader({ member, searchAllTasks = false }) {
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const searchPool = searchAllTasks ? tasks : tasks.filter(t => t.members.some(m => m.id === member.id));
-  const results = query.trim().length > 0
-    ? searchPool.filter(t =>
-        t.id.toLowerCase().includes(query.toLowerCase()) ||
-        t.title.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 6)
-    : [];
+  // Context-aware search based on current page
+  let results = [];
+  
+  if (query.trim().length > 0) {
+    const q = query.toLowerCase();
+    
+    switch (currentPage) {
+      case 'tasks':
+        // Search in ALL tasks (including completed), then filter by member if needed
+        const tasksToSearch = searchAllTasks ? tasks : tasks.filter(t => {
+          if (!t.members || !Array.isArray(t.members)) return false;
+          return t.members.some(m => m.id == member.id || m.memberId == member.id || m.uid == member.uid || m.id == member.memberId);
+        });
+        results = tasksToSearch.filter(t =>
+          (t.id && t.id.toLowerCase().includes(q)) ||
+          (t.title && t.title.toLowerCase().includes(q))
+        ).slice(0, 5).map(t => ({ type: 'task', data: t }));
+        break;
+      
+      case 'team':
+        // Search in team members
+        const teamToSearch = pageFilteredData.team || [];
+        results = teamToSearch.filter(m =>
+          (m.name && m.name.toLowerCase().includes(q)) ||
+          (m.role && m.role.toLowerCase().includes(q)) ||
+          (m.email && m.email.toLowerCase().includes(q))
+        ).slice(0, 5).map(m => ({ type: 'member', data: m }));
+        break;
+      
+      case 'financial':
+      case 'payments':
+        // Search in ALL tasks (including completed)
+        const paymentsTasksToSearch = searchAllTasks ? tasks : tasks.filter(t => {
+          if (!t.members || !Array.isArray(t.members)) return false;
+          return t.members.some(m => m.id == member.id || m.memberId == member.id || m.uid == member.uid || m.id == member.memberId);
+        });
+        results = paymentsTasksToSearch.filter(t =>
+          (t.id && t.id.toLowerCase().includes(q)) ||
+          (t.title && t.title.toLowerCase().includes(q))
+        ).slice(0, 5).map(t => ({ type: 'task', data: t }));
+        break;
+      
+      case 'notes':
+        // Search in notes/scribes
+        const notesToSearch = pageFilteredData.notes || [];
+        results = notesToSearch.filter(n =>
+          (n.title && n.title.toLowerCase().includes(q))
+        ).slice(0, 5).map(n => ({ type: 'scribe', data: n }));
+        break;
+      
+      case 'help':
+        // Search in help submissions
+        const helpToSearch = pageFilteredData.help || [];
+        results = helpToSearch.filter(h =>
+          (h.message && h.message.toLowerCase().includes(q)) ||
+          (h.response && h.response.toLowerCase().includes(q)) ||
+          (h.member && h.member.name && h.member.name.toLowerCase().includes(q))
+        ).slice(0, 5).map(h => ({ type: 'help', data: h }));
+        break;
+      
+      default:
+        // Home page - search ALL tasks (including completed) assigned to this member
+        // Use flexible ID comparison to handle string/number mismatches
+        const searchPool = searchAllTasks ? tasks : tasks.filter(t => {
+          if (!t.members || !Array.isArray(t.members)) return false;
+          return t.members.some(m => {
+            // Try multiple ID comparisons to handle different data structures
+            return m.id == member.id || // Loose equality handles string/number
+                   m.memberId == member.id ||
+                   m.uid == member.uid ||
+                   m.id == member.memberId;
+          });
+        });
+        console.log('🔍 MemberHeader search debug:', {
+          currentPage,
+          searchAllTasks,
+          totalTasks: tasks.length,
+          memberId: member.id,
+          memberIdType: typeof member.id,
+          memberUid: member.uid,
+          memberName: member.name,
+          searchPoolSize: searchPool.length,
+          query: q,
+          firstTaskMembers: tasks[0]?.members?.map(m => ({ id: m.id, idType: typeof m.id, memberId: m.memberId, name: m.name })),
+        });
+        results = searchPool.filter(t =>
+          (t.id && t.id.toLowerCase().includes(q)) ||
+          (t.title && t.title.toLowerCase().includes(q))
+        ).slice(0, 5).map(t => ({ type: 'task', data: t }));
+        console.log('🔍 Search results:', results.length, results.map(r => ({ id: r.data.id, title: r.data.title })));
+        break;
+    }
+  }
 
   const showDrop = focused && query.trim().length > 0;
 
@@ -33,6 +119,14 @@ export default function MemberHeader({ member, searchAllTasks = false }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+  
+  const handleResultClick = (result) => {
+    if (onSearchResultClick) {
+      onSearchResultClick(result);
+    }
+    setQuery('');
+    setFocused(false);
+  };
 
   const STAGE_COLOR = {
     New: '#9CA3AF', 
@@ -77,20 +171,25 @@ export default function MemberHeader({ member, searchAllTasks = false }) {
       }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8,
-          background: 'linear-gradient(135deg, #3B5BFC 0%, #7C3AED 100%)',
+          background: workspaceLogo ? 'transparent' : 'linear-gradient(135deg, #3B5BFC 0%, #7C3AED 100%)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(59,91,252,0.35)',
           flexShrink: 0,
+          overflow: 'hidden',
         }}>
-          <Zap size={13} color="#fff" strokeWidth={2.5} fill="#fff" />
+          {workspaceLogo ? (
+            <img src={workspaceLogo} alt="Brand" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <Zap size={13} color="#fff" strokeWidth={2.5} fill="#fff" />
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
           <span style={{
             fontSize: 16, fontWeight: 800, letterSpacing: '-0.2px',
             background: 'linear-gradient(90deg, #3B5BFC, #7C3AED)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Taskzy</span>
-          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginTop: 1 }}>Workspace</span>
+          }}>{workspaceName || 'Taskzy'}</span>
+          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginTop: 1 }}>{workspaceSub || 'Workspace'}</span>
         </div>
       </div>
 
@@ -134,33 +233,117 @@ export default function MemberHeader({ member, searchAllTasks = false }) {
             }}>
               {results.length === 0 ? (
                 <div style={{ padding: '18px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                  No tasks found for "<strong>{query}</strong>"
+                  No results found for "<strong>{query}</strong>"
                 </div>
               ) : (
                 <>
-                  <div style={{ padding: '8px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.6px', textTransform: 'uppercase' }}>
-                    {results.length} result{results.length !== 1 ? 's' : ''}
-                  </div>
-                  {results.map(task => (
-                    <div key={task.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', borderTop: '1px solid var(--border-light)',
-                      transition: 'background 0.12s',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#3B5BFC', padding: '2px 7px', borderRadius: 5, flexShrink: 0 }}>{task.id}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        color: STAGE_COLOR[task.stage],
-                        background: STAGE_COLOR[task.stage] + '18',
-                        border: `1px solid ${STAGE_COLOR[task.stage]}33`,
-                        padding: '2px 8px', borderRadius: 20, flexShrink: 0,
-                      }}>{task.stage}</span>
-                    </div>
-                  ))}
+                  {results.map((result, idx) => {
+                    const { type, data } = result;
+                    
+                    if (type === 'task') {
+                      return (
+                        <div 
+                          key={`${type}-${data.id}-${idx}`}
+                          onClick={() => handleResultClick(result)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+                            transition: 'background 0.12s', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#3B5BFC', padding: '2px 7px', borderRadius: 5, flexShrink: 0 }}>{data.id}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.title}</span>
+                          {data.stage && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700,
+                              color: STAGE_COLOR[data.stage],
+                              background: STAGE_COLOR[data.stage] + '18',
+                              border: `1px solid ${STAGE_COLOR[data.stage]}33`,
+                              padding: '2px 8px', borderRadius: 20, flexShrink: 0,
+                            }}>{data.stage}</span>
+                          )}
+                        </div>
+                      );
+                    } else if (type === 'scribe') {
+                      return (
+                        <div 
+                          key={`${type}-${data.id}-${idx}`}
+                          onClick={() => handleResultClick(result)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+                            transition: 'background 0.12s', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED' }}>📝</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.title}</span>
+                        </div>
+                      );
+                    } else if (type === 'member') {
+                      return (
+                        <div 
+                          key={`${type}-${data.id}-${idx}`}
+                          onClick={() => handleResultClick(result)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+                            transition: 'background 0.12s', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: data.avatarImg ? 'transparent' : data.color,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 11, fontWeight: 800, color: '#fff',
+                            overflow: 'hidden', flexShrink: 0
+                          }}>
+                            {data.avatarImg ? (
+                              <img src={data.avatarImg} alt={data.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              data.avatar
+                            )}
+                          </div>
+                          <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.role}</div>
+                          </div>
+                        </div>
+                      );
+                    } else if (type === 'help') {
+                      return (
+                        <div 
+                          key={`${type}-${data.id}-${idx}`}
+                          onClick={() => handleResultClick(result)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+                            transition: 'background 0.12s', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ fontSize: 11, fontWeight: 700, color: data.status === 'solved' ? '#12C479' : '#F97316' }}>
+                            {data.status === 'solved' ? '✓' : '⏱'}
+                          </span>
+                          <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {data.message.length > 40 ? data.message.substring(0, 40) + '...' : data.message}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {data.member?.name} • {data.status === 'solved' ? 'Solved' : 'Pending'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
                 </>
               )}
             </div>

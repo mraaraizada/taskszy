@@ -570,7 +570,6 @@ export default function PlanSelection({ email, onSelectPlan, onBack, backText = 
               </button>
               <button
                 onClick={() => {
-                  alert('Thank you! We will contact you soon.');
                   setShowCustomize(false);
                 }}
                 style={{

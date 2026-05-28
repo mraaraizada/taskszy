@@ -1,15 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { CheckCircle, DollarSign, RotateCcw, Calendar, ChevronLeft, ChevronRight, AlertCircle, ChevronDown, RefreshCw, Clock, Plus, Trash2, X, MessageSquare, Send, Users, User, Shield } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { createBroadcast, getVisibleBroadcasts } from '../lib/broadcastService';
 import { useApp } from '../context/AppContext';
 import { AdminTaskModal } from '../pages/TasksPage';
+import { AdminPasswordModal } from './AdminPasswordModal';
 import { notify } from '../lib/notify';
 import Avatar from './Avatar';
 import TaskChatPanel from './TaskChatPanel';
 import { DashboardSkeleton } from './Skeleton';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from './ui/empty';
 import { useLottie } from 'lottie-react';
-import donutWelcomeAnim from '../lottie/Welcome (1).json';
+import { subscribeToCalendarEvents, addCalendarEvent, removeCalendarEvent } from '../lib/calendarService';
+
+function useDonutWelcomeAnim() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Welcome (1).json').then(m => setData(m.default)); }, []);
+  return data;
+}
 import { Button } from './ui/button';
 
 const TYPE_ICONS = {
@@ -27,7 +37,7 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const TASK_FILTERS = ['Active', 'Completed', 'All'];
 
-function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
+function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate, orgId, userId, isSharedCalendar = true }) {
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today.getDate());
@@ -35,7 +45,41 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [eventName, setEventName] = useState('');
   const [eventColor, setEventColor] = useState('#22C55E');
-  const [events, setEvents] = useState([]); // Start with empty events
+  const [events, setEvents] = useState([]);
+  const [selectedEvent, setSelectedEvent] = useState(null); // Track clicked event for delete
+  const calendarRef = useRef(null); // Reference to calendar container
+
+  // Subscribe to calendar events from Firebase
+  useEffect(() => {
+    if (!orgId || !userId) {
+      console.log('⚠️ Calendar: Missing orgId or userId', { orgId, userId });
+      return;
+    }
+    
+    console.log('📅 Calendar: Subscribing to events', { orgId, userId, isSharedCalendar });
+    
+    const unsubscribe = subscribeToCalendarEvents(orgId, userId, isSharedCalendar, (loadedEvents) => {
+      console.log('📅 Calendar: Events loaded', { count: loadedEvents.length, events: loadedEvents });
+      setEvents(loadedEvents);
+    });
+    
+    return () => {
+      console.log('📅 Calendar: Unsubscribing');
+      unsubscribe();
+    };
+  }, [orgId, userId, isSharedCalendar]);
+
+  // Click outside to deselect event
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target)) {
+        setSelectedEvent(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Reset selectedDay when selectedCalendarDate is cleared
   useEffect(() => {
@@ -49,14 +93,24 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const taskDates = new Set(tasks.map(t => {
-    const d = new Date(t.deadline);
+  const taskDates = new Set(tasks.filter(t => t.stage !== 'Complete').map(t => {
+    const d = new Date(t.extendedDeadline || t.deadline);
     if (d.getFullYear() === year && d.getMonth() === month) return d.getDate();
     return null;
   }).filter(Boolean));
 
-  const overdueDates = new Set(tasks.filter(t => new Date(t.deadline) < today && t.stage !== 'Complete').map(t => {
-    const d = new Date(t.deadline);
+  // Count tasks per date (incomplete tasks only)
+  const taskCountByDate = {};
+  tasks.filter(t => t.stage !== 'Complete').forEach(t => {
+    const d = new Date(t.extendedDeadline || t.deadline);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      taskCountByDate[day] = (taskCountByDate[day] || 0) + 1;
+    }
+  });
+
+  const overdueDates = new Set(tasks.filter(t => new Date(t.extendedDeadline || t.deadline) < today && t.stage !== 'Complete').map(t => {
+    const d = new Date(t.extendedDeadline || t.deadline);
     if (d.getFullYear() === year && d.getMonth() === month) return d.getDate();
     return null;
   }).filter(Boolean));
@@ -66,13 +120,39 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
     setShowModal(true);
   };
 
-  const handleSaveEvent = () => {
-    if (eventName.trim() && selectedDate) {
-      setEvents([...events, { date: selectedDate, name: eventName, color: eventColor, month, year }]);
-      setShowModal(false);
-      setEventName('');
-      setEventColor('#22C55E');
-      setSelectedDate(null);
+  const handleSaveEvent = async () => {
+    if (eventName.trim() && selectedDate && orgId && userId) {
+      try {
+        const newEvent = {
+          date: selectedDate,
+          name: eventName,
+          color: eventColor,
+          month,
+          year
+        };
+        
+        await addCalendarEvent(orgId, userId, isSharedCalendar, newEvent);
+        notify.success('Event added successfully');
+        setShowModal(false);
+        setEventName('');
+        setEventColor('#22C55E');
+        setSelectedDate(null);
+      } catch (error) {
+        console.error('Error saving event:', error);
+        notify.error('Failed to save event');
+      }
+    }
+  };
+
+  const handleDeleteEvent = async (event) => {
+    if (!orgId || !userId) return;
+    
+    try {
+      await removeCalendarEvent(orgId, userId, isSharedCalendar, event);
+      notify.success('Event deleted');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      notify.error('Failed to delete event');
     }
   };
 
@@ -85,7 +165,7 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
-    <div>
+    <div ref={calendarRef}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <button onClick={() => setViewDate(new Date(year, month - 1, 1))} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ChevronLeft size={18} color="var(--text-muted)" />
@@ -105,6 +185,8 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
           const isSelected = day === selectedDay;
           const eventsForDate = getEventsForDate(day);
           const hasEvents = eventsForDate.length > 0;
+          const hasTask = taskDates.has(day);
+          const isOverdue = overdueDates.has(day);
           
           // Determine background and text color
           let bgColor = 'transparent';
@@ -145,20 +227,38 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
               onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
             >
               {day}
-              {/* Show dots only for events */}
-              {hasEvents && (
+              {/* Show dots for events and tasks */}
+              {(hasEvents || hasTask) && (
                 <div style={{ 
                   position: 'absolute', 
-                  bottom: 5, 
+                  bottom: 3, 
                   left: '50%', 
                   transform: 'translateX(-50%)', 
                   display: 'flex',
-                  gap: 5
+                  flexWrap: 'wrap',
+                  gap: 3,
+                  maxWidth: '90%',
+                  justifyContent: 'center',
+                  alignItems: 'center'
                 }}>
-                  {eventsForDate.slice(0, 3).map((event, idx) => (
-                    <div key={idx} style={{ 
-                      width: 7, 
-                      height: 7, 
+                  {/* Task dots - show multiple dots based on task count (max 10) */}
+                  {hasTask && (() => {
+                    const taskCount = taskCountByDate[day] || 0;
+                    const dotsToShow = Math.min(taskCount, 10); // Maximum 10 dots
+                    return Array.from({ length: dotsToShow }).map((_, idx) => (
+                      <div key={`task-${idx}`} style={{ 
+                        width: 5, 
+                        height: 5, 
+                        borderRadius: '50%', 
+                        background: isOverdue ? '#EF4444' : '#3B5BFC'
+                      }} />
+                    ));
+                  })()}
+                  {/* Event dots - show after task dots if space allows */}
+                  {eventsForDate.slice(0, hasTask ? Math.max(0, 10 - (taskCountByDate[day] || 0)) : 10).map((event, idx) => (
+                    <div key={`event-${idx}`} style={{ 
+                      width: 5, 
+                      height: 5, 
                       borderRadius: '50%', 
                       background: event.color 
                     }} />
@@ -179,11 +279,62 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', flex: 1 }}>
                   {selectedEvents.map((event, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px', background: 'var(--bg-surface)', borderRadius: 4 }}>
+                    <div 
+                      key={idx} 
+                      onClick={() => setSelectedEvent(selectedEvent?.id === event.id ? null : event)}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 3, 
+                        padding: '2px 6px', 
+                        background: selectedEvent?.id === event.id ? '#FEE2E2' : 'var(--bg-surface)', 
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        border: selectedEvent?.id === event.id ? '1px solid #EF4444' : '1px solid transparent',
+                        transition: 'all 0.15s'
+                      }}
+                    >
                       <div style={{ width: 6, height: 6, borderRadius: '50%', background: event.color, flexShrink: 0 }} />
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                         {event.name}
                       </span>
+                      {selectedEvent?.id === event.id && (
+                        (() => {
+                          // Check if event is in the past
+                          const eventDate = new Date(event.year, event.month, event.date);
+                          const todayDate = new Date();
+                          todayDate.setHours(0, 0, 0, 0);
+                          const isPastEvent = eventDate < todayDate;
+                          
+                          // Only show delete button for current or future events
+                          if (isPastEvent) return null;
+                          
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteEvent(event);
+                                setSelectedEvent(null);
+                              }}
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: '50%',
+                                background: '#EF4444',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginLeft: 2,
+                                flexShrink: 0
+                              }}
+                            >
+                              <X size={10} color="#fff" strokeWidth={2.5} />
+                            </button>
+                          );
+                        })()
+                      )}
                     </div>
                   ))}
                 </div>
@@ -386,14 +537,23 @@ const WEEK_OPTIONS = ['This Week', 'Last Week', '2 Weeks Ago'];
 
 function TaskDonut({ tasks }) {
   const [hovered, setHovered] = useState(null);
-  const { showDonutWelcome, setShowDonutWelcome } = useApp();
+  const { showDonutWelcome, setShowDonutWelcome, hasSeenDonutWelcome } = useApp();
   const [donutFading, setDonutFading] = useState(false);
+  const donutAnimData = useDonutWelcomeAnim();
+
+  // Auto-dismiss if already seen
+  useEffect(() => {
+    if (showDonutWelcome && hasSeenDonutWelcome) {
+      console.log('🍩 Auto-dismissing donut welcome - already seen');
+      setShowDonutWelcome(false);
+    }
+  }, [showDonutWelcome, hasSeenDonutWelcome, setShowDonutWelcome]);
 
   const DonutLottie = () => {
     const { View } = useLottie({
-      animationData: donutWelcomeAnim,
+      animationData: donutAnimData ?? null,
       loop: false,
-      autoplay: true,
+      autoplay: !!donutAnimData,
       onComplete: () => { setDonutFading(true); setTimeout(() => setShowDonutWelcome(false), 500); },
       style: { width: '100%', height: '100%', objectFit: 'cover' },
     });
@@ -401,36 +561,61 @@ function TaskDonut({ tasks }) {
       const t = setTimeout(() => { setDonutFading(true); setTimeout(() => setShowDonutWelcome(false), 500); }, 4000);
       return () => clearTimeout(t);
     }, []);
+    if (!donutAnimData) return null;
     return View;
   };
 
   const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
 
-  // All tasks — not just this week
-  const completed = tasks.filter(t => t.stage === 'Complete').length;
-  const overdue   = tasks.filter(t => t.stage !== 'Complete' && new Date(t.extendedDeadline || t.deadline) < now).length;
-  const pending   = tasks.filter(t => t.stage !== 'Complete' && new Date(t.extendedDeadline || t.deadline) >= now).length;
-  const total     = tasks.length;
+  // Completed: Tasks completed in last 7 days
+  const completed = tasks.filter(t => {
+    if (t.stage !== 'Complete') return false;
+    // Check if completed in last 7 days (using history or updatedAt)
+    const completedDate = t.history?.find(h => h.stage === 'Complete')?.date;
+    if (completedDate) {
+      const date = completedDate?.toDate ? completedDate.toDate() : new Date(completedDate);
+      return date >= sevenDaysAgo;
+    }
+    return true; // Include if no history available
+  }).length;
+
+  // Active: Tasks active (not complete) with deadline in last 7 days or future
+  const active = tasks.filter(t => {
+    if (t.stage === 'Complete') return false;
+    const deadline = new Date(t.extendedDeadline || t.deadline);
+    return deadline >= sevenDaysAgo;
+  }).length;
+
+  // Pending: ALL pending tasks from any date (overdue tasks)
+  const pending = tasks.filter(t => {
+    if (t.stage === 'Complete') return false;
+    const deadline = new Date(t.extendedDeadline || t.deadline);
+    return deadline < sevenDaysAgo;
+  }).length;
+
+  const total = completed + active + pending;
 
   const data = [
     { name: 'Complete', value: completed, color: '#12C479' },
-    { name: 'Pending',  value: pending,   color: '#3B5BFC' },
-    { name: 'Overdue',  value: overdue,   color: '#F59E0B' },
+    { name: 'Active',   value: active,    color: '#3B5BFC' },
+    { name: 'Pending',  value: pending,   color: '#F59E0B' },
   ].filter(d => d.value > 0);
 
   const displayData = data.length > 0 ? data : [{ name: 'Empty', value: 1, color: '#E5E7EB' }];
 
-  const active = hovered ? data.find(d => d.name === hovered) : null;
-  const centerValue = active ? active.value : total;
-  const centerLabel = active ? active.name : 'Total';
-  const centerColor = active ? active.color : 'var(--text-primary)';
+  const hoveredData = hovered ? data.find(d => d.name === hovered) : null;
+  const centerValue = hoveredData ? hoveredData.value : total;
+  const centerLabel = hoveredData ? hoveredData.name : 'Total';
+  const centerColor = hoveredData ? hoveredData.color : 'var(--text-primary)';
 
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 18, padding: '18px 22px', border: '1.5px solid var(--border)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>Task Overview</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed · Pending · Overdue</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed · Active · Pending</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '3px 9px', borderRadius: 6, border: '1px solid var(--border)' }}>All Tasks</span>
       </div>
@@ -438,7 +623,7 @@ function TaskDonut({ tasks }) {
       {/* Donut */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
         <div style={{ position: 'relative', width: 200, height: 200 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
             <PieChart>
               <Pie
                 data={displayData}
@@ -463,7 +648,7 @@ function TaskDonut({ tasks }) {
       </div>
 
       {/* Welcome lottie overlay — covers full card */}
-      {showDonutWelcome && (
+      {showDonutWelcome && !hasSeenDonutWelcome && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none', opacity: donutFading ? 0 : 1, transition: 'opacity 0.5s ease', borderRadius: 18, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <DonutLottie />
         </div>
@@ -474,7 +659,7 @@ function TaskDonut({ tasks }) {
 }
 
 // ── Broadcast View/Edit Modal ─────────────────────────────────────────────────
-function BroadcastViewModal({ broadcast, onClose, canEdit, onSave }) {
+function BroadcastViewModal({ broadcast, onClose, canEdit, onSave, showCreatorInfo = false }) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(broadcast.title);
   const [editMessage, setEditMessage] = useState(broadcast.message);
@@ -495,7 +680,36 @@ function BroadcastViewModal({ broadcast, onClose, canEdit, onSave }) {
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: 0.5 }}>Update</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Sent to {broadcast.to} · {new Date(broadcast.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {showCreatorInfo && broadcast.creatorInfo && (
+                  <>
+                    {broadcast.creatorInfo.avatarImg ? (
+                      <img src={broadcast.creatorInfo.avatarImg} alt={broadcast.creatorInfo.name} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: broadcast.creatorInfo.color || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>
+                        {broadcast.creatorInfo.avatar || broadcast.creatorInfo.name?.[0] || 'U'}
+                      </div>
+                    )}
+                    <span style={{ fontWeight: 600 }}>{broadcast.creatorInfo.name}</span>
+                    <span>·</span>
+                  </>
+                )}
+                {new Date(broadcast.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {showCreatorInfo && (
+                  <>
+                    <span>·</span>
+                    {broadcast.recipientMode === 'all' ? (
+                      <span>(All)</span>
+                    ) : broadcast.recipientMode === 'role' && broadcast.selectedRoles && broadcast.selectedRoles.length > 0 ? (
+                      <span>({broadcast.selectedRoles.join(', ')})</span>
+                    ) : broadcast.recipientMode === 'member' && broadcast.selectedMembers && broadcast.selectedMembers.length > 0 ? (
+                      <span>({broadcast.selectedMembers.length === 1 ? '1 Member' : `${broadcast.selectedMembers.length} Members`})</span>
+                    ) : (
+                      <span>(No recipients)</span>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -558,6 +772,8 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [sending, setSending] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState(null);
 
   const uniqueRoles = [...new Set(team.filter(m => m.status === 'Active').map(m => m.role))].sort();
   const activeMembers = team.filter(m => m.status === 'Active');
@@ -578,12 +794,26 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
     : selectedMembers.length;
 
   const handleSend = () => {
-    if (!message.trim()) return;
-    setSending(true);
-    setTimeout(() => {
-      onSend({ title: title.trim(), message: message.trim(), recipientMode, selectedMembers, recipientCount });
-      onClose();
-    }, 600);
+    if (!title.trim() || !message.trim()) return;
+    // Store the update data and show password modal
+    setPendingUpdate({ title: title.trim(), message: message.trim(), recipientMode, selectedMembers, recipientCount });
+    setShowPasswordModal(true);
+  };
+
+  const handlePasswordConfirm = () => {
+    // Password verified, proceed with sending
+    if (pendingUpdate) {
+      setSending(true);
+      setTimeout(() => {
+        onSend(pendingUpdate);
+        onClose();
+      }, 600);
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setShowPasswordModal(false);
+    setPendingUpdate(null);
   };
 
   return (
@@ -598,7 +828,6 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Update</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Broadcast a message to your team</div>
             </div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--border)', background: 'var(--bg-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -610,7 +839,7 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
 
           {/* Title */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title <span style={{ color: '#EF4444' }}>*</span></label>
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -623,9 +852,8 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
 
           {/* Message */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Message</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Message <span style={{ color: '#EF4444' }}>*</span></label>
             <textarea
-              autoFocus
               value={message}
               onChange={e => setMessage(e.target.value)}
               placeholder="Write your update or announcement..."
@@ -645,7 +873,6 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
               {[
                 { key: 'all', label: 'All', icon: <Users size={13} /> },
                 { key: 'role', label: 'Role', icon: <Shield size={13} /> },
-                { key: 'member', label: 'Member', icon: <User size={13} /> },
               ].map(opt => (
                 <button key={opt.key} type="button"
                   onClick={() => { setRecipientMode(opt.key); setSelectedMembers([]); setSelectedRoles([]); }}
@@ -659,7 +886,7 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
             {recipientMode === 'all' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#EEF2FF', borderRadius: 10, border: '1.5px solid #C7D4FF' }}>
                 <CheckCircle size={14} color="#3B5BFC" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All {activeMembers.length} active members will receive this update</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#3B5BFC' }}>All {activeMembers.length} active members will read this update</span>
               </div>
             )}
 
@@ -682,7 +909,13 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
                         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{role}</div>
                         <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
                           {roleMembers.map(m => (
-                            <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
+                            <div key={m.id} title={m.name} style={{ width: 18, height: 18, borderRadius: '50%', background: m.avatarImg ? 'transparent' : m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff', overflow: 'hidden', border: m.avatarImg ? '1px solid var(--border-light)' : 'none' }}>
+                              {m.avatarImg ? (
+                                <img src={m.avatarImg} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                m.avatar
+                              )}
+                            </div>
                           ))}
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 2 }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
                         </div>
@@ -731,13 +964,17 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
             {/* Selection summary */}
             {recipientMode !== 'all' && selectedMembers.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Sending to:</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Update to:</span>
                 {selectedMembers.slice(0, 5).map(id => {
                   const m = activeMembers.find(x => x.id === id);
                   if (!m) return null;
                   return (
                     <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 4px', background: '#EEF2FF', borderRadius: 20, border: '1px solid #C7D4FF' }}>
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
+                      {m.avatarImg ? (
+                        <img src={m.avatarImg} alt={m.name} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{m.avatar}</div>
+                      )}
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#3B5BFC' }}>{m.name}</span>
                     </div>
                   );
@@ -762,25 +999,43 @@ function ComposeUpdateModal({ onClose, team, onSend }) {
               boxShadow: title.trim() && message.trim() && (recipientMode === 'all' || selectedMembers.length > 0) ? '0 4px 14px rgba(59,91,252,0.3)' : 'none',
             }}>
             {sending ? <RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> : <Send size={13} strokeWidth={2.5} />}
-            {sending ? 'Updating…' : `Update to ${recipientCount} member${recipientCount !== 1 ? 's' : ''}`}
+            {sending ? 'Updating…' : 'Update members'}
           </button>
         </div>
       </div>
+
+      {/* Admin Password Modal */}
+      {showPasswordModal && (
+        <AdminPasswordModal
+          onClose={handlePasswordCancel}
+          onConfirm={handlePasswordConfirm}
+          action="send this update"
+          label="Admin Password"
+        />
+      )}
     </div>
   );
 }
 
-export default function Dashboard({ hideBudget = false, member = null, onCreateTask = null }) {
-  const { tasks, team, activity, STAGE_COLORS, STAGE_BG, STAGES, updateTaskStage, deleteTask, markTaskPaid, fmt, scheduledTasks, addScheduledTask, removeScheduledTask, createTask, refreshTrigger, addActivity, broadcasts, setBroadcasts, updateBroadcast } = useApp();
+export default function Dashboard({ hideBudget = false, member = null, onCreateTask = null, onNavigateToNotes = null, openTaskId = null }) {
+  const { tasks, team, activity, STAGE_COLORS, STAGE_BG, STAGES, updateTaskStage, deleteTask, markTaskPaid, fmt, scheduledTasks, addScheduledTask, removeScheduledTask, createTask, refreshTrigger, addActivity, broadcasts, setBroadcasts, updateBroadcast, TAGS, CATEGORIES, workspaceId, currentUser, notes: globalNotes } = useApp();
+
+  // OPTIMIZATION: Memoize visible broadcasts to prevent excessive filtering on every render
+  const visibleBroadcasts = useMemo(() => {
+    return getVisibleBroadcasts(broadcasts, currentUser);
+  }, [broadcasts, currentUser.role, currentUser.userRole, currentUser.uid]);
+
+  // Determine if this is a shared calendar based on the dashboard type
+  // Admin Dashboard (member = null) → shared calendar for ALL users
+  // Management Dashboard (member exists, hideBudget = true) → shared calendar for ALL users
+  // Team Dashboard (member exists, hideBudget = false) → personal calendar per user
+  const isSharedCalendar = !member || hideBudget;
 
   // React to refresh trigger - this will cause component to re-render with fresh data
   useEffect(() => {
     // Component will automatically re-render when refreshTrigger changes
     // In a real app, you might fetch fresh data here
   }, [refreshTrigger]);
-
-  const activeTasks = tasks.filter(t => t.stage !== 'Complete');
-  const upcoming    = [...activeTasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 3);
 
   const [filter, setFilter]         = useState('Active');
   const [modalTask, setModalTask]   = useState(null);
@@ -793,34 +1048,186 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
   const [currentPage, setCurrentPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
-  const [updatesMonthOffset, setUpdatesMonthOffset] = useState(0); // 0 = current month
   const [showComposeUpdate, setShowComposeUpdate] = useState(false);
+  const [updatesDisplayLimit, setUpdatesDisplayLimit] = useState(10); // For expanded panel pagination
   const [viewBroadcast, setViewBroadcast] = useState(null); // { id, title, message, to, time } | null
+  
+  // ⭐ CRITICAL: Update modalTask when tasks array changes (real-time updates)
+  // This ensures the modal shows the latest member stages when team members update from Team Dashboard
+  useEffect(() => {
+    if (modalTask) {
+      const updatedTask = tasks.find(t => t.id === modalTask.id);
+      if (updatedTask) {
+        console.log('🔄 Dashboard: Updating modalTask with latest data', {
+          taskId: updatedTask.id,
+          members: updatedTask.members?.map(m => ({ id: m.id, name: m.name, stage: m.stage }))
+        });
+        // Always update to ensure we have the latest data
+        setModalTask(updatedTask);
+      }
+    }
+  }, [tasks, modalTask?.id]); // Re-run when tasks array changes or modalTask.id changes
+  
+  // Open task modal when openTaskId is provided (from search)
+  useEffect(() => {
+    if (openTaskId) {
+      const task = tasks.find(t => t.id === openTaskId);
+      if (task) {
+        console.log('🔍 Opening task from search:', openTaskId);
+        setModalTask(task);
+      }
+    }
+  }, [openTaskId, tasks]);
+  
+  // Debug: Log when viewBroadcast changes
+  useEffect(() => {
+    console.log('🔄 viewBroadcast state changed:', viewBroadcast);
+  }, [viewBroadcast]);
   const [chatTask, setChatTask] = useState(null);
-  const [readUpdateIds, setReadUpdateIds] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('readUpdateIds') || '[]')); } catch { return new Set(); }
-  });
+  const [readUpdateIds, setReadUpdateIds] = useState(new Set());
+
+  // Load read update IDs from Firestore (consistent with team member dashboard)
+  useEffect(() => {
+    if (!workspaceId || !currentUser?.uid) return;
+    console.log('👂 Setting up Firestore listener for readUpdateIds:', `workspaces/${workspaceId}/userReadState/${currentUser.uid}`);
+    const ref = doc(db, `workspaces/${workspaceId}/userReadState`, currentUser.uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        const ids = snap.data().readUpdateIds || [];
+        console.log('📥 Loaded readUpdateIds from Firestore:', ids.length, 'items');
+        setReadUpdateIds(new Set(ids));
+      } else {
+        console.log('📭 No readUpdateIds document found, starting fresh');
+        setReadUpdateIds(new Set());
+      }
+    }, (error) => {
+      console.error('❌ Error loading readUpdateIds:', error);
+    });
+    return unsub;
+  }, [workspaceId, currentUser?.uid]);
 
   const markUpdateRead = (id) => {
+    console.log('📝 Marking update as read:', id);
     setReadUpdateIds(prev => {
       const next = new Set(prev);
       next.add(id);
-      try { localStorage.setItem('readUpdateIds', JSON.stringify([...next])); } catch {}
+      console.log('📝 Updated readUpdateIds:', Array.from(next));
+      // Save to Firestore instead of localStorage
+      if (workspaceId && currentUser?.uid) {
+        console.log('💾 Saving to Firestore:', `workspaces/${workspaceId}/userReadState/${currentUser.uid}`);
+        setDoc(
+          doc(db, `workspaces/${workspaceId}/userReadState`, currentUser.uid),
+          { readUpdateIds: [...next], updatedAt: serverTimestamp() },
+          { merge: true }
+        ).then(() => {
+          console.log('✅ Successfully saved to Firestore');
+        }).catch((error) => {
+          console.error('❌ Error saving to Firestore:', error);
+        });
+      }
       return next;
     });
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   const tasksPerPage = 10;
 
-  // Merge scheduled tasks with regular tasks
-  const allTasks = [...tasks, ...scheduledTasks];
+  // Merge scheduled tasks with regular tasks - with visibility filtering
+  const allTasks = [...tasks, ...scheduledTasks.filter((t) => {
+    // Scheduled tasks visibility:
+    // 1. Admin users can see all scheduled tasks
+    // 2. Management users can only see their own scheduled tasks
+    const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
+    const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
+    
+    if (isAdmin) {
+      return true;
+    } else if (isManagement) {
+      const createdByUid = t.createdBy?.uid;
+      const createdByMemberId = t.createdBy?.memberId;
+      const currentUid = currentUser?.uid;
+      const currentMemberId = currentUser?.memberId || currentUser?.id;
+      
+      return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
+    } else {
+      return false;
+    }
+  })];
 
-  let filtered = allTasks.filter(t => {
+  // Function to extract dominant color from image and create light background
+  const getImageBasedBg = (imageUrl, fallbackBg) => {
+    if (!imageUrl || !imageUrl.startsWith('data:image')) {
+      return fallbackBg;
+    }
+    
+    // This will be calculated on first render and cached
+    // For now, return fallback - we'll enhance this with actual color extraction
+    return fallbackBg;
+  };
+
+  // Function to lighten a color for background use
+  const lightenColor = (color, opacity = 0.15) => {
+    if (!color || !color.startsWith('#')) return '#F0F2F8';
+    
+    // Extract RGB values
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Create a light version by blending with white
+    const lightR = Math.round(r + (255 - r) * (1 - opacity));
+    const lightG = Math.round(g + (255 - g) * (1 - opacity));
+    const lightB = Math.round(b + (255 - b) * (1 - opacity));
+    
+    return `#${lightR.toString(16).padStart(2, '0')}${lightG.toString(16).padStart(2, '0')}${lightB.toString(16).padStart(2, '0')}`;
+  };
+
+  // Enrich tasks with full tag and category data (including images) - MEMOIZED to prevent excessive re-renders
+  const enrichedTasks = useMemo(() => {
+    return allTasks.map(task => {
+      const enrichedTask = { ...task };
+      
+      // Enrich tags with full data including images
+      if (task.tags && task.tags.length > 0 && TAGS && TAGS.length > 0) {
+        enrichedTask.tags = task.tags.map(taskTag => {
+          const fullTag = TAGS.find(t => t.id === taskTag.id);
+          if (fullTag) {
+            const tagImage = fullTag.image || fullTag.icon;
+            const tagColor = fullTag.color || taskTag.color;
+            // Use saved bg or generate if not available
+            const lightBg = fullTag.bg || lightenColor(tagColor, 0.15);
+            return { ...taskTag, image: tagImage, emoji: fullTag.emoji || taskTag.emoji, color: tagColor, bg: lightBg };
+          }
+          return taskTag;
+        });
+      }
+      
+      // Enrich category with full data including image
+      if (task.category && CATEGORIES && CATEGORIES.length > 0) {
+        const fullCategory = CATEGORIES.find(c => c.id === task.category.id);
+        if (fullCategory) {
+          const categoryImage = fullCategory.image || fullCategory.icon;
+          const categoryColor = fullCategory.color || task.category.color;
+          // Use saved bg or generate if not available
+          const lightBg = fullCategory.bg || lightenColor(categoryColor, 0.15);
+          enrichedTask.category = { ...task.category, image: categoryImage, emoji: fullCategory.emoji || task.category.emoji, color: categoryColor, bg: lightBg };
+        }
+      }
+      
+      return enrichedTask;
+    });
+  }, [allTasks, TAGS, CATEGORIES]);
+
+  const activeTasks = enrichedTasks.filter(t => t.stage !== 'Complete');
+  const upcoming    = [...activeTasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 3);
+
+  let filtered = enrichedTasks.filter(t => {
     return filter === 'Active' ? t.stage !== 'Complete' : filter === 'Completed' ? t.stage === 'Complete' : true;
   }).sort((a, b) => {
-    if (a.stage === 'Complete' && b.stage !== 'Complete') return 1;
-    if (b.stage === 'Complete' && a.stage !== 'Complete') return -1;
-    return new Date(a.deadline) - new Date(b.deadline);
+    // Sort by most recent date (updatedAt or createdAt) - newest first
+    const dateA = a.updatedAt?.toDate ? a.updatedAt.toDate() : (a.updatedAt ? new Date(a.updatedAt) : (a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0)));
+    const dateB = b.updatedAt?.toDate ? b.updatedAt.toDate() : (b.updatedAt ? new Date(b.updatedAt) : (b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0)));
+    return dateB - dateA; // Descending order (newest first)
   });
 
   // Filter by selected calendar date
@@ -915,10 +1322,10 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
               {upcoming.length === 0 ? (
                 <div style={{ flex: 1, textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>No active tasks</div>
               ) : upcoming.map(task => {
-                const deadline = new Date(task.deadline);
+                const deadline = new Date(task.extendedDeadline || task.deadline);
                 const overdue = deadline < new Date();
                 const days = Math.ceil((deadline - new Date()) / (1000 * 60 * 60 * 24));
-                const dateLabel = overdue ? `${Math.abs(days)}d late` : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const dateLabel = overdue ? (Math.abs(days) === 0 ? 'Late' : `${Math.abs(days)}d late`) : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 return (
                   <div key={task.id} style={{
                     flex: 1, background: overdue ? 'var(--bg-surface)' : 'var(--bg-subtle)',
@@ -932,7 +1339,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                   >
                     <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, fontWeight: 700, color: task.paid ? '#12C479' : '#F97316', background: task.paid ? '#E8FBF1' : '#FFF7ED', padding: '2px 7px', borderRadius: 20 }}>{task.paid ? 'Paid' : 'Pending'}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '2px 6px', borderRadius: 4 }}>{task.id}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '2px 6px', borderRadius: 4 }}>#{task.id}</span>
                       <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? '#EF4444' : days <= 2 ? '#F97316' : 'var(--text-muted)' }}>{dateLabel}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1090,41 +1497,75 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                     {/* Main info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, minWidth: 0, overflow: 'hidden' }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>{task.id}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>{task.title}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>#{task.id}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1A1D2E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>{task.title}</span>
                         <button
-                          onClick={e => { e.stopPropagation(); setChatTask(task); }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#3B5BFC', position: 'relative' }}
+                          onClick={e => { e.stopPropagation(); if (!task.isScheduled) setChatTask(task); }}
+                          title={task.isScheduled ? "Chat not available for scheduled tasks" : "Open chat"}
+                          style={{ background: 'none', border: 'none', cursor: task.isScheduled ? 'not-allowed' : 'pointer', padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: task.isScheduled ? 'var(--text-muted)' : '#3B5BFC', position: 'relative', transition: 'all 0.2s', opacity: task.isScheduled ? 0.5 : 1 }}
+                          onMouseEnter={e => { if (!task.isScheduled) { e.currentTarget.style.color = '#3B5BFC'; e.currentTarget.querySelector('svg').style.fill = '#3B5BFC'; } }}
+                          onMouseLeave={e => { if (!task.isScheduled) { e.currentTarget.style.color = '#3B5BFC'; e.currentTarget.querySelector('svg').style.fill = 'none'; } }}
                         >
-                          <MessageSquare size={17} />
-                          {(() => {
-                            try {
-                              const msgs = JSON.parse(localStorage.getItem(`task_chat_${task.id}`) || '[]');
-                              const readAt = parseInt(localStorage.getItem(`task_chat_read_${task.id}`) || '0');
-                              const unread = msgs.filter(m => m.id > readAt).length;
-                              return unread > 0 ? (
-                                <span style={{ position: 'absolute', top: -3, right: -3, background: '#EF4444', color: '#fff', borderRadius: '50%', width: 13, height: 13, fontSize: 7, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid var(--bg-surface)' }}>
-                                  {unread > 9 ? '9+' : unread}
-                                </span>
-                              ) : null;
-                            } catch { return null; }
-                          })()}
+                          <MessageSquare size={17} style={{ transition: 'fill 0.2s' }} />
+                          {/* Unread indicator dot */}
+                          {task.unreadCount > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: -1,
+                              right: -1,
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: '#EF4444',
+                              border: '1.5px solid var(--bg-surface)',
+                            }} />
+                          )}
                         </button>
-                        {task.category && (
-                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: task.category.bg, color: task.category.color, fontWeight: 700, border: `1px solid ${task.category.color}30`, flexShrink: 0, marginLeft: 4 }}>{task.category.emoji} {task.category.label}</span>
-                        )}
+                        {task.category && (() => {
+                          // Use enriched background or fallback
+                          const bgColor = task.category.bg || '#F0F2F8';
+                          return (
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: bgColor, color: '#1A1D2E', fontWeight: 700, border: '1px solid #E8EAEF', flexShrink: 0, marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {task.category.image ? (
+                                task.category.image.startsWith('data:image') ? (
+                                  <img src={task.category.image} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} />
+                                ) : (
+                                  <span style={{ fontSize: 13 }}>{task.category.image}</span>
+                                )
+                              ) : (
+                                <span style={{ fontSize: 13 }}>{task.category.emoji}</span>
+                              )}
+                              <span>{task.category.label}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: STAGE_BG[task.stage], color: STAGE_COLORS[task.stage], flexShrink: 0 }}>{task.stage}</span>
-                        {task.tags && task.tags.slice(0, 2).map(tag => (
-                          <span key={tag.label} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 20, background: tag.bg, color: tag.color, fontWeight: 600, flexShrink: 0 }}>{tag.emoji} {tag.label}</span>
-                        ))}
+                        {task.tags && task.tags.slice(0, 2).map(tag => {
+                          // Use enriched background or fallback
+                          const bgColor = tag.bg || '#F0F2F8';
+                          return (
+                            <span key={tag.label} style={{ fontSize: 11, padding: '3px 7px', borderRadius: 20, background: bgColor, color: '#1A1D2E', fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #E8EAEF' }}>
+                              {tag.image ? (
+                                tag.image.startsWith('data:image') ? (
+                                  <img src={tag.image} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} />
+                                ) : (
+                                  <span style={{ fontSize: 13 }}>{tag.image}</span>
+                                )
+                              ) : (
+                                <span style={{ fontSize: 13 }}>{tag.emoji}</span>
+                              )}
+                              <span>{tag.label}</span>
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
 
                     {/* Due date - right side center */}
                     <div style={{ textAlign: 'center', flexShrink: 0, minWidth: 100 }}>
-                      <span style={{ fontSize: 11, color: overdueFlag ? '#EF4444' : days <= 2 ? '#F97316' : 'var(--text-muted)', fontWeight: overdueFlag || days <= 2 ? 700 : 500, display: 'block' }}>
+                      <span style={{ fontSize: 11, color: overdueFlag ? '#EF4444' : days <= 2 ? '#F97316' : '#1A1D2E', fontWeight: overdueFlag || days <= 2 ? 700 : 600, display: 'block' }}>
                         {isComplete ? new Date(task.paidOn || task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : overdueFlag ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${task.extendedDeadline ? 'Extended: ' : 'Due '}${new Date(task.extendedDeadline || task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                       </span>
                       {task.isScheduled && (
@@ -1145,7 +1586,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                     {/* Budget */}
                     {!hideBudget && (
                       <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 80 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: isComplete ? '#12C479' : 'var(--text-primary)' }}>₹ {task.totalBudget?.toLocaleString()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: isComplete ? '#12C479' : '#1A1D2E' }}>₹ {task.totalBudget?.toLocaleString()}</div>
                       </div>
                     )}
 
@@ -1154,7 +1595,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                       const mem = task.members.find(m => m.id === member.id);
                       return (
                         <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: task.paid ? '#12C479' : 'var(--text-primary)' }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: task.paid ? '#12C479' : '#1A1D2E' }}>
                             ₹ {mem?.budget?.toLocaleString()}
                           </div>
                         </div>
@@ -1175,6 +1616,9 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
             <MiniCalendar 
               tasks={tasks} 
               selectedCalendarDate={selectedCalendarDate}
+              orgId={workspaceId}
+              userId={currentUser?.uid || currentUser?.id}
+              isSharedCalendar={isSharedCalendar}
               onDateSelect={(day, month, year) => {
                 setSelectedCalendarDate({ day, month, year });
                 setCurrentPage(1);
@@ -1187,20 +1631,37 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
 
             <TaskDonut tasks={tasks} />
 
-            {/* Updates card — always rendered to keep layout stable */}
+            {/* Updates card — always visible */}
             <div
-              onClick={() => setShowUpdates(true)}
-              style={{ flex: 1, background: 'var(--bg-surface)', borderRadius: 18, padding: '18px 22px', border: `1.5px solid ${showUpdates ? '#3B5BFC' : 'var(--border)'}`, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', cursor: showUpdates ? 'default' : 'pointer', transition: 'box-shadow 0.2s, border-color 0.2s' }}
+              onClick={(e) => {
+                // Don't open Updates panel if clicking on a broadcast item (it will handle opening itself)
+                const clickedBroadcast = e.target.closest('[data-broadcast-item="true"]');
+                if (!clickedBroadcast && !showUpdates) {
+                  setShowUpdates(true);
+                }
+              }}
+              style={{ flex: 1, background: 'var(--bg-surface)', borderRadius: 18, padding: '18px 22px', border: `1.5px solid ${showUpdates ? '#3B5BFC' : 'var(--border)'}`, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow 0.2s, border-color 0.2s' }}
               onMouseEnter={e => { if (!showUpdates) { e.currentTarget.style.boxShadow = '0 4px 18px rgba(59,91,252,0.10)'; e.currentTarget.style.borderColor = '#3B5BFC'; }}}
               onMouseLeave={e => { if (!showUpdates) { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = 'var(--border)'; }}}
             >
               {/* Header */}
               {(() => {
-                const now = new Date();
-                const TASK_STAGE_TYPES = new Set(['payment','accept','review','update','complete','start','new','edit','delete','broadcast']);
-                const allItems = activity.filter(act => { const d = new Date(act.time); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && TASK_STAGE_TYPES.has(act.type); });
+                // ⭐ Use visibleBroadcasts directly instead of filtering activity
+                // This ensures broadcasts persist and show read/unread status correctly
+                const allItems = visibleBroadcasts;
+                
+                console.log('📊 Updates Header - Visible broadcasts:', {
+                  totalBroadcasts: broadcasts.length,
+                  visibleBroadcasts: visibleBroadcasts.length,
+                  currentUser: {
+                    role: currentUser.role,
+                    userRole: currentUser.userRole,
+                    uid: currentUser.uid
+                  }
+                });
+                
                 const count = allItems.length;
-                const unread = allItems.filter(act => !readUpdateIds.has(act.id)).length;
+                const unread = allItems.filter(b => !readUpdateIds.has(b.id)).length;
                 return (
                   <div style={{ marginBottom: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -1214,7 +1675,9 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>Updates</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recent changes</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Recent
+                        </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1231,45 +1694,52 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
               })()}
               {/* List preview */}
               {(() => {
-                const now = new Date();
-                const TASK_STAGE_TYPES = new Set(['payment','accept','review','update','complete','start','new','edit','delete','broadcast']);
-                const items = activity.filter(act => {
-                  const d = new Date(act.time);
-                  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && TASK_STAGE_TYPES.has(act.type);
+                // ⭐ Use visibleBroadcasts directly - these are already filtered by role and join date
+                const allItems = visibleBroadcasts;
+                
+                // ⭐ COLLAPSED VIEW: Show only UNREAD messages (max 10)
+                const unreadItems = allItems.filter(b => !readUpdateIds.has(b.id));
+                const items = unreadItems.slice(0, 10); // Limit to 10 unread messages
+                
+                console.log('📊 Updates preview (COLLAPSED):', {
+                  totalBroadcasts: allItems.length,
+                  unreadCount: unreadItems.length,
+                  displayedUnread: items.length,
+                  readCount: allItems.length - unreadItems.length
                 });
+                
                 if (items.length === 0) return (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No updates this month</div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No unread updates</div>
                 );
+                
+                const displayItems = items;
+                
                 return (
                   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {items.map((act, i) => {
-                      const cfg = TYPE_ICONS[act.type] || TYPE_ICONS.accept;
+                    {displayItems.map((broadcast, i) => {
+                      const cfg = TYPE_ICONS.broadcast;
                       const ActIcon = cfg.icon;
-                      const isBroadcast = act.type === 'broadcast';
-                      const dashIdx = act.sub.indexOf(' — ');
-                      const taskRef  = dashIdx !== -1 ? act.sub.slice(0, dashIdx) : act.sub;
-                      const taskName = dashIdx !== -1 ? act.sub.slice(dashIdx + 3) : '';
+                      
                       return (
-                        <div key={act.id} style={{ display: 'flex', gap: 10, paddingBottom: i < items.length - 1 ? 12 : 0 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: isBroadcast ? '#F5F3FF' : 'var(--bg-subtle)', border: `1.5px solid ${isBroadcast ? '#DDD6FE' : 'var(--border-light)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div 
+                          key={broadcast.id}
+                          data-broadcast-item="true"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markUpdateRead(broadcast.id);
+                            setShowUpdates(true); // Expand the Updates panel
+                          }}
+                          style={{ display: 'flex', gap: 10, paddingBottom: i < items.length - 1 ? 12 : 0, cursor: 'pointer' }}
+                        >
+                          <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: '#F5F3FF', border: '1.5px solid #DDD6FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ActIcon size={11} color={cfg.color} strokeWidth={2.5} />
                           </div>
                           <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
-                            {isBroadcast ? (
-                              <>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 2 }}>{act.title}</div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{act.sub}</div>
-                              </>
-                            ) : (
-                              <>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{act.title}</div>
-                                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '1px 5px', borderRadius: 4 }}>{taskRef}</span>
-                                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>{taskName}</span>
-                                </div>
-                              </>
-                            )}
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{fmt(act.time)}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 2 }}>{broadcast.title}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Team Update</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                              {new Date(broadcast.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1301,7 +1771,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                     </div>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>Updates</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Recent changes</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Recent</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1316,41 +1786,34 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                   </div>
                 </div>
 
-                {/* Month navigator */}
-                {(() => {
-                  const now = new Date();
-                  const viewDate = new Date(now.getFullYear(), now.getMonth() + updatesMonthOffset, 1);
-                  const monthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                  return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-subtle)', flexShrink: 0 }}>
-                      <button onClick={() => setUpdatesMonthOffset(p => p - 1)}
-                        style={{ width: 26, height: 26, borderRadius: 7, border: '1.5px solid var(--border)', background: 'var(--bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <ChevronLeft size={12} color="var(--text-secondary)" />
-                      </button>
-                      <div style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{monthLabel}</div>
-                      <button onClick={() => setUpdatesMonthOffset(p => p + 1)} disabled={updatesMonthOffset >= 0}
-                        style={{ width: 26, height: 26, borderRadius: 7, border: '1.5px solid var(--border)', background: 'var(--bg-surface)', cursor: updatesMonthOffset >= 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: updatesMonthOffset >= 0 ? 0.35 : 1 }}>
-                        <ChevronRight size={12} color="var(--text-secondary)" />
-                      </button>
-                    </div>
-                  );
-                })()}
-
                 {/* List */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {(() => {
-                    const now = new Date();
-                    const viewDate = new Date(now.getFullYear(), now.getMonth() + updatesMonthOffset, 1);
-                    const TASK_STAGE_TYPES = new Set(['payment', 'accept', 'review', 'update', 'complete', 'start', 'new', 'edit', 'delete', 'broadcast']);
-                    const items = activity.filter(act => {
-                      const d = new Date(act.time);
-                      return d.getMonth() === viewDate.getMonth() && d.getFullYear() === viewDate.getFullYear() && TASK_STAGE_TYPES.has(act.type);
+                    // ⭐ Use visibleBroadcasts directly - show ALL broadcasts (read + unread)
+                    // Sort by time (newest first)
+                    const allItems = [...visibleBroadcasts].sort((a, b) => {
+                      const timeA = a.time instanceof Date ? a.time : new Date(a.time);
+                      const timeB = b.time instanceof Date ? b.time : new Date(b.time);
+                      return timeB - timeA; // Newest first
                     });
-                    const anyUnread = items.some(act => !readUpdateIds.has(act.id));
-                    if (items.length === 0) return (
+                    
+                    // ⭐ EXPANDED VIEW: Show all messages with pagination
+                    const items = allItems.slice(0, updatesDisplayLimit);
+                    const hasMore = allItems.length > updatesDisplayLimit;
+                    
+                    const anyUnread = items.some(b => !readUpdateIds.has(b.id));
+                    
+                    console.log('📊 Updates expanded - All broadcasts:', {
+                      total: allItems.length,
+                      displayed: items.length,
+                      unread: items.filter(b => !readUpdateIds.has(b.id)).length,
+                      hasMore
+                    });
+                    
+                    if (allItems.length === 0) return (
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: 8, paddingTop: 20 }}>
                         <RefreshCw size={32} color="#C4C9D9" />
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>No updates this month</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>No updates available</div>
                       </div>
                     );
                     return (
@@ -1359,10 +1822,17 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                             <button
                               onClick={() => {
-                                const allIds = items.map(a => a.id);
+                                const allIds = items.map(b => b.id);
                                 setReadUpdateIds(prev => {
                                   const next = new Set([...prev, ...allIds]);
-                                  try { localStorage.setItem('readUpdateIds', JSON.stringify([...next])); } catch {}
+                                  // Save to Firestore instead of localStorage
+                                  if (workspaceId && currentUser?.uid) {
+                                    setDoc(
+                                      doc(db, `workspaces/${workspaceId}/userReadState`, currentUser.uid),
+                                      { readUpdateIds: [...next], updatedAt: serverTimestamp() },
+                                      { merge: true }
+                                    ).catch(() => {});
+                                  }
                                   return next;
                                 });
                               }}
@@ -1372,41 +1842,61 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                             </button>
                           </div>
                         )}
-                        {items.map((act, i) => {
-                          const cfg = TYPE_ICONS[act.type] || TYPE_ICONS.accept;
+                        {items.map((broadcast, i) => {
+                          const cfg = TYPE_ICONS.broadcast;
                           const ActIcon = cfg.icon;
-                          const isBroadcast = act.type === 'broadcast';
-                          const dashIdx = act.sub.indexOf(' — ');
-                          const taskRef  = dashIdx !== -1 ? act.sub.slice(0, dashIdx) : act.sub;
-                          const taskName = dashIdx !== -1 ? act.sub.slice(dashIdx + 3) : '';
-                          const isUnread = !readUpdateIds.has(act.id);
-                          const broadcastData = isBroadcast ? broadcasts.find(b => b.id === act.id) : null;
+                          const isUnread = !readUpdateIds.has(broadcast.id);
+                          
                           return (
-                            <div key={act.id} onClick={() => {
-                              if (isUnread) markUpdateRead(act.id);
-                              if (isBroadcast && broadcastData) setViewBroadcast(broadcastData);
-                            }} style={{ display: 'flex', gap: 10, padding: '8px 10px', borderRadius: 10, background: isUnread ? (isBroadcast ? '#F5F3FF' : '#EEF2FF') : 'transparent', marginBottom: i < items.length - 1 ? 4 : 0, cursor: isBroadcast ? 'pointer' : (isUnread ? 'pointer' : 'default'), transition: 'background 0.2s' }}>
-                              <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: isUnread ? '#fff' : 'var(--bg-subtle)', border: `1.5px solid ${isUnread ? (isBroadcast ? '#DDD6FE' : '#3B5BFC40') : 'var(--border-light)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div key={broadcast.id} onClick={() => {
+                              if (isUnread) markUpdateRead(broadcast.id);
+                              setViewBroadcast(broadcast);
+                            }} style={{ display: 'flex', gap: 10, padding: '8px 10px', borderRadius: 10, background: isUnread ? '#F5F3FF' : 'transparent', marginBottom: i < items.length - 1 ? 4 : 0, cursor: 'pointer', transition: 'background 0.2s' }}>
+                              <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: isUnread ? '#fff' : 'var(--bg-subtle)', border: `1.5px solid ${isUnread ? '#DDD6FE' : 'var(--border-light)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <ActIcon size={12} color={cfg.color} strokeWidth={2.5} />
                               </div>
                               <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: isBroadcast ? '#7C3AED' : 'var(--text-primary)' }}>{act.title}</div>
-                                  {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: isBroadcast ? '#7C3AED' : '#3B5BFC', flexShrink: 0 }} />}
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED' }}>{broadcast.title}</div>
+                                  {isUnread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#7C3AED', flexShrink: 0 }} />}
                                 </div>
-                                {isBroadcast ? (
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{act.sub}</div>
-                                ) : (
-                                  <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 3, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '1px 5px', borderRadius: 4 }}>{taskRef}</span>
-                                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskName}</span>
-                                  </div>
-                                )}
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmt(act.time)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Team Update</div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                  {new Date(broadcast.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                </div>
                               </div>
                             </div>
                           );
                         })}
+                        {/* Load More button */}
+                        {hasMore && (
+                          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                            <button
+                              onClick={() => setUpdatesDisplayLimit(prev => prev + 10)}
+                              style={{
+                                padding: '8px 16px',
+                                background: '#EEF2FF',
+                                border: '1.5px solid #3B5BFC',
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: '#3B5BFC',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#3B5BFC';
+                                e.currentTarget.style.color = '#fff';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#EEF2FF';
+                                e.currentTarget.style.color = '#3B5BFC';
+                              }}
+                            >
+                              Load More
+                            </button>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
@@ -1420,15 +1910,58 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
       </div>
 
       {/* ── Task Detail Modal ── */}
-      {modalTask && <AdminTaskModal task={modalTask} onClose={() => { setModalTask(null); setConfirmDelete(false); }} hideBudget={hideBudget} onCreateScheduled={(task) => { createTask(task); removeScheduledTask(task.id); }} onCancelScheduled={(id) => removeScheduledTask(id)} />}
-      {chatTask && <TaskChatPanel task={chatTask} onClose={() => setChatTask(null)} currentUser={{ name: 'Admin', avatar: 'A', color: '#3B5BFC' }} team={team} />}
+      {modalTask && <AdminTaskModal key={`${modalTask.id}-${modalTask.members?.map(m => `${m.id}:${m.stage}`).join('-')}`} task={modalTask} onClose={() => { setModalTask(null); setConfirmDelete(false); }} hideBudget={hideBudget} onCreateScheduled={(task) => { createTask(task); removeScheduledTask(task.id); }} onCancelScheduled={(id) => removeScheduledTask(id)} managementMode={member !== null} currentUser={member || currentUser} onNavigateToTask={(taskId, scribeId) => {
+        console.log('📞 Dashboard received navigation request:', { taskId, scribeId });
+        if (onNavigateToNotes && scribeId) {
+          onNavigateToNotes(scribeId);
+        }
+      }} />}
+      {chatTask && <TaskChatPanel task={chatTask} onClose={() => setChatTask(null)} currentUser={currentUser} team={team} />}
 
       {/* ── Broadcast View Modal ── */}
       {viewBroadcast && (
         <BroadcastViewModal
           broadcast={viewBroadcast}
           onClose={() => setViewBroadcast(null)}
-          canEdit={true}
+          canEdit={(() => {
+            // Check if user created the broadcast (for non-admin users)
+            if (member !== null && viewBroadcast.createdBy !== currentUser?.uid) return false;
+            
+            // Check if broadcast was created today (same day) - applies to ALL users including admin
+            try {
+              const broadcastDate = viewBroadcast.time instanceof Date 
+                ? viewBroadcast.time 
+                : viewBroadcast.createdAt instanceof Date
+                ? viewBroadcast.createdAt
+                : new Date(viewBroadcast.time || viewBroadcast.createdAt);
+              
+              const today = new Date();
+              
+              // Reset time to midnight for accurate day comparison
+              const broadcastDay = new Date(broadcastDate.getFullYear(), broadcastDate.getMonth(), broadcastDate.getDate());
+              const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              
+              // Compare timestamps (same day if timestamps are equal)
+              const isSameDay = broadcastDay.getTime() === todayDay.getTime();
+              
+              console.log('🔍 Edit button check:', {
+                broadcastId: viewBroadcast.id,
+                broadcastDate: broadcastDate.toISOString(),
+                today: today.toISOString(),
+                broadcastDay: broadcastDay.toISOString(),
+                todayDay: todayDay.toISOString(),
+                isSameDay,
+                canEdit: isSameDay,
+                userType: member === null ? 'admin' : 'management'
+              });
+              
+              return isSameDay;
+            } catch (error) {
+              console.error('❌ Error checking date:', error);
+              return false; // If date check fails, don't allow edit
+            }
+          })()}
+          showCreatorInfo={member === null}
           onSave={(id, updates) => {
             updateBroadcast(id, updates);
             setViewBroadcast(prev => ({ ...prev, ...updates }));
@@ -1441,13 +1974,49 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
         <ComposeUpdateModal
           onClose={() => setShowComposeUpdate(false)}
           team={team}
-          onSend={({ title: updateTitle, message, recipientMode, selectedMembers, recipientCount }) => {
+          onSend={async ({ title: updateTitle, message, recipientMode, selectedMembers, recipientCount }) => {
             const to = recipientMode === 'all' ? 'All members' : `${recipientCount} member${recipientCount !== 1 ? 's' : ''}`;
-            const id = Date.now();
-            const broadcastObj = { id, title: updateTitle, message, to, recipientMode, selectedMembers, recipientCount, time: new Date() };
-            setBroadcasts(prev => [broadcastObj, ...prev]);
-            addActivity('broadcast', updateTitle || message, `${message} · Sent to ${to}`, null, null, id);
-            notify.success(`Update sent to ${to}`);
+            
+            // Get selected roles from selected members
+            const selectedRoles = recipientMode === 'role' 
+              ? [...new Set(team.filter(m => selectedMembers.includes(m.id)).map(m => m.role))]
+              : [];
+            
+            const broadcastData = {
+              title: updateTitle,
+              message,
+              to,
+              recipientMode,
+              selectedMembers,
+              selectedRoles,
+              recipientCount,
+              createdBy: currentUser?.uid || null,
+              creatorInfo: currentUser ? {
+                name: currentUser.name || 'Admin',
+                avatar: currentUser.avatar || '👤',
+                avatarImg: currentUser.avatarImg || null,
+                color: currentUser.color || '#3B5BFC',
+                role: currentUser.role || 'admin'
+              } : null
+            };
+
+            try {
+              // Save to Firebase
+              const broadcastId = await createBroadcast(workspaceId, broadcastData);
+              console.log('✅ Broadcast created with ID:', broadcastId);
+              
+              // Wait a moment for the broadcast listener to receive the new broadcast
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Add to activity feed with the same ID as the broadcast
+              addActivity('broadcast', updateTitle, `${message} · Sent to ${to}`, null, null, broadcastId);
+              console.log('✅ Activity added for broadcast:', broadcastId);
+              
+              notify.success('Update');
+            } catch (error) {
+              console.error('❌ Error creating broadcast:', error);
+              notify.error('Failed to send update');
+            }
           }}
         />
       )}

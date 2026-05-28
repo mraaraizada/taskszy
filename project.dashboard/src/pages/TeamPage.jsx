@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Mail, Star, CheckCircle, Clock, Edit2, X, Building2, Phone, MapPin, Lock, FileText, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Search, Mail, Star, CheckCircle, Clock, Edit2, X, Building2, Phone, MapPin, Lock, FileText, ChevronLeft, ChevronRight, ChevronDown, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Avatar from '../components/Avatar';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
 import { TeamSkeleton } from '../components/Skeleton';
+import { toast } from 'sonner';
+import { getOrganizationsPaginated } from '../lib/optimizedOrganizationService';
+
+console.log('👥 TeamPage.jsx loaded at:', new Date().toISOString());
 
 const AVATAR_COLORS = ['#3B5BFC','#7C3AED','#12C479','#F97316','#EF4444','#06B6D4','#EC4899','#8B5CF6'];
 
@@ -75,7 +79,7 @@ function EditOrganizationModal({ org, onClose, onSave, managementMode = false })
           {/* Organization Name (Read-only) */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Organization</div>
-            <div style={{ padding: '10px 14px', background: 'var(--input-bg)', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: 13, color: 'var(--text-muted)' }}>
+            <div style={{ padding: '10px 14px', background: 'var(--input-bg)', borderRadius: 10, border: '1.5px solid var(--border)', fontSize: 13, color: 'var(--text-muted)', textTransform: 'capitalize' }}>
               {org.name}
             </div>
           </div>
@@ -403,9 +407,8 @@ function MemberProfileModal({ member, onClose }) {
           {/* Stats */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Performance</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
               {[
-                { label: 'Total Tasks', value: member.tasks, color: member.color, icon: Clock },
                 { label: 'Completed', value: member.completed, color: '#12C479', icon: CheckCircle },
               ].map(s => {
                 const Icon = s.icon;
@@ -446,27 +449,30 @@ function MemberProfileModal({ member, onClose }) {
 
 // ── Organization Card ─────────────────────────────────────────────────────────────
 function OrganizationCard({ org, onEdit, onToggleStatus, onViewProfile, managementMode = false }) {
-  const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const [hover, setHover] = useState(false);
   const [clicked, setClicked] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
+  // Use workspace logo or generate initials
   const initials = getInitials(org.name);
-  const color = org.color || AVATAR_COLORS[org.id.charCodeAt(0) % AVATAR_COLORS.length];
+  const color = org.ownerColor || AVATAR_COLORS[org.id ? org.id.charCodeAt(0) % AVATAR_COLORS.length : 0];
   
   const handleToggleStatus = (e) => {
     e.stopPropagation();
-    const actionText = org.subscriptionStatus === 'active' ? 'suspend this organization' : 'activate this organization';
-    requestAdminPassword(actionText, () => {
-      onToggleStatus(org.id);
-    });
+    setShowConfirmDialog(true);
+  };
+  
+  const handleConfirmToggle = () => {
+    setShowConfirmDialog(false);
+    onToggleStatus(org.id);
+  };
+  
+  const handleCancelToggle = () => {
+    setShowConfirmDialog(false);
   };
   
   const handleCardClick = () => {
-    if (org.subscriptionStatus === 'active') {
-      setClicked(!clicked);
-    } else {
-      onViewProfile(org);
-    }
+    setClicked(!clicked);
   };
   
   const statusColors = {
@@ -477,14 +483,44 @@ function OrganizationCard({ org, onEdit, onToggleStatus, onViewProfile, manageme
   };
   
   const planColors = {
+    Free: { bg: '#F3F4F6', text: '#6B7280' },
     Starter: { bg: '#FEF3C7', text: '#D97706' },
     Professional: { bg: '#DBEAFE', text: '#1D4ED8' },
-    Business: { bg: '#F3E8FF', text: '#9333EA' },
-    Enterprise: { bg: '#FFF7ED', text: '#F97316' },
+    Business: { bg: '#D1FAE5', text: '#059669' },
+    Enterprise: { bg: '#F3E8FF', text: '#9333EA' },
   };
   
   const status = statusColors[org.subscriptionStatus] || statusColors.inactive;
-  const planStyle = planColors[org.subscriptionPlan] || planColors.Starter;
+  const planStyle = planColors[org.subscriptionPlan] || planColors.Free;
+  
+  // Format date helper
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'N/A';
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+  
+  // Calculate days until expiry
+  const getDaysUntilExpiry = () => {
+    if (!org.planExpiryDate) return null;
+    try {
+      const now = new Date();
+      const expiry = new Date(org.planExpiryDate);
+      if (isNaN(expiry.getTime())) return null;
+      const diffTime = expiry - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    } catch (e) {
+      return null;
+    }
+  };
+  
+  const daysUntilExpiry = getDaysUntilExpiry();
   
   return (
     <>
@@ -502,118 +538,265 @@ function OrganizationCard({ org, onEdit, onToggleStatus, onViewProfile, manageme
       >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ 
-            width: 46, 
-            height: 46, 
-            borderRadius: 14, 
-            background: color, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            boxShadow: `0 4px 12px ${color}40`,
-            fontSize: 16,
-            fontWeight: 800,
-            color: '#fff'
-          }}>
-            {initials}
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{org.name}</div>
+          {/* Workspace Logo or Initials */}
+          {org.workspaceLogo ? (
+            <img
+              src={org.workspaceLogo}
+              alt={org.name}
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 14,
+                objectFit: 'cover',
+                boxShadow: `0 4px 12px ${color}40`,
+              }}
+            />
+          ) : (
             <div style={{ 
-              fontSize: 11, 
-              fontWeight: 700,
-              marginTop: 4,
-              padding: '3px 10px',
-              borderRadius: 12,
-              background: planStyle.bg,
-              color: planStyle.text,
-              display: 'inline-block'
+              width: 46, 
+              height: 46, 
+              borderRadius: 14, 
+              background: color, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              boxShadow: `0 4px 12px ${color}40`,
+              fontSize: 16,
+              fontWeight: 800,
+              color: '#fff'
             }}>
-              {org.subscriptionPlan}
+              {initials}
+            </div>
+          )}
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{org.name}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, textTransform: 'capitalize' }}>
+              {org.workspaceSub || 'No description'}
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: status.bg, color: status.text }}>
-            {org.subscriptionStatus === 'active' ? '● ' : '○ '}{status.label}
-          </span>
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>
-            Till {new Date(org.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        </div>
-      </div>
-
-      {/* Contact Info */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Mail size={11} />
-          {org.contactEmail}
-        </div>
-        {org.contactPhone && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Phone size={11} />
-            {org.contactPhone}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Plan Badge */}
+            <span style={{ 
+              fontSize: 11, 
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 12,
+              background: planStyle.bg,
+              color: planStyle.text,
+            }}>
+              {org.subscriptionPlan}
+            </span>
+            {/* Status Dot - Only show if active or inactive */}
+            {(org.subscriptionStatus === 'active' || org.subscriptionStatus === 'inactive') && (
+              <div style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: org.subscriptionStatus === 'active' ? '#12C479' : '#EF4444',
+                boxShadow: `0 0 0 2px ${org.subscriptionStatus === 'active' ? '#ECFDF5' : '#FEF2F2'}`,
+              }} />
+            )}
           </div>
-        )}
+          {org.planExpiryDate && formatDate(org.planExpiryDate) !== 'N/A' && (
+            <span style={{ 
+              fontSize: 9, 
+              color: 'var(--text-muted)', 
+              fontWeight: 600 
+            }}>
+              Till {formatDate(org.planExpiryDate)}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Stats */}
-      {org.usageStats && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          {[
-            { label: 'Users', value: org.usageStats.activeUsers },
-            { label: 'Tasks', value: org.usageStats.tasksCreated },
-          ].map(s => (
-            <div key={s.label} style={{ flex: 1, background: 'var(--input-bg)', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</span>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.label}</span>
+      {/* Contact Info and Team Stats */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        {/* Contact Info - Left Side */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+          {org.email && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Mail size={11} />
+              {org.email}
             </div>
-          ))}
+          )}
+          {org.phone && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Phone size={11} />
+              {org.phone}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Team Members Box - Right Side */}
+        <div style={{ background: 'var(--input-bg)', borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 80 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {org.activeTeamCount || 0} <span style={{ fontSize: 10, fontWeight: 600 }}>+ {org.teamCount || 0}</span>
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>
+            Teams
+          </span>
+        </div>
+      </div>
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          Joined {new Date(org.joinDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          Joined {formatDate(org.joinDate)}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {org.subscriptionStatus === 'active' && clicked && (
-            <button onClick={handleToggleStatus} style={{ padding: '5px 10px', background: '#FEF2F2', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#EF4444' }}>
-              Suspend
-            </button>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); onEdit(org); }} style={{ padding: '5px 10px', background: '#EEF2FF', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#3B5BFC' }}>
-            Edit
+        
+        {/* Active/Inactive Toggle Button - Only visible when card is clicked */}
+        {clicked && (
+          <button
+            onClick={handleToggleStatus}
+            style={{
+              padding: '6px 14px',
+              fontSize: 11,
+              fontWeight: 700,
+              borderRadius: 10,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              background: org.subscriptionStatus === 'active' ? '#FEF2F2' : '#ECFDF5',
+              color: org.subscriptionStatus === 'active' ? '#EF4444' : '#12C479',
+              boxShadow: org.subscriptionStatus === 'active' 
+                ? '0 2px 8px rgba(239, 68, 68, 0.15)' 
+                : '0 2px 8px rgba(18, 196, 121, 0.15)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = org.subscriptionStatus === 'active'
+                ? '0 4px 12px rgba(239, 68, 68, 0.25)'
+                : '0 4px 12px rgba(18, 196, 121, 0.25)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = org.subscriptionStatus === 'active'
+                ? '0 2px 8px rgba(239, 68, 68, 0.15)'
+                : '0 2px 8px rgba(18, 196, 121, 0.15)';
+            }}
+          >
+            {org.subscriptionStatus === 'active' ? 'Inactive' : 'Active'}
           </button>
-        </div>
+        )}
       </div>
     </div>
-    {showPasswordModal && (
-      <AdminPasswordModal
-        onClose={handlePasswordCancel}
-        onConfirm={handlePasswordConfirm}
-        action={pendingAction?.actionName || 'perform this action'}
-      label={managementMode ? 'Management Password' : 'Admin Password'} />
+    
+    {/* Confirmation Dialog */}
+    {showConfirmDialog && (
+      <div 
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}
+        onClick={handleCancelToggle}
+      >
+        <div 
+          style={{
+            background: 'var(--bg-surface)',
+            borderRadius: 16,
+            padding: '24px',
+            width: '100%',
+            maxWidth: 360,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            border: '1px solid var(--border)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 style={{ 
+            fontSize: 16, 
+            fontWeight: 700, 
+            color: 'var(--text-primary)', 
+            marginBottom: 8 
+          }}>
+            {org.subscriptionStatus === 'active' ? 'Deactivate Organization?' : 'Activate Organization?'}
+          </h3>
+          <p style={{ 
+            fontSize: 13, 
+            color: 'var(--text-muted)', 
+            marginBottom: 20,
+            lineHeight: 1.5
+          }}>
+            {org.subscriptionStatus === 'active' 
+              ? 'This will set the organization to inactive.'
+              : 'This will activate the organization.'}
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={handleCancelToggle}
+              style={{
+                flex: 1,
+                padding: '10px 18px',
+                background: 'var(--bg-subtle)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--input-bg)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-subtle)'}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmToggle}
+              style={{
+                flex: 1,
+                padding: '10px 18px',
+                background: org.subscriptionStatus === 'active' 
+                  ? 'linear-gradient(135deg, #EF4444, #DC2626)' 
+                  : 'linear-gradient(135deg, #12C479, #10B368)',
+                border: 'none',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                color: '#fff',
+                cursor: 'pointer',
+                boxShadow: org.subscriptionStatus === 'active'
+                  ? '0 4px 12px rgba(239, 68, 68, 0.3)'
+                  : '0 4px 12px rgba(18, 196, 121, 0.3)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
     )}
   </>
   );
 }
 
 function TeamPage({ managementMode = false }) {
-  const { organizations } = useApp();
+  const { globalSearchQuery, selectedOrganizationId, setSelectedOrganizationId } = useApp();
+  const [organizations, setOrganizations] = useState([]);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [planFilter, setPlanFilter] = useState('All Plans');
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [orgFilter, setOrgFilter] = useState('Organizations');
   const [showModal, setShowModal] = useState(false);
   const [editOrg, setEditOrg] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
-  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const orgsPerPage = 15;
 
   // Check if page has been visited before
@@ -621,6 +804,37 @@ function TeamPage({ managementMode = false }) {
     const visited = sessionStorage.getItem('visited_team');
     return !visited;
   });
+
+  // Load organizations with pagination
+  useEffect(() => {
+    loadOrganizations(true); // Reset on initial load to avoid duplicates
+  }, []);
+
+  const loadOrganizations = async (reset = false) => {
+    try {
+      setPageLoading(true);
+      const result = await getOrganizationsPaginated({
+        pageSize: 100,
+        lastDoc: reset ? null : lastDoc,
+        forceRefresh: reset
+      });
+      
+      if (reset) {
+        setOrganizations(result.organizations);
+      } else {
+        setOrganizations(prev => [...prev, ...result.organizations]);
+      }
+      
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+      console.log('✅ TeamPage: Organizations loaded', { count: result.organizations.length });
+    } catch (error) {
+      console.error('❌ TeamPage: Error loading organizations:', error);
+      toast.error('Failed to load organizations');
+    } finally {
+      setPageLoading(false);
+    }
+  };
 
   // Initial loading effect
   useEffect(() => {
@@ -652,9 +866,27 @@ function TeamPage({ managementMode = false }) {
   };
 
   const filtered = organizations.filter(org => {
-    const matchPlan = planFilter === 'All Plans' || org.subscriptionPlan === planFilter;
-    const matchStatus = statusFilter === 'All Status' || org.subscriptionStatus === statusFilter;
-    return matchPlan && matchStatus;
+    // If selectedOrganizationId is set (from Dashboard navigation), show only that org
+    if (selectedOrganizationId) {
+      return org.id === selectedOrganizationId;
+    }
+    
+    // Combined filter: check if it's "Organizations" (show all) or matches plan/status
+    const matchFilter = orgFilter === 'Organizations' || 
+                        org.subscriptionPlan === orgFilter || 
+                        org.subscriptionStatus === orgFilter;
+    const matchSearch = !globalSearchQuery || 
+      org.name?.toLowerCase().includes(globalSearchQuery.toLowerCase()) ||
+      org.workspaceSub?.toLowerCase().includes(globalSearchQuery.toLowerCase());
+    return matchFilter && matchSearch;
+  });
+
+  console.log('👥 TeamPage: Search query:', globalSearchQuery, 'Selected org ID:', selectedOrganizationId, 'Total orgs:', organizations.length, 'Filtered:', filtered.length);
+
+  console.log('👥 TeamPage: Filtered organizations:', {
+    total: organizations.length,
+    filtered: filtered.length,
+    orgFilter
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -684,9 +916,81 @@ function TeamPage({ managementMode = false }) {
   const endIndex = startIndex + orgsPerPage;
   const paginatedOrgs = sorted.slice(startIndex, endIndex);
 
-  const toggleOrgStatus = (id) => {
-    // Placeholder for toggle functionality
-    console.log('Toggle organization status:', id);
+  console.log('📄 TeamPage: Pagination info:', {
+    totalOrgs: sorted.length,
+    orgsPerPage,
+    totalPages,
+    currentPage,
+    displayedOrgs: paginatedOrgs.length
+  });
+
+  const toggleOrgStatus = async (id) => {
+    try {
+      const org = organizations.find(o => o.id === id);
+      if (!org) {
+        console.error('Organization not found:', id);
+        return;
+      }
+
+      const newStatus = org.subscriptionStatus === 'active' ? 'inactive' : 'active';
+      console.log('Toggle organization status:', id, 'from', org.subscriptionStatus, 'to', newStatus);
+
+      // Import Firestore functions
+      const { doc, updateDoc, getDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+
+      const workspaceRef = doc(db, 'workspaces', id);
+      
+      // Check if workspace exists
+      const workspaceSnap = await getDoc(workspaceRef);
+      if (!workspaceSnap.exists()) {
+        console.error('Workspace document not found:', id);
+        toast.error('Organization not found');
+        return;
+      }
+
+      const workspaceData = workspaceSnap.data();
+      const updates = {
+        subscriptionStatus: newStatus,
+        updatedAt: serverTimestamp()
+      };
+
+      // If setting to inactive AND organization has an active plan, deactivate the plan
+      if (newStatus === 'inactive' && workspaceData.plan?.isActive === true) {
+        console.log('🔒 Deactivating plan for organization:', org.name);
+        updates['plan.isActive'] = false;
+        updates['plan.updatedAt'] = serverTimestamp();
+      }
+
+      // If setting to active, optionally reactivate plan if it has days left
+      if (newStatus === 'active' && workspaceData.plan?.expiryTimestamp) {
+        const expiryTime = typeof workspaceData.plan.expiryTimestamp.toMillis === 'function'
+          ? workspaceData.plan.expiryTimestamp.toMillis()
+          : workspaceData.plan.expiryTimestamp;
+        
+        // If plan hasn't expired yet, reactivate it
+        if (expiryTime >= Date.now()) {
+          console.log('✅ Reactivating plan for organization:', org.name);
+          updates['plan.isActive'] = true;
+          updates['plan.updatedAt'] = serverTimestamp();
+        }
+      }
+
+      console.log('📝 Updating workspace with:', updates);
+      await updateDoc(workspaceRef, updates);
+      
+      toast.success(newStatus === 'active' ? 'Organization activated' : 'Organization deactivated');
+      console.log('✅ Organization status updated:', id, updates);
+      
+      // The real-time listener should automatically refresh the data
+      // But we can also manually trigger a refresh to ensure immediate update
+      setTimeout(() => {
+        console.log('🔄 Triggering manual refresh after status update');
+      }, 500);
+    } catch (error) {
+      console.error('Failed to toggle organization status:', error);
+      toast.error('Failed to update organization status: ' + error.message);
+    }
   };
 
   const saveOrg = (updatedOrg) => {
@@ -747,56 +1051,80 @@ function TeamPage({ managementMode = false }) {
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'flex-end' }}>
-            {/* Plan Filter Dropdown */}
+            {/* Clear Selected Organization Filter */}
+            {selectedOrganizationId && (
+              <button 
+                onClick={() => {
+                  setSelectedOrganizationId(null);
+                  console.log('🔄 Cleared selected organization filter');
+                }}
+                style={{
+                  padding: '6px 12px', 
+                  borderRadius: 10, 
+                  fontSize: 12, 
+                  fontWeight: 600,
+                  border: '1.5px solid #3B5BFC', 
+                  background: '#EEF2FF',
+                  color: '#3B5BFC', 
+                  cursor: 'pointer', 
+                  outline: 'none',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6,
+                }}
+              >
+                <X size={14} /> Show All Organizations
+              </button>
+            )}
+            
+            {/* Combined Organizations Filter Dropdown */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowPlanDropdown(!showPlanDropdown)} style={{
+              <button onClick={() => setShowOrgDropdown(!showOrgDropdown)} style={{
                 padding: '6px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
                 border: '1.5px solid var(--border)', background: 'var(--bg-surface)',
                 color: 'var(--text-secondary)', cursor: 'pointer', outline: 'none',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
-                {planFilter} <ChevronDown size={14} />
+                {orgFilter} <ChevronDown size={14} />
               </button>
-              {showPlanDropdown && (
+              {showOrgDropdown && (
                 <div style={{
                   position: 'absolute', top: '100%', right: 0, marginTop: 4,
                   background: 'var(--bg-surface)', borderRadius: 10, border: '1.5px solid var(--border)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 140,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 160,
                 }}>
-                  {['All Plans', 'Starter', 'Professional', 'Business', 'Enterprise'].map(plan => (
-                    <button key={plan} onClick={() => { setPlanFilter(plan); setShowPlanDropdown(false); }} style={{
+                  {/* All Organizations */}
+                  <button onClick={() => { setOrgFilter('Organizations'); setSelectedOrganizationId(null); setShowOrgDropdown(false); }} style={{
+                    width: '100%', padding: '8px 12px', border: 'none', background: 'transparent',
+                    textAlign: 'left', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    color: orgFilter === 'Organizations' ? '#3B5BFC' : 'var(--text-secondary)',
+                  }}>
+                    Organizations
+                  </button>
+                  
+                  {/* Divider */}
+                  <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                  
+                  {/* Plan Filters */}
+                  {['Starter', 'Professional', 'Business', 'Enterprise'].map(plan => (
+                    <button key={plan} onClick={() => { setOrgFilter(plan); setSelectedOrganizationId(null); setShowOrgDropdown(false); }} style={{
                       width: '100%', padding: '8px 12px', border: 'none', background: 'transparent',
                       textAlign: 'left', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      color: planFilter === plan ? '#3B5BFC' : 'var(--text-secondary)',
+                      color: orgFilter === plan ? '#3B5BFC' : 'var(--text-secondary)',
                     }}>
                       {plan}
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
-            
-            {/* Status Filter Dropdown */}
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowStatusDropdown(!showStatusDropdown)} style={{
-                padding: '6px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                border: '1.5px solid var(--border)', background: 'var(--bg-surface)',
-                color: 'var(--text-secondary)', cursor: 'pointer', outline: 'none',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                {statusFilter} <ChevronDown size={14} />
-              </button>
-              {showStatusDropdown && (
-                <div style={{
-                  position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                  background: 'var(--bg-surface)', borderRadius: 10, border: '1.5px solid var(--border)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 140,
-                }}>
-                  {['All Status', 'active', 'trial', 'inactive', 'suspended'].map(status => (
-                    <button key={status} onClick={() => { setStatusFilter(status); setShowStatusDropdown(false); }} style={{
+                  
+                  {/* Divider */}
+                  <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                  
+                  {/* Status Filters */}
+                  {['active', 'inactive'].map(status => (
+                    <button key={status} onClick={() => { setOrgFilter(status); setSelectedOrganizationId(null); setShowOrgDropdown(false); }} style={{
                       width: '100%', padding: '8px 12px', border: 'none', background: 'transparent',
                       textAlign: 'left', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      color: statusFilter === status ? '#3B5BFC' : 'var(--text-secondary)',
+                      color: orgFilter === status ? '#3B5BFC' : 'var(--text-secondary)',
                       textTransform: 'capitalize',
                     }}>
                       {status}

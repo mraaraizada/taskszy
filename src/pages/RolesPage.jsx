@@ -1,8 +1,9 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Plus, Shield, ChevronDown, Check, X, Tag, FolderOpen, Lock, Edit2, Copy, FileImage, Users, Settings2, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
+import { toast } from 'sonner';
 
 const COLOR_PALETTE = [
   '#3B5BFC','#7C3AED','#12C479','#F97316','#EF4444',
@@ -12,39 +13,31 @@ const COLOR_PALETTE = [
 /* ═══════════════════════════════════════════════
    TAGS TAB
 ═══════════════════════════════════════════════ */
-const INITIAL_TAGS = [
-  { id: 1, name: 'Urgent',      color: '#EF4444', image: '🚨' },
-  { id: 2, name: 'Design',      color: '#7C3AED', image: '🎨' },
-  { id: 3, name: 'Development', color: '#3B5BFC', image: '💻' },
-  { id: 4, name: 'Marketing',   color: '#F97316', image: '📢' },
-  { id: 5, name: 'Research',    color: '#06B6D4', image: '🔬' },
-  { id: 6, name: 'Review',      color: '#F59E0B', image: '👀' },
-  { id: 7, name: 'Blocked',     color: '#EF4444', image: '🚫' },
-  { id: 8, name: 'Feature',     color: '#12C479', image: '⭐' },
-];
+const INITIAL_TAGS = [];
 
 /* ═══════════════════════════════════════════════
    CATEGORIES TAB
 ═══════════════════════════════════════════════ */
-const INITIAL_CATS = [
-  { id: 1, name: 'Web Development',  color: '#3B5BFC', icon: '💻', count: 12 },
-  { id: 2, name: 'Mobile App',        color: '#7C3AED', icon: '📱', count: 8  },
-  { id: 3, name: 'UI/UX Design',      color: '#EC4899', icon: '🎨', count: 15 },
-  { id: 4, name: 'Marketing',         color: '#F97316', icon: '📢', count: 6  },
-  { id: 5, name: 'Data & Analytics',  color: '#06B6D4', icon: '📊', count: 4  },
-  { id: 6, name: 'Content Writing',   color: '#12C479', icon: '✍️', count: 9  },
-  { id: 7, name: 'DevOps',            color: '#F59E0B', icon: '⚙️', count: 3  },
-  { id: 8, name: 'Security',          color: '#EF4444', icon: '🔒', count: 5  },
-  { id: 9, name: 'Documentation',     color: '#8B5CF6', icon: '📁', count: 7  },
-  { id: 10, name: 'Testing',          color: '#10B981', icon: '🧪', count: 11 },
-  { id: 11, name: 'Research',         color: '#0EA5E9', icon: '🔬', count: 6  },
-  { id: 12, name: 'Support',          color: '#F43F5E', icon: '💬', count: 8  },
-  { id: 13, name: 'Sales',            color: '#14B8A6', icon: '💼', count: 4  },
-  { id: 14, name: 'Training',         color: '#A855F7', icon: '🎓', count: 3  },
-  { id: 15, name: 'Infrastructure',   color: '#6366F1', icon: '🏗️', count: 5  },
-];
+const INITIAL_CATS = [];
 
-const ICONS = ['💻','📱','🎨','📣','📊','✍️','⚙️','🔒','📁','🚀','💡','🎯'];
+const ICONS = ['[PC]','[Phone]','🎨','[Mega]','[Chart]','✍️','⚙️','[Lock]','📁','[Rocket]','[Idea]','[Target]'];
+
+// Function to lighten a color for background use
+function lightenColor(color, opacity = 0.15) {
+  if (!color || !color.startsWith('#')) return '#F0F2F8';
+  
+  const hex = color.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  
+  const lightR = Math.round(r + (255 - r) * (1 - opacity));
+  const lightG = Math.round(g + (255 - g) * (1 - opacity));
+  const lightB = Math.round(b + (255 - b) * (1 - opacity));
+  
+  return `#${lightR.toString(16).padStart(2, '0')}${lightG.toString(16).padStart(2, '0')}${lightB.toString(16).padStart(2, '0')}`;
+}
+
 
 /* ═══════════════════════════════════════════════
    TEXT IMAGE ADD COMPONENT
@@ -84,7 +77,14 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
         b = Math.round(b / count);
         
         const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-        resolve(hex);
+        
+        // Generate light background (15% opacity blend with white)
+        const lightR = Math.round(r + (255 - r) * 0.85);
+        const lightG = Math.round(g + (255 - g) * 0.85);
+        const lightB = Math.round(b + (255 - b) * 0.85);
+        const lightBg = '#' + [lightR, lightG, lightB].map(x => x.toString(16).padStart(2, '0')).join('');
+        
+        resolve({ color: hex, bg: lightBg });
       };
       img.src = imageUrl;
     });
@@ -99,8 +99,9 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
         const preview = reader.result;
         setImagePreview(preview);
         if (file.type.startsWith('image/')) {
-          const extractedColor = await extractColorFromImage(preview);
+          const { color: extractedColor, bg: extractedBg } = await extractColorFromImage(preview);
           setColor(extractedColor);
+          console.log('🎨 Extracted color:', extractedColor, 'Light bg:', extractedBg);
         } else {
           setColor('#3B5BFC');
         }
@@ -112,7 +113,17 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
   const handleAdd = () => {
     if (!name.trim()) return;
     requestAdminPassword(`add ${type}`, () => {
-      onAdd({ name: name.trim(), image: imagePreview || '📌', color, type });
+      // Generate light background from color
+      const hex = color.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const lightR = Math.round(r + (255 - r) * 0.85);
+      const lightG = Math.round(g + (255 - g) * 0.85);
+      const lightB = Math.round(b + (255 - b) * 0.85);
+      const lightBg = '#' + [lightR, lightG, lightB].map(x => x.toString(16).padStart(2, '0')).join('');
+      
+      onAdd({ name: name.trim(), image: imagePreview || '📌', color, bg: lightBg, type });
       setName('');
       setImage(null);
       setImagePreview('');
@@ -159,6 +170,7 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
         onChange={e => setName(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && canAdd && handleAdd()}
         placeholder="Text"
+        maxLength={20}
         style={{ width: 180, padding: '7px 10px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', background: 'var(--input-bg)', outline: 'none', fontFamily: 'inherit' }}
         onFocus={e => e.target.style.borderColor = '#3B5BFC'}
         onBlur={e => e.target.style.borderColor = 'var(--border)'}
@@ -347,6 +359,7 @@ function CopyModal({ item, type, onClose, onSave }) {
 
 function NewRoleModal({ onClose, onSave, managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
+  const { currentUser } = useApp();
   const [roleType, setRoleType] = useState('Admin');
   const [name, setName]         = useState('');
   const [about, setAbout]       = useState('');
@@ -357,7 +370,20 @@ function NewRoleModal({ onClose, onSave, managementMode = false }) {
   const handleCreateRole = () => {
     if (!isValid) return;
     requestAdminPassword('create role', () => {
-      onSave({ id: Date.now(), name: name.trim(), description: about.trim(), roleType, color, members: 0, permissions: {} });
+      onSave({ 
+        id: Date.now(), 
+        name: name.trim(), 
+        description: about.trim(), 
+        roleType, 
+        color, 
+        members: 0, 
+        permissions: {},
+        createdBy: {
+          name: currentUser?.name || 'Admin',
+          role: currentUser?.userRole || currentUser?.role || 'admin',
+          uid: currentUser?.uid || null
+        }
+      });
       onClose();
     });
   };
@@ -379,7 +405,6 @@ function NewRoleModal({ onClose, onSave, managementMode = false }) {
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role Type *</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {[
-                { val: 'Admin', color: '#7C3AED', bg: '#F5F3FF', border: '#7C3AED', icon: <Shield size={16} color={roleType === 'Admin' ? '#7C3AED' : '#9CA3AF'} /> },
                 { val: 'Management',  color: '#3B5BFC', bg: '#EEF2FF', border: '#3B5BFC', icon: <Settings2 size={16} color={roleType === 'Management' ? '#3B5BFC' : '#9CA3AF'} /> },
                 { val: 'Team Member', color: '#12C479', bg: '#ECFDF5', border: '#12C479', icon: <Users size={16} color={roleType === 'Team Member' ? '#12C479' : '#9CA3AF'} /> },
               ].map(t => (
@@ -505,6 +530,7 @@ function RoleCard({ role, selected, onSelect, onCopy, onDelete, onEdit }) {
 }
 
 function RolesTab() {
+  const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const { roles, saveRoles, team, saveMember } = useApp();
   const setRoles = saveRoles;
   const [selectedId, setSelectedId] = useState(roles[0]?.id || 1);
@@ -514,7 +540,7 @@ function RolesTab() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
-  const role = roles.find(r => r.id === selectedId);
+  const role = roles.find((r) => r.id === selectedId);
 
   if (!role && roles.length > 0) { setSelectedId(roles[0].id); return null; }
   if (!role) return (
@@ -549,20 +575,45 @@ function RolesTab() {
   const saveEditRole = () => {
     if (!editName.trim()) return;
     setRoles(prev => prev.map(r => r.id === editingRole.id ? { ...r, name: editName.trim(), description: editDescription.trim() } : r));
-    // Sync work description to all team members whose role matches
-    team
-      .filter(m => m.role === editingRole.name)
-      .forEach(m => saveMember({ ...m, desc: editDescription.trim() }));
+    // Note: Card description is separate from work description, so we don't sync it to team members
     setEditingRole(null);
   };
 
   const saveDesc = () => {
-    setRoles(prev => prev.map(r => r.id === selectedId ? { ...r, description: tempDesc } : r));
-    // Sync work description to all team members whose role matches this role's name
-    team
-      .filter(m => m.role === role.name)
-      .forEach(m => saveMember({ ...m, desc: tempDesc }));
+    console.log('💾 saveDesc called:', {
+      roleId: selectedId,
+      roleName: role.name,
+      tempDesc: tempDesc,
+      tempDescLength: tempDesc?.length || 0
+    });
+    
+    const updatedAt = Date.now();
+    console.log('🔥 Calling setRoles (saveRoles) to update Firebase...');
+    setRoles(prev => prev.map(r => r.id === selectedId ? { 
+      ...r, 
+      workDescription: tempDesc,
+      workDescriptionUpdatedAt: updatedAt // Track when description was updated
+    } : r));
+    console.log('✅ setRoles called - role should be saved to Firebase');
+    
+    // Sync work description to all team members whose role matches this role's name (case-insensitive)
+    const affectedMembers = team.filter(m => m.role?.toLowerCase() === role.name?.toLowerCase());
+    console.log(`📝 Syncing work description to ${affectedMembers.length} team member(s) with role "${role.name}"`);
+    console.log('📝 Affected members:', affectedMembers.map(m => ({ id: m.id, name: m.name, role: m.role, currentDesc: m.desc })));
+    
+    affectedMembers.forEach(m => {
+      console.log(`  ✅ Updating ${m.name} (ID: ${m.id}) with desc:`, tempDesc);
+      // Reset the descReadAt timestamp so users see the unread indicator
+      saveMember({ ...m, desc: tempDesc, descReadAt: null });
+    });
     setEditingDesc(false);
+    
+    // Show success notification
+    if (affectedMembers.length > 0) {
+      toast.success(`Work description updated for ${affectedMembers.length} team member${affectedMembers.length > 1 ? 's' : ''} with role "${role.name}"`);
+    } else {
+      toast.success('Work description saved');
+    }
   };
 
   const saveAbout = () => {
@@ -596,10 +647,65 @@ function RolesTab() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{role.name}</div>
-                {role.roleType && (
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: role.roleType === 'Admin' ? '#F5F3FF' : role.roleType === 'Management' ? '#EEF2FF' : '#ECFDF5', color: role.roleType === 'Admin' ? '#7C3AED' : role.roleType === 'Management' ? '#3B5BFC' : '#12C479', marginTop: 4, display: 'inline-block' }}>{role.roleType}</span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  {role.roleType && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: role.roleType === 'Admin' ? '#F5F3FF' : role.roleType === 'Management' ? '#EEF2FF' : '#ECFDF5', color: role.roleType === 'Admin' ? '#7C3AED' : role.roleType === 'Management' ? '#3B5BFC' : '#12C479', display: 'inline-block' }}>{role.roleType}</span>
+                  )}
+                  {role.createdBy && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+                      Created by: {role.createdBy.name} ({role.createdBy.role})
+                    </span>
+                  )}
+                </div>
               </div>
+              
+              {/* Save and Cancel buttons */}
+              {(editingDesc || editingAbout) && (
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button 
+                    onClick={() => {
+                      requestAdminPassword('save changes', () => {
+                        if (editingDesc) saveDesc();
+                        if (editingAbout) saveAbout();
+                      });
+                    }}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 5, 
+                      padding: '8px 16px', 
+                      background: 'linear-gradient(135deg, #12C479, #0EA368)', 
+                      border: 'none', 
+                      borderRadius: 9, 
+                      fontSize: 12, 
+                      fontWeight: 700, 
+                      color: '#fff', 
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px #12C47940'
+                    }}
+                  >
+                    <Check size={14} /> Save
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingDesc(false);
+                      setEditingAbout(false);
+                    }}
+                    style={{ 
+                      padding: '8px 16px', 
+                      background: 'var(--bg-subtle)', 
+                      border: '1.5px solid var(--border)', 
+                      borderRadius: 9, 
+                      fontSize: 12, 
+                      fontWeight: 600, 
+                      color: 'var(--text-secondary)', 
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Body */}
@@ -616,17 +722,13 @@ function RolesTab() {
                       placeholder="Use / to separate each point. e.g. Review pull requests daily / Write unit tests for all new features / Attend weekly stand-ups"
                       style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #3B5BFC', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', background: 'var(--input-bg)', outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6 }} />
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, marginBottom: 4 }}>
-                      💡 Use <code style={{ background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, fontFamily: 'monospace', fontSize: 11 }}>/</code> to separate each bullet point shown to team members
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                      <button onClick={saveDesc} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 16px', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}><Check size={12} /> Save</button>
-                      <button onClick={() => setEditingDesc(false)} style={{ padding: '7px 12px', background: 'var(--bg-subtle)', border: '1.5px solid var(--border)', borderRadius: 9, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
+                      [Idea] Use <code style={{ background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, fontFamily: 'monospace', fontSize: 11 }}>/</code> to separate each bullet point shown to team members
                     </div>
                   </div>
                 ) : (
-                  <div style={{ position: 'relative', minHeight: 120, padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: 10, border: '1.5px solid var(--border-light)', fontSize: 13, color: role.description ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {role.description || 'Use / to separate each point. e.g. Review pull requests daily / Write unit tests / Attend weekly stand-ups'}
-                    <button onClick={() => { setEditingDesc(true); setTempDesc(role.description || ''); }}
+                  <div style={{ position: 'relative', minHeight: 120, padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: 10, border: '1.5px solid var(--border-light)', fontSize: 13, color: role.workDescription ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {role.workDescription || 'Use / to separate each point. e.g. Review pull requests daily / Write unit tests / Attend weekly stand-ups'}
+                    <button onClick={() => { setEditingDesc(true); setTempDesc(role.workDescription || ''); }}
                       style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
                       <Edit2 size={12} color="var(--text-muted)" />
                     </button>
@@ -653,24 +755,43 @@ function RolesTab() {
               <button onClick={() => setEditingRole(null)} style={{ background: 'var(--input-bg)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={15} color="#6B7280" /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[{ label: 'Role Name *', val: editName, set: setEditName }, { label: 'Description', val: editDescription, set: setEditDescription }].map(f => (
-                <div key={f.label}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>{f.label}</label>
-                  <input value={f.val} onChange={e => f.set(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEditRole()}
-                    style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                    onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              {/* Role Name - Read Only */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Role Name</label>
+                <div style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-subtle)', boxSizing: 'border-box', fontFamily: 'inherit' }}>
+                  {editingRole.name}
                 </div>
-              ))}
+              </div>
+              {/* Description - Editable */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Description</label>
+                <input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveEditRole()}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  onFocus={(e) => e.target.style.borderColor = '#3B5BFC'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
+              </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
                 <button onClick={() => setEditingRole(null)} style={{ flex: 1, padding: 11, background: 'var(--input-bg)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
-                <button onClick={saveEditRole} disabled={!editName.trim()}
-                  style={{ flex: 1, padding: 11, background: editName.trim() ? `linear-gradient(135deg, ${editingRole.color}, ${editingRole.color}CC)` : '#E8EAEF', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, color: editName.trim() ? '#fff' : '#9CA3AF', cursor: editName.trim() ? 'pointer' : 'default' }}>
+                <button onClick={() => {
+                  requestAdminPassword('save role description', () => {
+                    setRoles(prev => prev.map((r) => r.id === editingRole.id ? { ...r, description: editDescription } : r));
+                    setEditingRole(null);
+                  });
+                }}
+                  style={{ flex: 1, padding: 11, background: `linear-gradient(135deg, ${editingRole.color}, ${editingRole.color}CC)`, border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
                   Save Changes
                 </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+      {showPasswordModal && (
+        <AdminPasswordModal
+          onClose={handlePasswordCancel}
+          onConfirm={handlePasswordConfirm}
+          action={pendingAction?.actionName || 'perform this action'}
+          label="Admin Password"
+        />
       )}
     </div>
   );
@@ -681,8 +802,7 @@ function RolesTab() {
 ═══════════════════════════════════════════════ */
 function TagsAndCategoriesTab({ managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
-  const [tags, setTags] = useState([]);
-  const [cats, setCats] = useState([]);
+  const { TAGS: tags, CATEGORIES: cats, saveTags, saveCategories, deleteTag: deleteTagFromContext, deleteCategory: deleteCategoryFromContext, tasks, updateTask } = useApp();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState(null);
   const [selectedCatId, setSelectedCatId] = useState(null);
@@ -696,9 +816,9 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   function addItem(item) {
     const newId = Date.now();
     if (item.type === 'tag') {
-      setTags(prev => [...prev, { id: newId, name: item.name, image: item.image, color: item.color, createdByManagement: managementMode }]);
+      saveTags(prev => [...prev, { id: newId, name: item.name, image: item.image, color: item.color, bg: item.bg, createdByManagement: managementMode }]);
     } else {
-      setCats(prev => [...prev, { id: newId, name: item.name, icon: item.image, color: item.color, count: 0, createdByManagement: managementMode }]);
+      saveCategories(prev => [...prev, { id: newId, name: item.name, icon: item.image, color: item.color, bg: item.bg, count: 0, createdByManagement: managementMode }]);
     }
     setShowCreate(false);
   }
@@ -717,25 +837,113 @@ function TagsAndCategoriesTab({ managementMode = false }) {
 
   function saveEditTag() {
     if (!editName.trim()) return;
-    setTags(prev => prev.map(t => t.id === editTagId ? { ...t, name: editName.trim(), color: editColor } : t));
-    setEditTagId(null);
+    
+    // ⭐ CRITICAL: Capture the old name BEFORE updating the tag
+    const oldTag = tags.find((t) => t.id === editTagId);
+    const oldName = oldTag?.name;
+    const newName = editName.trim();
+    
+    if (!oldName || oldName === newName) {
+      setEditTagId(null);
+      return;
+    }
+    
+    requestAdminPassword('save tag changes', async () => {
+      console.log(`🏷️ Updating tag "${oldName}" to "${newName}" in all tasks`);
+      console.log(`📊 Total tasks to check: ${tasks.length}`);
+      
+      let updatedCount = 0;
+      
+      // First, update all tasks that use this tag
+      const updatePromises = tasks.map(async (task) => {
+        if (task.tags && Array.isArray(task.tags)) {
+          console.log(`🔍 Checking task #${task.id}:`, {
+            tags: task.tags.map(t => t.label),
+            hasOldTag: task.tags.some((tag) => tag.label === oldName)
+          });
+          
+          // Check if this task uses the old tag name (stored as 'label' in task)
+          const hasTag = task.tags.some((tag) => tag.label === oldName);
+          
+          if (hasTag) {
+            // Update the tag label in this task
+            const updatedTags = task.tags.map((tag) => 
+              tag.label === oldName ? { ...tag, label: newName } : tag
+            );
+            
+            console.log(`  ✅ Updating task #${task.id}: "${task.title}"`);
+            updatedCount++;
+            await updateTask(task.id, { ...task, tags: updatedTags });
+          }
+        }
+      });
+      
+      await Promise.all(updatePromises);
+      console.log(`✅ Updated ${updatedCount} tasks with new tag name`);
+      
+      // Then update the tag in tags array
+      saveTags(prev => prev.map((t) => t.id === editTagId ? { ...t, name: newName } : t));
+      
+      setEditTagId(null);
+    });
   }
 
   function saveEditCat() {
     if (!editName.trim()) return;
-    setCats(prev => prev.map(c => c.id === editCatId ? { ...c, name: editName.trim(), color: editColor } : c));
-    setEditCatId(null);
+    
+    // ⭐ CRITICAL: Capture the old name BEFORE updating the category
+    const oldCat = cats.find((c) => c.id === editCatId);
+    const oldName = oldCat?.name;
+    const newName = editName.trim();
+    
+    if (!oldName || oldName === newName) {
+      setEditCatId(null);
+      return;
+    }
+    
+    requestAdminPassword('save category changes', async () => {
+      console.log(`📁 Updating category "${oldName}" to "${newName}" in all tasks`);
+      console.log(`📊 Total tasks to check: ${tasks.length}`);
+      
+      let updatedCount = 0;
+      
+      // First, update all tasks that use this category
+      const updatePromises = tasks.map(async (task) => {
+        console.log(`🔍 Checking task #${task.id}:`, {
+          hasCategory: !!task.category,
+          categoryLabel: task.category?.label,
+          matches: task.category?.label === oldName
+        });
+        
+        // Check if this task uses the old category name (stored as 'label' in task.category object)
+        if (task.category && task.category.label === oldName) {
+          console.log(`  ✅ Updating task #${task.id}: "${task.title}"`);
+          updatedCount++;
+          // Update the category label in this task
+          const updatedCategory = { ...task.category, label: newName };
+          await updateTask(task.id, { ...task, category: updatedCategory });
+        }
+      });
+      
+      await Promise.all(updatePromises);
+      console.log(`✅ Updated ${updatedCount} tasks with new category name`);
+      
+      // Then update the category in categories array
+      saveCategories(prev => prev.map((c) => c.id === editCatId ? { ...c, name: newName } : c));
+      
+      setEditCatId(null);
+    });
   }
 
   function deleteTag(id) {
     requestAdminPassword('delete tag', () => {
-      setTags(prev => prev.filter(t => t.id !== id));
+      deleteTagFromContext(id);
     });
   }
 
   function deleteCat(id) {
     requestAdminPassword('delete category', () => {
-      setCats(prev => prev.filter(c => c.id !== id));
+      deleteCategoryFromContext(id);
     });
   }
 
@@ -745,7 +953,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
 
   function confirmCopyTag(newName) {
     const newTag = { ...copyingTag, id: Date.now(), name: newName };
-    setTags(prev => [...prev, newTag]);
+    saveTags(prev => [...prev, newTag]);
     setCopyingTag(null);
   }
 
@@ -755,7 +963,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
 
   function confirmCopyCat(newName) {
     const newCat = { ...copyingCat, id: Date.now(), name: newName };
-    setCats(prev => [...prev, newCat]);
+    saveCategories(prev => [...prev, newCat]);
     setCopyingCat(null);
   }
 
@@ -802,19 +1010,23 @@ function TagsAndCategoriesTab({ managementMode = false }) {
           )}
 
           {/* Tags */}
-          {tags.map(tag => (
-            <div key={`tag-${tag.id}`}
-              onClick={() => { setSelectedTagId(selectedTagId === tag.id ? null : tag.id); setSelectedCatId(null); }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-muted, #F0F2F8)'; e.currentTarget.style.borderColor = tag.color; }}
-              onMouseLeave={e => { if (selectedTagId !== tag.id) { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.borderColor = 'var(--border-light)'; } }}
-              style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 12px', background: 'var(--bg-subtle)',
-              borderRadius: 10, border: `1.5px solid ${selectedTagId === tag.id ? tag.color : 'var(--border-light)'}`,
-              transition: 'all 0.15s',
-              cursor: 'pointer',
-              minHeight: 38,
-            }}>
+          {tags.map(tag => {
+            // Use saved bg or generate from color
+            const bgColor = tag.bg || (tag.color ? lightenColor(tag.color, 0.15) : '#F0F2F8');
+            return (
+              <div key={`tag-${tag.id}`}
+                onClick={() => { setSelectedTagId(selectedTagId === tag.id ? null : tag.id); setSelectedCatId(null); }}
+                onMouseEnter={e => { e.currentTarget.style.background = tag.color ? lightenColor(tag.color, 0.10) : '#F0F2F8'; e.currentTarget.style.borderColor = tag.color; }}
+                onMouseLeave={e => { if (selectedTagId !== tag.id) { e.currentTarget.style.background = bgColor; e.currentTarget.style.borderColor = 'var(--border-light)'; } }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 12px', background: bgColor,
+                  borderRadius: 10, border: `1.5px solid ${selectedTagId === tag.id ? tag.color : 'var(--border-light)'}`,
+                  transition: 'all 0.15s',
+                  cursor: 'pointer',
+                  minHeight: 38,
+                }}
+              >
               {editTagId === tag.id ? (
                 <>
                   <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -826,16 +1038,11 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   </div>
                   <input
                     value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveEditTag()}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditTag()}
                     autoFocus
                     style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }}
                   />
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {COLOR_PALETTE.slice(0, 5).map(c => (
-                      <div key={c} onClick={() => setEditColor(c)} style={{ width: 16, height: 16, borderRadius: 4, background: c, cursor: 'pointer', border: editColor === c ? '2px solid var(--text-primary)' : '2px solid transparent' }} />
-                    ))}
-                  </div>
                   <button onClick={saveEditTag} style={{ background: '#ECFDF5', border: 'none', borderRadius: 7, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <Check size={12} color="#12C479" />
                   </button>
@@ -875,7 +1082,8 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
           
           {/* Spacer */}
           {tags.length > 0 && cats.length > 0 && (
@@ -883,19 +1091,23 @@ function TagsAndCategoriesTab({ managementMode = false }) {
           )}
           
           {/* Categories */}
-          {cats.map(cat => (
-            <div key={`cat-${cat.id}`}
-              onClick={() => { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedTagId(null); }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-muted, #F0F2F8)'; e.currentTarget.style.borderColor = cat.color; }}
-              onMouseLeave={e => { if (selectedCatId !== cat.id) { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.borderColor = 'var(--border-light)'; } }}
-              style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 12px', background: 'var(--bg-subtle)',
-              borderRadius: 10, border: `1.5px solid ${selectedCatId === cat.id ? cat.color : 'var(--border-light)'}`,
-              transition: 'all 0.15s',
-              cursor: 'pointer',
-              minHeight: 38,
-            }}>
+          {cats.map(cat => {
+            // Use saved bg or generate from color
+            const bgColor = cat.bg || (cat.color ? lightenColor(cat.color, 0.15) : '#F0F2F8');
+            return (
+              <div key={`cat-${cat.id}`}
+                onClick={() => { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedTagId(null); }}
+                onMouseEnter={e => { e.currentTarget.style.background = cat.color ? lightenColor(cat.color, 0.10) : '#F0F2F8'; e.currentTarget.style.borderColor = cat.color; }}
+                onMouseLeave={e => { if (selectedCatId !== cat.id) { e.currentTarget.style.background = bgColor; e.currentTarget.style.borderColor = 'var(--border-light)'; } }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 12px', background: bgColor,
+                  borderRadius: 10, border: `1.5px solid ${selectedCatId === cat.id ? cat.color : 'var(--border-light)'}`,
+                  transition: 'all 0.15s',
+                  cursor: 'pointer',
+                  minHeight: 38,
+                }}
+              >
               {editCatId === cat.id ? (
                 <>
                   <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -907,16 +1119,11 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   </div>
                   <input
                     value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveEditCat()}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditCat()}
                     autoFocus
                     style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }}
                   />
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {COLOR_PALETTE.slice(0, 5).map(c => (
-                      <div key={c} onClick={() => setEditColor(c)} style={{ width: 16, height: 16, borderRadius: 4, background: c, cursor: 'pointer', border: editColor === c ? '2px solid var(--text-primary)' : '2px solid transparent' }} />
-                    ))}
-                  </div>
                   <button onClick={saveEditCat} style={{ background: '#ECFDF5', border: 'none', borderRadius: 7, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <Check size={12} color="#12C479" />
                   </button>
@@ -956,7 +1163,8 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       {copyingTag && <CopyModal item={copyingTag} type="Tag" onClose={() => setCopyingTag(null)} onSave={confirmCopyTag} />}

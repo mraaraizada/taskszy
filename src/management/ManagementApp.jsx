@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLottie } from 'lottie-react';
-import profileUserCardAnim from '../lottie/Profile user card.json';
+import { monitor } from '../lib/performanceMonitor';
+import FeedbackModal from '../components/FeedbackModal';
+import DataLoadError from '../components/DataLoadError';
+import { listenForFeedbackRequests } from '../lib/feedbackBroadcastService';
+
+function useProfileCardAnim() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Profile user card.json').then(m => setData(m.default)); }, []);
+  return data;
+}
 import ManagementSidebar from './ManagementSidebar';
 import MemberHeader from '../member/MemberHeader';
 import PlanInactiveOverlay from '../components/PlanInactiveOverlay';
@@ -51,16 +60,19 @@ const SKELETON_MAP = {
 
 function ProfileUserCardOverlay({ onDone }) {
   const [fading, setFading] = useState(false);
+  const animationData = useProfileCardAnim();
 
   const dismiss = () => {
     setFading(true);
-    setTimeout(onDone, 500);
+    setTimeout(() => {
+      onDone();
+    }, 500);
   };
 
   const { View } = useLottie({
-    animationData: profileUserCardAnim,
+    animationData: animationData ?? null,
     loop: false,
-    autoplay: true,
+    autoplay: !!animationData,
     onComplete: dismiss,
     style: { width: '100vw', height: '100vh', objectFit: 'cover' },
   });
@@ -68,6 +80,7 @@ function ProfileUserCardOverlay({ onDone }) {
   useEffect(() => {
     const t = setTimeout(dismiss, 4000);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -87,25 +100,227 @@ function ProfileUserCardOverlay({ onDone }) {
   );
 }
 
-export default function ManagementApp({ memberId, onLogout, visible }) {
+export default function ManagementApp({ memberId, onLogout, visible, triggerWelcomeAnimation = false }) {
   const [activePage, setActivePage] = useState('home');
   const [pageLoading, setPageLoading] = useState(false);
   const [pageKey, setPageKey] = useState(0);
   const [visitedPages, setVisitedPages] = useState(new Set(['home']));
   const [initialLoading, setInitialLoading] = useState(true);
   const [showProfileCard, setShowProfileCard] = useState(false);
-  const { team, dataLoaded, refreshData, setShowDonutWelcome } = useApp();
-  const member = team.find(m => m.id === memberId);
+  const [waitingForAnimation, setWaitingForAnimation] = useState(false); // Track if we're waiting for first-time animation
+  const hasMarkedWelcomeSeenRef = useRef(false); // Use ref to persist across renders
+  const animationTriggeredRef = useRef(false); // Prevent duplicate animation triggers
+  const [selectedScribeId, setSelectedScribeId] = useState(null); // Track scribe to open in NotesPage
+  const [pageFilteredData, setPageFilteredData] = useState({}); // Store filtered/paginated data from each page for search
+  const [pageExtraProps, setPageExtraProps] = useState({}); // Store extra props for pages (like filterToTaskId)
+  const [feedbackRequest, setFeedbackRequest] = useState(null); // Feedback request from admin
+  
+  // Auto-fix state (must be declared before any conditional returns)
+  const [fixing, setFixing] = useState(false);
+  const [fixed, setFixed] = useState(false);
+  const autoFixAttemptedRef = useRef(false); // Prevent duplicate auto-fix attempts
+  
+  const { team, dataLoaded, refreshData, setShowDonutWelcome, hasSeenDonutWelcome, currentUser, setCurrentUser, saveMember, workspaceId, currentUid, workspaceName, dataLoadError } = useApp();
+  const member = team.find(m => m.id === memberId || m.id === String(memberId) || String(m.id) === String(memberId));
 
-  // Clear initial loading once visible and show profile card
+  // ── Listen for feedback requests from admin ──
   useEffect(() => {
-    if (visible && initialLoading) {
-      setInitialLoading(false);
-      setShowProfileCard(true);
-    }
-  }, [visible, initialLoading]);
+    // Always use workspaceId if available, otherwise use 'ALL' to catch broadcasts to all organizations
+    const listenerId = workspaceId || 'ALL';
+    
+    // Get user's join date to filter out old broadcasts
+    const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
+    
+    console.log('🎯 [ManagementApp] Feedback listener setup check:', {
+      hasWorkspaceId: !!workspaceId,
+      workspaceId: workspaceId,
+      hasCurrentUid: !!currentUid,
+      currentUid: currentUid,
+      listenerId: listenerId,
+      currentUser: currentUser,
+      userCreatedAt: userCreatedAt?.toISOString()
+    });
+    
+    console.log('👂 [ManagementApp] Setting up feedback request listener with ID:', listenerId);
+    
+    const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
+      console.log('📢 [ManagementApp] Feedback request received:', request);
+      setFeedbackRequest(request);
+    }, userCreatedAt);
+    
+    return () => {
+      console.log('🔇 [ManagementApp] Cleaning up feedback request listener');
+      unsubscribe();
+    };
+  }, [workspaceId, currentUid, currentUser]);
 
-  if (!member) return null;
+  // Track page navigation
+  useEffect(() => {
+    monitor.trackPageLoad(`management_${activePage}`);
+  }, [activePage]);
+
+  // Use stable displayMember with caching to prevent flickering
+  const [displayMember, setDisplayMember] = useState(() => {
+    // Initialize with currentUser if available, otherwise use member
+    const initial = currentUser?.memberId === memberId ? currentUser : member;
+    // Never initialize with null/undefined - keep previous value
+    return initial || null;
+  });
+  
+  // Update displayMember only when data actually changes
+  useEffect(() => {
+    const newMember = currentUser?.memberId === memberId ? currentUser : member;
+    
+    // CRITICAL: Don't update if newMember is null/undefined - this prevents flickering
+    // when currentUid temporarily becomes null during initialization
+    if (!newMember || !newMember.id) {
+      console.log('⏳ ManagementApp: Skipping displayMember update - newMember is null/undefined');
+      return;
+    }
+    
+    setDisplayMember(prev => {
+      // Only update if data actually changed
+      if (!prev || 
+          prev.id !== newMember.id ||
+          prev.name !== newMember.name ||
+          prev.avatarImg !== newMember.avatarImg ||
+          prev.role !== newMember.role ||
+          prev.status !== newMember.status) {
+        console.log('✅ ManagementApp: Updating displayMember with new data');
+        return newMember;
+      }
+      console.log('✅ ManagementApp: displayMember unchanged, keeping previous');
+      return prev;
+    });
+  }, [currentUser, member, memberId]);
+
+  // Auto-fix missing team entry silently in the background
+  useEffect(() => {
+    if (dataLoaded && !member && currentUser && workspaceId && !autoFixAttemptedRef.current) {
+      console.log('🔧 Auto-fixing missing team entry for management:', memberId);
+      autoFixAttemptedRef.current = true; // Mark as attempted to prevent duplicates
+      
+      const autoFix = async () => {
+        try {
+          const { getAuth } = await import('firebase/auth');
+          const { getProfile } = await import('../lib/userProfileService');
+          const auth = getAuth();
+          const uid = auth.currentUser?.uid;
+          
+          if (!uid) return;
+          
+          // Load user profile to get email
+          const userProfile = await getProfile(uid);
+          if (!userProfile || !userProfile.email) {
+            console.error('❌ Cannot auto-fix: user profile or email not found');
+            return;
+          }
+          
+          // Create team entry from current user profile
+          const newMember = {
+            id: memberId,
+            name: currentUser.name || userProfile.name || 'Management',
+            email: userProfile.email, // Use email from Firestore profile
+            phone: currentUser.phone || userProfile.phone || '',
+            location: currentUser.location || 'Not Set',
+            role: currentUser.role || 'Management',
+            avatar: currentUser.avatar || 'M',
+            color: currentUser.color || '#3B5BFC',
+            status: 'Active',
+            joined: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+            desc: currentUser.desc || '',
+            about: currentUser.about || '',
+            avatarImg: currentUser.avatarImg || null,
+            tasks: 0,
+            completed: 0,
+            rating: 0,
+            uid: uid,
+            addedBy: { name: 'System', avatar: 'S', color: '#3B5BFC' }
+          };
+          
+          console.log('💾 Auto-creating team entry:', newMember);
+          saveMember(newMember, null);
+        } catch (error) {
+          console.error('❌ Auto-fix failed:', error);
+        }
+      };
+      
+      autoFix();
+    }
+  }, [dataLoaded, member, currentUser, workspaceId, memberId, saveMember]);
+
+  // Check if user has seen welcome animation and show it only once
+  // This should only trigger AFTER workspace setup is complete
+  useEffect(() => {
+    // Don't show animations if not visible or no user data
+    if (!visible || !currentUser || !currentUid) return;
+    
+    // Don't show animations during initial loading
+    if (initialLoading) return;
+    
+    if (!hasMarkedWelcomeSeenRef.current) {
+      hasMarkedWelcomeSeenRef.current = true;
+      
+      // Show profile card for first-time users ONLY after workspace setup
+      // The profile card will be triggered from App.jsx after setup completes
+      if (!hasSeenDonutWelcome) {
+        console.log('🎴 First-time management user - ready for animations after setup');
+        // Don't trigger here - let App.jsx trigger after workspace setup
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, currentUser, currentUid, initialLoading]);
+
+  // Trigger profile card animation when prop changes (after workspace setup)
+  useEffect(() => {
+    // Prevent duplicate triggers
+    if (animationTriggeredRef.current) {
+      console.log('⚠️ Animation already triggered, skipping');
+      return;
+    }
+    
+    if (triggerWelcomeAnimation && !hasSeenDonutWelcome && visible) {
+      console.log('🎴 Triggering profile card animation after workspace setup');
+      animationTriggeredRef.current = true; // Mark as triggered
+      
+      // Set initial loading to false first
+      setInitialLoading(false);
+      // Block dashboard rendering until animation completes
+      setWaitingForAnimation(true);
+      // Then show profile card after a delay
+      setTimeout(() => {
+        setShowProfileCard(true);
+      }, 500);
+    } else if (visible && currentUser && currentUid && !triggerWelcomeAnimation) {
+      // Returning user - no animation needed, unblock dashboard immediately
+      console.log('✅ Returning management user - skipping animation, showing dashboard immediately');
+      setWaitingForAnimation(false);
+      setInitialLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerWelcomeAnimation, hasSeenDonutWelcome, visible, currentUser, currentUid, dataLoaded]);
+
+  // Wait for data to load before checking member (but skip for returning users)
+  if ((!dataLoaded || waitingForAnimation) && initialLoading) {
+    console.log('⏳ Management waiting for data to load or animation...', { dataLoaded, waitingForAnimation, initialLoading });
+    return <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading...</div>
+    </div>;
+  }
+
+  // Set initial loading to false once data is loaded (for returning users)
+  if (initialLoading && dataLoaded && !waitingForAnimation) {
+    console.log('✅ Data loaded - setting initialLoading to false');
+    setInitialLoading(false);
+  }
+
+  if (!member) {
+    // Show loading skeleton while auto-fix creates the team entry
+    console.log('⏳ Management member not found, auto-fix in progress...');
+    return <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading...</div>
+    </div>;
+  }
 
   const page = PAGE_CONFIG[activePage] || PAGE_CONFIG.home;
 
@@ -114,6 +329,9 @@ export default function ManagementApp({ memberId, onLogout, visible }) {
       refreshData();
       return;
     }
+
+    // Clear page extra props when navigating to a different page
+    setPageExtraProps({});
 
     if (!visitedPages.has(p)) {
       // First visit — show skeleton
@@ -130,18 +348,115 @@ export default function ManagementApp({ memberId, onLogout, visible }) {
       setActivePage(p);
     }
   };
+  
+  const handleSearchResultClick = ({ type, data }) => {
+    console.log('🔍 Search result clicked (Management):', { type, data, currentPage: activePage });
+    
+    switch (type) {
+      case 'task':
+        if (activePage === 'home') {
+          // On home page, open task modal directly
+          setPageExtraProps({ openTaskId: data.id });
+          setPageKey(k => k + 1);
+        } else if (activePage === 'tasks' || activePage === 'payments') {
+          // Show ONLY this task in the table
+          setPageExtraProps({ filterToTaskId: data.id });
+          setPageKey(k => k + 1);
+        } else {
+          // Navigate to tasks page and show only this task
+          handleNav('tasks');
+          setTimeout(() => {
+            setPageExtraProps({ filterToTaskId: data.id });
+            setPageKey(k => k + 1);
+          }, 100);
+        }
+        break;
+      
+      case 'scribe':
+        // Open scribe in notes page
+        setSelectedScribeId(data.id);
+        if (activePage !== 'notes') {
+          handleNav('notes');
+        } else {
+          setPageKey(k => k + 1);
+        }
+        break;
+      
+      case 'member':
+        // Highlight member on team page
+        if (activePage === 'team') {
+          setPageExtraProps({ filterToMemberId: data.id });
+          setPageKey(k => k + 1);
+        } else {
+          handleNav('team');
+          setTimeout(() => {
+            setPageExtraProps({ filterToMemberId: data.id });
+            setPageKey(k => k + 1);
+          }, 100);
+        }
+        break;
+      
+      case 'help':
+        // Show help submission on help page
+        if (activePage === 'help') {
+          setPageExtraProps({ filterToHelpId: data.id });
+          setPageKey(k => k + 1);
+        } else {
+          handleNav('help');
+          setTimeout(() => {
+            setPageExtraProps({ filterToHelpId: data.id });
+            setPageKey(k => k + 1);
+          }, 100);
+        }
+        break;
+    }
+  };
 
   function renderPage() {
     switch (activePage) {
-      case 'tasks':    return <TasksPage hideBudget={true} hideTimeline={true} currentUser={member} managementMode={true} onNavigateToNotes={() => handleNav('notes')} />;
-      case 'team':     return <TeamPage managementMode={true} />;
+      case 'tasks':    return <TasksPage hideBudget={true} hideTimeline={true} currentUser={displayMember} managementMode={true} onNavigateToNotes={(scribeId) => { 
+        console.log('📥 ManagementApp received scribe ID from TasksPage:', scribeId);
+        setSelectedScribeId(scribeId); 
+        handleNav('notes'); 
+      }} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
+      case 'team':     return <TeamPage managementMode={true} setPageFilteredData={setPageFilteredData} filterToMemberId={pageExtraProps.filterToMemberId} />;
       case 'manage':   return <RolesPage managementMode={true} />;
-      case 'payments': return <MemberPayments member={member} />;
-      case 'workdesc': return <MemberWorkDesc member={member} />;
-      case 'notes':    return <NotesPage deletedBy={{ id: member.id, name: member.name, role: member.role, avatar: member.avatar, color: member.color }} currentUser={{ id: member.id, name: member.name, role: member.role, userRole: 'management' }} onNavigateToTask={() => handleNav('tasks')} />;
-      case 'help':     return <ManagementHelp member={member} />;
-      case 'profile':  return <ManagementProfile member={member} />;
-      default:         return <ManagementHome member={member} setActivePage={handleNav} />;
+      case 'payments': return <MemberPayments member={displayMember} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
+      case 'workdesc': return <MemberWorkDesc member={displayMember} />;
+      case 'notes':    return <NotesPage 
+        deletedBy={{ 
+          id: displayMember.id, 
+          name: displayMember.name, 
+          role: displayMember.role, 
+          avatar: displayMember.avatar, 
+          color: displayMember.color 
+        }} 
+        currentUser={{ 
+          id: displayMember.id, 
+          uid: displayMember.uid || currentUid || currentUser?.uid, // Try multiple sources for uid
+          name: displayMember.name, 
+          role: displayMember.role, 
+          userRole: 'management',
+          memberId: displayMember.id,
+          avatar: displayMember.avatar,
+          color: displayMember.color,
+          avatarImg: displayMember.avatarImg
+        }}
+        selectedScribeId={selectedScribeId}
+        onScribeOpened={() => {
+          console.log('🧹 Clearing selectedScribeId (Management)');
+          setSelectedScribeId(null);
+        }}
+        onNavigateToTask={() => handleNav('tasks')} 
+        setPageFilteredData={setPageFilteredData}
+      />;
+      case 'help':     return <ManagementHelp member={displayMember} setPageFilteredData={setPageFilteredData} filterToHelpId={pageExtraProps.filterToHelpId} />;
+      case 'profile':  return <ManagementProfile member={displayMember} />;
+      default:         return <ManagementHome member={displayMember} setActivePage={handleNav} onNavigateToNotes={(noteId) => {
+        console.log('📥 ManagementApp received note ID:', noteId);
+        setSelectedScribeId(noteId);
+        handleNav('notes');
+      }} openTaskId={pageExtraProps.openTaskId} />;
     }
   }
 
@@ -220,6 +535,11 @@ export default function ManagementApp({ memberId, onLogout, visible }) {
     );
   }
 
+  // ── Data load error - show manual retry button ──
+  if (dataLoadError) {
+    return <DataLoadError error={dataLoadError} onRetry={refreshData} />;
+  }
+
   return (
     <div style={{
       display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden',
@@ -229,9 +549,9 @@ export default function ManagementApp({ memberId, onLogout, visible }) {
       transition: 'opacity 0.4s ease, transform 0.4s ease, background 0.25s ease',
     }}>
       <SkeletonStyles />
-      <ManagementSidebar activePage={activePage} setActivePage={handleNav} member={member} onLogout={onLogout} />
+      <ManagementSidebar activePage={activePage} setActivePage={handleNav} member={displayMember} onLogout={onLogout} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', overflow: 'hidden' }}>
-        <MemberHeader title={page.title} subtitle={page.subtitle} member={member} searchAllTasks={true} />
+        <MemberHeader title={page.title} subtitle={page.subtitle} member={displayMember} searchAllTasks={true} currentPage={activePage} onSearchResultClick={handleSearchResultClick} pageFilteredData={pageFilteredData} />
         <div
           key={pageKey}
           className="page-enter"
@@ -244,14 +564,48 @@ export default function ManagementApp({ memberId, onLogout, visible }) {
 
       {/* Profile user card overlay */}
       {showProfileCard && (
-        <ProfileUserCardOverlay onDone={() => { 
-          setShowProfileCard(false); 
-          // Only show donut welcome if user hasn't seen it before
-          const hasSeenWelcome = localStorage.getItem('hasSeenDonutWelcome');
-          if (hasSeenWelcome !== 'true') {
-            setShowDonutWelcome(true);
+        <ProfileUserCardOverlay onDone={async () => { 
+          setShowProfileCard(false);
+          
+          // Mark welcome animation as seen
+          if (currentUid && currentUser?.hasSeenWelcomeAnimation !== true) {
+            try {
+              const { updateProfile } = await import('../lib/userProfileService');
+              await updateProfile(currentUid, { hasSeenWelcomeAnimation: true });
+              console.log('✅ Welcome animation marked as seen (Management)');
+              
+              setCurrentUser(prev => ({
+                ...prev,
+                hasSeenWelcomeAnimation: true
+              }));
+            } catch (err) {
+              console.error('❌ Failed to mark welcome animation as seen:', err);
+            }
+          }
+          
+          // Allow dashboard to render now
+          setWaitingForAnimation(false);
+          
+          // Show donut welcome if not seen yet
+          if (!hasSeenDonutWelcome) {
+            console.log('🍩 Showing donut welcome after profile card (Management)');
+            setTimeout(() => setShowDonutWelcome(true), 400);
           }
         }} />
+      )}
+
+      {/* Feedback Modal - Shows when admin sends feedback request */}
+      {feedbackRequest && displayMember && (
+        <FeedbackModal
+          feedbackRequest={feedbackRequest}
+          organizationId={workspaceId}
+          organizationName={workspaceName || 'Your Organization'}
+          userId={currentUid}
+          userName={displayMember.name}
+          userEmail={displayMember.email}
+          userPhone={displayMember.phone || ''}
+          userRole="management"
+        />
       )}
     </div>
   );

@@ -1,29 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { notify } from './lib/notify';
+import { onAuthChanged, signOutUser } from './lib/authService';
+import { getProfile, stampLogin, clearSession } from './lib/userProfileService';
+import { db } from './lib/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useLottie } from 'lottie-react';
-import welcomeAnimation from './lottie/Welcome.json';
-import profileUserCardAnimation from './lottie/Profile user card.json';
 import { Toaster } from './components/ui/sonner';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
-import LoginPage from './pages/LoginPage';
-import TasksPage from './pages/TasksPage';
-import TeamPage from './pages/TeamPage';
-import FinancialPage from './pages/FinancialPage';
-import RolesPage from './pages/RolesPage';
-import SettingsPage from './pages/SettingsPage';
-import PerformancePage from './pages/PerformancePage';
-import ReportsPage from './pages/ReportsPage';
-import NotesPage from './pages/NotesPage';
-import HelpPage from './pages/HelpPage';
-import TrashPage from './pages/TrashPage';
-import SheetPage from './pages/SheetPage';
 import WorkspaceSetup from './components/WorkspaceSetup';
+import FeedbackModal from './components/FeedbackModal';
+import DataLoadError from './components/DataLoadError';
 import { MultiStepLoader } from './components/ui/multi-step-loader';
-import ManagementApp from './management/ManagementApp';
-import MemberApp from './member/MemberApp';
 import {
   SkeletonStyles,
   DashboardSkeleton, TasksSkeleton, TeamSkeleton,
@@ -31,7 +20,49 @@ import {
   PerformanceSkeleton, NotesSkeleton, HelpSkeleton, SettingsSkeleton,
   AppShellSkeleton,
 } from './components/Skeleton';
+import { monitor } from './lib/performanceMonitor';
+import { listenForFeedbackRequests } from './lib/feedbackBroadcastService';
 
+// Load migration tools (available in console)
+import './lib/migrationRunner';
+
+// Load feature flags (available in console)
+import './lib/featureFlags';
+
+// ── Dynamically loaded lottie JSONs (keep them out of the main bundle) ────────
+function useWelcomeAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('./lottie/Welcome.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+function useProfileCardAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('./lottie/Profile user card.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+function useProfileUserCardAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('./lottie/Profile user card.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+
+// ── Lazy-loaded pages (each becomes its own chunk) ────────────────────────────
+const LoginPage      = lazy(() => import('./pages/LoginPage'));
+const TasksPage      = lazy(() => import('./pages/TasksPage'));
+const TeamPage       = lazy(() => import('./pages/TeamPage'));
+const FinancialPage  = lazy(() => import('./pages/FinancialPage'));
+const RolesPage      = lazy(() => import('./pages/RolesPage'));
+const SettingsPage   = lazy(() => import('./pages/SettingsPage'));
+const PerformancePage = lazy(() => import('./pages/PerformancePage'));
+const ReportsPage    = lazy(() => import('./pages/ReportsPage'));
+const NotesPage      = lazy(() => import('./pages/NotesPage'));
+const HelpPage       = lazy(() => import('./pages/HelpPage'));
+const TrashPage      = lazy(() => import('./pages/TrashPage'));
+const SheetPage      = lazy(() => import('./pages/SheetPage'));
+const ManagementApp  = lazy(() => import('./management/ManagementApp'));
+const MemberApp      = lazy(() => import('./member/MemberApp'));
+
+// ── Page metadata ─────────────────────────────────────────────────────────────
 const pageConfig = {
   dashboard:   { title: 'Dashboard',     subtitle: 'Welcome back, Admin!' },
   tasks:       { title: 'Tasks',          subtitle: 'Manage and track all tasks' },
@@ -58,104 +89,92 @@ const SKELETON_MAP = {
   notes:       NotesSkeleton,
   help:        HelpSkeleton,
   settings:    SettingsSkeleton,
-  trash:       NotesSkeleton, // Reuse notes skeleton for trash
+  trash:       NotesSkeleton,
 };
 
-function renderPage(activeItem, extraProps = {}) {
+// ── Page renderer ─────────────────────────────────────────────────────────────
+function renderPage(activeItem, handleNav, extraProps = {}, onNavigateToNotes, setPageFilteredData) {
   switch (activeItem) {
-    case 'tasks':       return <TasksPage currentUser={{ name: 'Admin', role: 'Administrator', avatar: 'A', color: '#3B5BFC' }} onNavigateToNotes={() => handleNav('notes')} {...extraProps} />;
-    case 'team':        return <TeamPage />;
-    case 'financial':   return <FinancialPage />;
+    case 'tasks':       return <TasksPage onNavigateToNotes={() => handleNav('notes')} onNavigateToManage={() => handleNav('roles')} onNavigateToFinancial={(taskId) => handleNav('financial', { prefilledTaskId: taskId })} setPageFilteredData={setPageFilteredData} filterToTaskId={extraProps.filterToTaskId} {...extraProps} />;
+    case 'team':        return <TeamPage onNavigateToManage={() => handleNav('roles')} setPageFilteredData={setPageFilteredData} {...extraProps} />;
+    case 'financial':   return <FinancialPage prefilledTaskId={extraProps.prefilledTaskId} filterToTaskId={extraProps.filterToTaskId} setPageFilteredData={setPageFilteredData} />;
     case 'roles':       return <RolesPage />;
     case 'performance': return <PerformancePage />;
     case 'reports':     return <ReportsPage />;
-    case 'notes':       return <NotesPage onNavigateToTask={() => handleNav('tasks')} />;
+    case 'notes':       return <NotesPage onNavigateToTask={() => handleNav('tasks')} selectedScribeId={extraProps.selectedScribeId} onScribeOpened={extraProps.onScribeOpened} setPageFilteredData={setPageFilteredData} />;
     case 'sheet':       return <SheetPage />;
-    case 'help':        return <HelpPage />;
+    case 'help':        return <HelpPage setPageFilteredData={setPageFilteredData} />;
     case 'trash':       return <TrashPage />;
     case 'settings':    return <SettingsPage />;
-    default:            return <Dashboard {...extraProps} />;
+    default:            return <Dashboard {...extraProps} onNavigateToNotes={onNavigateToNotes} />;
   }
 }
 
+// ── Overlays ──────────────────────────────────────────────────────────────────
 function ProfileWelcomeOverlay({ onDone }) {
   const [fading, setFading] = useState(false);
-
-  const dismiss = () => {
-    setFading(true);
-    setTimeout(onDone, 500);
-  };
-
+  const animationData = useProfileCardAnimation();
+  const dismiss = () => { setFading(true); setTimeout(onDone, 500); };
   const { View } = useLottie({
-    animationData: profileUserCardAnimation,
-    loop: false,
-    autoplay: true,
-    onComplete: dismiss,
+    animationData: animationData ?? null,
+    loop: false, autoplay: !!animationData, onComplete: dismiss,
     style: { width: '100vw', height: '100vh' },
   });
-
-  useEffect(() => {
-    const t = setTimeout(dismiss, 4000);
-    return () => clearTimeout(t);
-  }, []);
-
+  useEffect(() => { const t = setTimeout(dismiss, 4000); return () => clearTimeout(t); }, []);
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(255,255,255,0.95)',
-        pointerEvents: 'none',
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 0.5s ease',
-      }}
-    >
-      {View}
-    </div>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(255,255,255,0.95)', pointerEvents: 'none',
+      opacity: fading ? 0 : 1, transition: 'opacity 0.5s ease',
+    }}>{animationData ? View : null}</div>
   );
 }
 
 function WelcomeOverlay({ onDone }) {
   const [fading, setFading] = useState(false);
-
-  const dismiss = () => {
-    setFading(true);
-    setTimeout(onDone, 400);
-  };
-
+  const animationData = useWelcomeAnimation();
+  const dismiss = () => { setFading(true); setTimeout(onDone, 400); };
   const { View } = useLottie({
-    animationData: welcomeAnimation,
-    loop: false,
-    autoplay: true,
-    onComplete: dismiss,
+    animationData: animationData ?? null,
+    loop: false, autoplay: !!animationData, onComplete: dismiss,
     style: { width: '100vw', height: '100vh' },
   });
-
-  useEffect(() => {
-    const t = setTimeout(dismiss, 4000);
-    return () => clearTimeout(t);
-  }, []);
-
+  useEffect(() => { const t = setTimeout(dismiss, 4000); return () => clearTimeout(t); }, []);
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-        background: 'rgba(15,20,40,0.35)',
-        pointerEvents: 'none',
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 0.4s ease',
-      }}
-    >
-      {View}
-    </div>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      background: 'rgba(15,20,40,0.35)', pointerEvents: 'none',
+      opacity: fading ? 0 : 1, transition: 'opacity 0.4s ease',
+    }}>{animationData ? View : null}</div>
+  );
+}
+
+function ProfileUserCardOverlay({ onDone }) {
+  const [fading, setFading] = useState(false);
+  const animationData = useProfileUserCardAnimation();
+  const dismiss = () => { setFading(true); setTimeout(onDone, 500); };
+  const { View } = useLottie({
+    animationData: animationData ?? null,
+    loop: false, autoplay: !!animationData, onComplete: dismiss,
+    style: { width: '100vw', height: '100vh', objectFit: 'cover' },
+  });
+  useEffect(() => { const t = setTimeout(dismiss, 4000); return () => clearTimeout(t); }, []);
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      background: 'rgba(15,20,40,0.35)', pointerEvents: 'none',
+      opacity: fading ? 0 : 1, transition: 'opacity 0.5s ease',
+    }}>{animationData ? View : null}</div>
   );
 }
 
 function PlanInactiveOverlay() {
   const { triggerPlanBlink } = useApp();
-
   return (
     <div
       onClick={() => triggerPlanBlink()}
@@ -164,31 +183,405 @@ function PlanInactiveOverlay() {
   );
 }
 
+// ── Management Password Prompt ────────────────────────────────────────────────
+function MgmtPasswordPrompt({ onComplete }) {
+  const { adminPassword } = useApp();
+  const [pwd, setPwd] = useState('');
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState('');
+  const [focus, setFocus] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (pwd === adminPassword) {
+      onComplete();
+    } else {
+      setError('Incorrect password. Please try again.');
+      setPwd('');
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      backdropFilter: 'blur(4px)', background: 'rgba(15,20,40,0.35)',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 24, padding: '40px 44px 36px',
+        width: '100%', maxWidth: 420,
+        boxShadow: '0 24px 64px rgba(59,91,252,0.12)',
+        animation: 'wsSetupIn 0.4s cubic-bezier(0.22,1,0.36,1) both',
+      }}>
+        <style>{`@keyframes wsSetupIn { from { opacity:0; transform:translateY(24px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+        <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #7C3AED, #3B5BFC)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1A1D2E', letterSpacing: '-0.5px', marginBottom: 4 }}>Management Access</h2>
+        <p style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 24 }}>Enter the admin password to access the management dashboard.</p>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              autoFocus
+              type={show ? 'text' : 'password'}
+              value={pwd}
+              onChange={e => { setPwd(e.target.value); setError(''); }}
+              placeholder="Admin password"
+              style={{
+                width: '100%', height: 48, borderRadius: 10, boxSizing: 'border-box',
+                border: `1.5px solid ${error ? '#FECACA' : focus ? '#7C3AED' : '#E5E7EB'}`,
+                padding: '0 44px 0 16px', fontSize: 14, color: '#1A1D2E', outline: 'none',
+                background: focus ? '#F9F5FF' : '#FAFBFF',
+                boxShadow: focus ? '0 0 0 3px rgba(124,58,237,0.10)' : 'none',
+                transition: 'border-color 0.2s, background 0.2s',
+              }}
+              onFocus={() => setFocus(true)}
+              onBlur={() => setFocus(false)}
+            />
+            <button type="button" onClick={() => setShow(v => !v)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF' }}>
+              {show
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              }
+            </button>
+          </div>
+          {error && (
+            <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={!pwd}
+            style={{ width: '100%', height: 50, borderRadius: 12, border: 'none', background: pwd ? 'linear-gradient(135deg, #7C3AED, #3B5BFC)' : '#E5E7EB', color: pwd ? '#fff' : '#9CA3AF', fontSize: 15, fontWeight: 700, cursor: pwd ? 'pointer' : 'default', boxShadow: pwd ? '0 6px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.2s' }}
+          >
+            Enter Dashboard
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main shell ────────────────────────────────────────────────────────────────
 function AppShell() {
-  const [auth, setAuth]             = useState(null);
-  const [activeItem, setActiveItem] = useState('dashboard');
+  const [auth, setAuth]               = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [activeItem, setActiveItem]   = useState('dashboard');
   const [dashVisible, setDashVisible] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
-  const [pageKey, setPageKey] = useState(0);
+  const [pageKey, setPageKey]         = useState(0);
   const [visitedPages, setVisitedPages] = useState(new Set());
   const [openCreateOnMount, setOpenCreateOnMount] = useState(false);
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
-  const [workspace, setWorkspace] = useState(null);
-  const [showLoader, setShowLoader] = useState(false);
+  const [workspace, setWorkspace]     = useState(null);
+  const [showLoader, setShowLoader]   = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showMgmtPwdPrompt, setShowMgmtPwdPrompt] = useState(false);
+  const [triggerMgmtAnimation, setTriggerMgmtAnimation] = useState(false); // Trigger management animations after setup
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [pageExtraProps, setPageExtraProps] = useState({}); // Store extra props for pages (like prefilledTaskId)
+  const [selectedScribeId, setSelectedScribeId] = useState(null); // Track scribe to open in NotesPage
+  const [pageFilteredData, setPageFilteredData] = useState({}); // Store filtered/paginated data from each page for search
+  const [feedbackRequest, setFeedbackRequest] = useState(null); // Feedback request from admin
+
+  // Track page navigation
+  useEffect(() => {
+    monitor.trackPageLoad(`admin_${activeItem}`);
+  }, [activeItem]);
+  // Track first-ever setup locally so the welcome animation isn't skipped
+  const isFirstSetupRef = useRef(false);
+  const mgmtAnimationTriggeredRef = useRef(false); // Prevent duplicate management animation triggers
+
+  // Debug: Log when showWorkspaceSetup changes
+  useEffect(() => {
+    console.log('🎨 showWorkspaceSetup changed:', showWorkspaceSetup);
+  }, [showWorkspaceSetup]);
+
+  const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const ACTIVITY_THROTTLE  = 5 * 60 * 1000;            // 5 minutes
 
   const loadingStates = [
-    { text: 'Setting up your workspace…' },
-    { text: 'Loading your projects…' },
-    { text: 'Syncing team members…' },
-    { text: 'Preparing your dashboard…' },
-    { text: 'Almost there…' },
+    { text: 'Setting up your workspace...' },
+    { text: 'Loading your projects...' },
+    { text: 'Syncing team members...' },
+    { text: 'Preparing your dashboard...' },
+    { text: 'Almost there...' },
   ];
-  const { dataLoaded, refreshData, isPlanActive, setShowDonutWelcome } = useApp();
 
-  // Once data loads after initial login, clear the initial loading flag
-  // and mark dashboard as visited
+  const { dataLoaded, refreshData, isPlanActive, setShowDonutWelcome, setCurrentUser, currentUser, currentUid, setCurrentUid, setWorkspaceId, hasSeenDonutWelcome, hasCompletedSetup, saveWorkspaceSettings, workspaceId, workspaceName, dataLoadError } = useApp();
+
+  // ── Listen for feedback requests from admin ──
+  useEffect(() => {
+    // Always use workspaceId if available, otherwise use 'ALL' to catch broadcasts to all organizations
+    const listenerId = workspaceId || 'ALL';
+    
+    // Get user's join date to filter out old broadcasts
+    const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
+    
+    console.log('🎯 Feedback listener setup check:', {
+      hasWorkspaceId: !!workspaceId,
+      workspaceId: workspaceId,
+      hasCurrentUid: !!currentUid,
+      currentUid: currentUid,
+      listenerId: listenerId,
+      currentUser: currentUser,
+      userCreatedAt: userCreatedAt?.toISOString()
+    });
+    
+    // Don't require currentUid - listener can work without it
+    // currentUid is only needed for dismissing feedback, not for receiving it
+    
+    console.log('👂 Setting up feedback request listener with ID:', listenerId);
+    
+    const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
+      console.log('📢 Feedback request received in App.jsx:', request);
+      setFeedbackRequest(request);
+    }, userCreatedAt);
+    
+    return () => {
+      console.log('🔇 Cleaning up feedback request listener');
+      unsubscribe();
+    };
+  }, [workspaceId, currentUid, currentUser]);
+
+  // ── Persistent session via onAuthStateChanged ──
+  // Use a ref to track if login was already handled by LoginPage
+  // to prevent double-trigger on signup (Firebase fires onAuthStateChanged immediately after createUser)
+  const loginHandledRef = useRef(false);
+  const loginInProgressRef = useRef(false); // Track if login is currently in progress
+  const logoutInProgressRef = useRef(false);
+  const expiredLogoutRef = useRef(false); // true only when logout was triggered by session expiry
+
+  useEffect(() => {
+    const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    const unsubscribe = onAuthChanged(async (user) => {
+      console.log('🔐 onAuthChanged fired:', { 
+        hasUser: !!user, 
+        uid: user?.uid, 
+        email: user?.email,
+        logoutInProgress: logoutInProgressRef.current,
+        loginInProgress: loginInProgressRef.current
+      });
+      
+      // Skip if logout is in progress — prevents false expiry detection
+      if (logoutInProgressRef.current) {
+        console.log('⚠️ Logout in progress - skipping auth state change');
+        setAuthLoading(false);
+        return;
+      }
+      
+      // Skip if login is in progress — let LoginPage handle it
+      if (loginInProgressRef.current) {
+        console.log('⚠️ Login in progress - skipping onAuthChanged to prevent duplicate handleLogin');
+        setAuthLoading(false);
+        return;
+      }
+      
+      if (!user) {
+        // No user - logged out state
+        console.log('🔐 onAuthChanged: No user (logged out)', {
+          logoutInProgress: logoutInProgressRef.current,
+          loginInProgress: loginInProgressRef.current
+        });
+        
+        // If logout is in progress, this is expected - don't do anything
+        if (logoutInProgressRef.current) {
+          console.log('⚠️ Logout in progress - user=null is expected');
+          setAuthLoading(false);
+          return;
+        }
+        
+        // If login is in progress and user becomes null, this might be a race condition
+        // Wait for login to complete instead of showing login page
+        if (loginInProgressRef.current) {
+          console.log('⚠️ Login in progress but user=null - waiting for login to complete');
+          setAuthLoading(false);
+          return;
+        }
+        
+        setAuthLoading(false);
+        return;
+      }
+      
+      // User is authenticated - proceed with profile loading
+      console.log('✅ User authenticated, loading profile...');
+      
+      if (user) {
+        const profile = await getProfile(user.uid);
+        if (profile) {
+          const now = Date.now();
+          const sinceLogin    = profile.loginTime        ? now - profile.loginTime.toMillis()        : 0;
+          const sinceActivity = profile.lastActivityTime ? now - profile.lastActivityTime.toMillis() : 0;
+
+          if (sinceLogin >= SESSION_TIMEOUT_MS || sinceActivity >= SESSION_TIMEOUT_MS) {
+            expiredLogoutRef.current = true;
+            logoutInProgressRef.current = true;
+            await signOutUser();
+            if (currentUid) clearSession(currentUid).catch(() => {});
+            logoutInProgressRef.current = false;
+            setSessionExpired(true);
+            setAuthLoading(false);
+            return;
+          }
+
+          if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
+
+          // Check user's own hasCompletedSetup flag (per-user, not workspace)
+          let completedSetup = profile.hasCompletedSetup === true;
+          
+          // ⭐ Determine user role and normalize it
+          // Map Firestore profile.role to userRole (admin/management/member)
+          let userRole = 'member'; // default
+          
+          if (profile.workspaceId && profile.workspaceId === `ws_${user.uid}`) {
+            // User's workspace ID matches their UID - they are the owner/admin
+            userRole = 'admin';
+            console.log('👑 User is workspace owner - setting role to admin');
+          } else if (profile.role) {
+            // Map profile.role to userRole
+            const roleLower = profile.role.toLowerCase();
+            if (roleLower === 'admin' || roleLower.includes('admin')) {
+              userRole = 'admin';
+            } else if (roleLower === 'management' || roleLower.includes('management') || roleLower.includes('manager')) {
+              userRole = 'management';
+            } else {
+              userRole = 'member';
+            }
+            console.log('🔐 Role mapping:', { 
+              firestoreRole: profile.role, 
+              mappedUserRole: userRole 
+            });
+          }
+          
+          console.log('🔍 User profile check:', { 
+            uid: user.uid, 
+            role: profile.role,
+            determinedRole: userRole,
+            workspaceId: profile.workspaceId,
+            isOwner: profile.workspaceId === `ws_${user.uid}`,
+            hasCompletedSetup: profile.hasCompletedSetup, 
+            completedSetup,
+            willShowSetup: !completedSetup
+          });
+          let hasPlan = false;
+          
+          if (profile.workspaceId) {
+            try {
+              // Check workspace doc for plan selection AND setup completion
+              const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
+              if (workspaceSnap.exists()) {
+                const wsData = workspaceSnap.data();
+                hasPlan = wsData?.plan?.id != null;
+                
+                // Check workspace's hasCompletedSetup flag (most reliable source)
+                const workspaceSetupComplete = wsData?.settings?.hasCompletedSetup === true;
+                
+                console.log('🔍 Workspace setup status:', {
+                  workspaceId: profile.workspaceId,
+                  workspaceSetupComplete,
+                  userSetupComplete: profile.hasCompletedSetup,
+                  hasPlan,
+                  wsDataSettings: wsData?.settings
+                });
+                
+                // For workspace owners (admins), use workspace's setup flag
+                // For other users, use their own profile flag
+                if (profile.workspaceId === `ws_${user.uid}`) {
+                  // User is workspace owner - use workspace setup flag
+                  completedSetup = workspaceSetupComplete;
+                  console.log('👑 Workspace owner - using workspace setup flag:', completedSetup);
+                } else {
+                  // User is not owner - use their own profile flag
+                  completedSetup = profile.hasCompletedSetup === true;
+                  console.log('👥 Non-owner user - using profile setup flag:', completedSetup);
+                }
+                
+                // Store workspace settings for pre-filling setup form
+                // Only pre-fill if workspace has been set up before (has name)
+                if (wsData?.settings && wsData.settings.workspaceName) {
+                  const workspaceData = {
+                    workspaceName: wsData.settings.workspaceName || '',
+                    workspaceSub: wsData.settings.workspaceSub || '',
+                    workspaceLogo: wsData.settings.workspaceLogo || null,
+                  };
+                  console.log('📦 Loading workspace data for setup (pre-configured):', workspaceData);
+                  setWorkspace(workspaceData);
+                } else {
+                  console.log('📦 No workspace data - first time setup (editable)');
+                  setWorkspace(null);
+                }
+              } else {
+                // Workspace document doesn't exist - first time setup needed
+                console.log('⚠️ Workspace document does not exist - first time setup needed');
+                completedSetup = false;
+              }
+            } catch (err) {
+              console.error('❌ Error loading workspace data:', err);
+              // On error, assume setup not complete to be safe
+              completedSetup = false;
+            }
+          }
+
+          // If admin without completed setup, don't auto-login (force them through setup)
+          // EXCEPTION: If this is a session re-login (user was already logged in before), always let them through
+          const isRelogin = expiredLogoutRef.current || sessionExpired;
+          if (userRole === 'admin' && !completedSetup && !isRelogin) {
+            console.log('⚠️ Admin without completed setup - blocking auto-login to force workspace setup');
+            setAuthLoading(false);
+            return;
+          }
+          
+          // If this is a re-login after session expiry, always mark setup as complete
+          // to prevent showing workspace setup again
+          if (isRelogin && completedSetup === false) {
+            completedSetup = true;
+            console.log('✅ Re-login detected - marking setup as complete to skip workspace setup');
+          }
+
+          console.log('✅ Calling handleLogin with role:', userRole, 'completedSetup:', completedSetup);
+          
+          // CRITICAL: Set currentUid IMMEDIATELY before any async operations
+          // This ensures Firestore listeners have the uid when they initialize
+          console.log('🔑 Setting currentUid to:', user.uid);
+          setCurrentUid(user.uid);
+          console.log('🔑 setCurrentUid called - AppContext should receive it now');
+          
+          // Also set workspaceId immediately
+          if (profile.workspaceId) {
+            console.log('🏢 Setting workspaceId to:', profile.workspaceId);
+            setWorkspaceId(profile.workspaceId);
+          }
+          
+          // Only call handleLogin if it hasn't been handled by LoginPage
+          // loginHandledRef is set to true after LoginPage completes login
+          // On reload, loginHandledRef is false, so handleLogin will be called
+          // CRITICAL: Also check loginInProgressRef to prevent race condition during login
+          if (!loginHandledRef.current && !loginInProgressRef.current) {
+            console.log('📞 Calling handleLogin from onAuthChanged...');
+            handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false);
+          } else {
+            // LoginPage already handled login OR login is in progress
+            console.log('✅ Login already handled or in progress - skipping handleLogin');
+            if (loginInProgressRef.current) {
+              console.log('⏳ Login in progress - onAuthChanged will not interfere');
+            }
+            // Ensure workspace is set even if we skip handleLogin
+            if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
+            setAuthLoading(false);
+          }
+        }
+      } else {
+        // No user - logged out state
+        console.log('🔐 onAuthChanged: No user (logged out)');
+      }
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     if (initialLoading && dataLoaded) {
       setInitialLoading(false);
@@ -196,21 +589,279 @@ function AppShell() {
     }
   }, [dataLoaded, initialLoading]);
 
-  const handleLogin = (role, memberId, email) => {
+  // ── Activity tracker — throttled lastActivityTime update ──────────────────
+  useEffect(() => {
+    if (!currentUid) return;
+    let lastWrite = 0;
+    const updateActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite < ACTIVITY_THROTTLE) return;
+      lastWrite = now;
+      updateDoc(doc(db, 'users', currentUid), {
+        lastActivityTime: serverTimestamp(),
+      }).catch(() => {});
+    };
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, updateActivity, { passive: true }));
+    return () => events.forEach(e => window.removeEventListener(e, updateActivity));
+  }, [currentUid]);
+
+  const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false) => {
+    const callStack = new Error().stack;
+    console.log('🚀 handleLogin called:', { 
+      role, 
+      memberId, 
+      email, 
+      workspaceIdParam, 
+      completedSetup, 
+      isNewSignup, 
+      currentAuth: auth, 
+      loginHandledRef: loginHandledRef.current,
+      loginInProgressRef: loginInProgressRef.current,
+      callStack: callStack?.split('\n').slice(1, 4).join('\n') // Show where it was called from
+    });
+    
+    // Prevent duplicate calls - if login is already in progress, ignore
+    if (loginInProgressRef.current) {
+      console.log('⚠️ Duplicate handleLogin call detected - login already in progress');
+      return;
+    }
+    
+    // Mark that login is in progress
+    loginInProgressRef.current = true;
+    loginHandledRef.current = true;
+    
+    // Load workspace data if needed (for management/admin users who need WorkspaceSetup)
+    if ((role === 'admin' || role === 'management') && workspaceIdParam && !workspace) {
+      console.log('📦 Loading workspace data for WorkspaceSetup...');
+      try {
+        const workspaceSnap = await getDoc(doc(db, 'workspaces', workspaceIdParam));
+        if (workspaceSnap.exists()) {
+          const wsData = workspaceSnap.data();
+          if (wsData?.settings && wsData.settings.workspaceName) {
+            const workspaceData = {
+              workspaceName: wsData.settings.workspaceName || '',
+              workspaceSub: wsData.settings.workspaceSub || '',
+              workspaceLogo: wsData.settings.workspaceLogo || null,
+            };
+            console.log('📦 Loaded workspace data in handleLogin:', workspaceData);
+            setWorkspace(workspaceData);
+          } else {
+            console.log('📦 No workspace name - first time setup');
+            setWorkspace(null);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not load workspace data (permissions may not be ready yet):', err.message);
+        // Don't block login - workspace data can be loaded later if needed
+      }
+    }
+    expiredLogoutRef.current = false;
+    setSessionExpired(false);
+    
+    // Set currentUid immediately at the start of handleLogin
+    import('firebase/auth').then(({ getAuth }) => {
+      const uid = getAuth().currentUser?.uid;
+      if (uid) {
+        console.log('🔑 handleLogin: Setting currentUid to:', uid);
+        setCurrentUid(uid);
+      }
+    }).catch(() => {});
+    
     if (email) {
-      localStorage.setItem('userEmail', email);
+      if (workspaceIdParam) setWorkspaceId(workspaceIdParam);
+      
+      // Load user profile from Firestore to get name and phone
+      import('./lib/userProfileService').then(({ getProfile }) => {
+        import('firebase/auth').then(({ getAuth }) => {
+          const auth = getAuth();
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            getProfile(uid).then(async (profileData) => {
+              if (profileData) {
+                let actualRoleName = role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member';
+                
+                // For all users, fetch their actual role name from team collection if they have a memberId
+                if (profileData.workspaceId && profileData.memberId) {
+                  try {
+                    const { doc: firestoreDoc, getDoc: firestoreGetDoc } = await import('firebase/firestore');
+                    const { db } = await import('./lib/firebase');
+                    const memberDoc = await firestoreGetDoc(firestoreDoc(db, `workspaces/${profileData.workspaceId}/team/${profileData.memberId}`));
+                    if (memberDoc.exists()) {
+                      actualRoleName = memberDoc.data().role || actualRoleName;
+                    }
+                  } catch (err) {
+                    console.warn('Could not fetch team role:', err);
+                  }
+                }
+                
+                const profile = {
+                  uid: uid, // Add Firebase Auth uid
+                  name: profileData.name || email.split('@')[0],
+                  email: profileData.email || email,
+                  phone: profileData.phone || '',
+                  role: actualRoleName,
+                  avatar: (profileData.name || email)[0].toUpperCase(),
+                  avatarImg: profileData.avatarImg || null, // Add profile picture
+                  color: profileData.color || '#3B5BFC', // ⭐ Use profile color if available
+                  userRole: role || profileData.role || 'member', // Fallback to profileData.role if role param is missing
+                  memberId: profileData.memberId || null, // Add memberId to identify team members
+                  hasSeenWelcomeAnimation: profileData.hasSeenWelcomeAnimation === true ? true : false,
+                };
+                console.log('👤 Setting user profile:', { 
+                  role, 
+                  profileDataRole: profileData.role, 
+                  finalUserRole: profile.userRole,
+                  memberId: profile.memberId 
+                });
+                setCurrentUser(profile);
+              }
+            }).catch(() => {
+              // Fallback if profile fetch fails
+              const profile = { 
+                uid: uid, // Add Firebase Auth uid
+                name: email.split('@')[0], 
+                email,
+                phone: '',
+                role: role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member', 
+                avatar: email[0].toUpperCase(), 
+                color: '#3B5BFC', // ⭐ Default color for fallback
+                userRole: role,
+                hasSeenWelcomeAnimation: false,
+              };
+              setCurrentUser(profile);
+            });
+          }
+        });
+      });
     }
     setInitialLoading(true);
     setVisitedPages(new Set());
+    console.log('🔐 Setting auth state:', { role, memberId });
     setAuth({ role, memberId });
     setTimeout(() => {
       setDashVisible(true);
-      setShowWorkspaceSetup(true);
+      if (role === 'admin') {
+        // Show workspace setup if:
+        // 1. isNewSignup === true (brand new admin, first time setup)
+        // 2. completedSetup === false (workspace not set up yet)
+        // Otherwise, go directly to dashboard (returning admin)
+        const shouldShowSetup = isNewSignup || completedSetup === false;
+        console.log('🔍 Admin setup check:', { 
+          isNewSignup, 
+          completedSetup, 
+          shouldShowSetup,
+          completedSetupType: typeof completedSetup,
+          completedSetupValue: completedSetup,
+          willSkipSetup: !shouldShowSetup
+        });
+        if (shouldShowSetup) {
+          console.log('✅ Showing WorkspaceSetup');
+          setShowWorkspaceSetup(true);
+        } else {
+          console.log('✅ Skipping WorkspaceSetup - going to dashboard');
+          // Returning admin with completed setup - go straight to dashboard
+          setShowWorkspaceSetup(false); // Explicitly set to false
+          setInitialLoading(false);
+          setVisitedPages(new Set(['dashboard']));
+          
+          // Trigger donut welcome if not seen yet (for returning users who skip animations)
+          console.log('🍩 Checking if should trigger donut welcome:', { hasSeenDonutWelcome });
+          if (!hasSeenDonutWelcome) {
+            console.log('🍩 Triggering donut welcome for returning user (after dashboard loads)');
+            // Wait for dashboard to fully render before showing donut
+            setTimeout(() => {
+              console.log('🍩 Setting showDonutWelcome to true');
+              setShowDonutWelcome(true);
+            }, 1500);
+          } else {
+            console.log('🍩 Skipping donut welcome - already seen');
+          }
+        }
+      } else if (role === 'management') {
+        // Management users also go through workspace setup (pre-filled + password)
+        // Only show setup for first-time management users
+        const shouldShowSetup = isNewSignup || completedSetup === false;
+        console.log('🔧 Management setup check:', { 
+          isNewSignup, 
+          completedSetup, 
+          shouldShowSetup,
+          completedSetupType: typeof completedSetup,
+          completedSetupValue: completedSetup,
+          willSkipSetup: !shouldShowSetup
+        });
+        if (shouldShowSetup) {
+          console.log('✅ Showing WorkspaceSetup for management');
+          setShowWorkspaceSetup(true);
+        } else {
+          console.log('✅ Skipping WorkspaceSetup for management - going to dashboard');
+          // Returning management user - go straight to dashboard
+          setShowWorkspaceSetup(false);
+          setInitialLoading(false);
+          setVisitedPages(new Set(['dashboard']));
+          
+          // Trigger donut welcome if not seen yet
+          console.log('🍩 Checking if should trigger donut welcome (management):', { hasSeenDonutWelcome });
+          if (!hasSeenDonutWelcome) {
+            console.log('🍩 Triggering donut welcome for returning management user');
+            setTimeout(() => {
+              console.log('🍩 Setting showDonutWelcome to true');
+              setShowDonutWelcome(true);
+            }, 1500);
+          } else {
+            console.log('🍩 Skipping donut welcome - already seen');
+          }
+        }
+      } else {
+        console.log('👥 Member role - showing dashboard directly');
+        setInitialLoading(false);
+        setVisitedPages(new Set(['dashboard']));
+      }
+      
+      // Login process complete
+      loginInProgressRef.current = false;
     }, 50);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('userEmail');
+  const handleLogout = async (expired = false) => {
+    console.log('🚪 handleLogout called:', { expired, currentUid });
+    expiredLogoutRef.current = false; // manual logout — never expired
+    setSessionExpired(false);
+    logoutInProgressRef.current = true;
+    loginInProgressRef.current = false; // Reset login progress flag
+    loginHandledRef.current = false; // Reset login handled flag
+    
+    // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
+    console.log('🧹 Clearing currentUid to trigger listener cleanup');
+    const uidToClean = currentUid;
+    setCurrentUid(null);
+    setWorkspaceId(null);
+    
+    // Wait for React to process the state update and cleanup listeners
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Clear session fields in Firestore before signing out
+    if (uidToClean) {
+      try { 
+        console.log('🧹 Clearing session for uid:', uidToClean);
+        await clearSession(uidToClean); 
+      } catch (err) {
+        console.error('❌ Failed to clear session:', err);
+      }
+    }
+    
+    // Sign out from Firebase
+    try { 
+      console.log('🚪 Signing out from Firebase');
+      await signOutUser(); 
+    } catch (err) { 
+      console.error('❌ signOut error', err); 
+    }
+    
+    // Wait a bit for Firebase to propagate the logout
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    logoutInProgressRef.current = false;
     setAuth(null);
     setDashVisible(false);
     setInitialLoading(false);
@@ -218,16 +869,18 @@ function AppShell() {
     setActiveItem('dashboard');
     setShowWorkspaceSetup(false);
     setWorkspace(null);
+    setShowMgmtPwdPrompt(false);
+    
+    console.log('✅ Logout complete - all refs reset');
   };
 
-  const handleNav = (item) => {
-    if (item === activeItem) {
-      refreshData();
-      return;
-    }
-
+  const handleNav = (item, extraProps = {}) => {
+    if (item === activeItem) { refreshData(); return; }
+    
+    // Store extra props for the target page (empty object clears previous props)
+    setPageExtraProps(extraProps);
+    
     if (!visitedPages.has(item)) {
-      // First visit — show skeleton
       setPageLoading(true);
       setTimeout(() => {
         setActiveItem(item);
@@ -237,41 +890,227 @@ function AppShell() {
         }, 500);
       }, 50);
     } else {
-      // Already visited — smooth slide-up + fade via CSS animation
       setPageKey(k => k + 1);
       setActiveItem(item);
     }
   };
 
+  const handleSearchResultClick = ({ type, data }) => {
+    console.log('🔍 Search result clicked:', { type, data, currentPage: activeItem });
+    
+    switch (type) {
+      case 'task':
+        if (activeItem === 'dashboard') {
+          // Open task detail modal
+          setPageExtraProps({ openTaskId: data.id });
+          setPageKey(k => k + 1);
+        } else if (activeItem === 'tasks' || activeItem === 'financial') {
+          // Show ONLY this task in the table (filter to single entry)
+          setPageExtraProps({ filterToTaskId: data.id });
+          setPageKey(k => k + 1);
+        } else if (activeItem === 'roles') {
+          // Navigate to tasks page and show only this task
+          handleNav('tasks');
+          setTimeout(() => {
+            setPageExtraProps({ filterToTaskId: data.id });
+            setPageKey(k => k + 1);
+          }, 100);
+        } else if (activeItem === 'performance') {
+          // Navigate to tasks page and show only this task
+          handleNav('tasks');
+          setTimeout(() => {
+            setPageExtraProps({ filterToTaskId: data.id });
+            setPageKey(k => k + 1);
+          }, 100);
+        }
+        break;
+      
+      case 'member':
+        // Highlight team member card ONLY (stay on team page, don't open modal)
+        setTimeout(() => {
+          const memberCard = document.querySelector(`[data-member-id="${data.id}"]`);
+          if (memberCard) {
+            memberCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Add highlight effect
+            const originalBoxShadow = memberCard.style.boxShadow;
+            memberCard.style.boxShadow = '0 0 0 3px rgba(59,91,252,0.3)';
+            setTimeout(() => { 
+              memberCard.style.boxShadow = originalBoxShadow; 
+            }, 2000);
+          }
+        }, 100);
+        break;
+      
+      case 'scribe':
+        // Open scribe in notes page (stay on notes page)
+        setPageExtraProps({ selectedScribeId: data.id });
+        setPageKey(k => k + 1);
+        break;
+      
+      case 'help':
+        // Highlight help article (stay on help page)
+        setTimeout(() => {
+          const helpCard = document.querySelector(`[data-help-id="${data.id}"]`);
+          if (helpCard) {
+            helpCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            helpCard.style.boxShadow = '0 0 0 3px rgba(245,158,11,0.3)';
+            setTimeout(() => { helpCard.style.boxShadow = ''; }, 2000);
+          }
+        }, 100);
+        break;
+    }
+  };
+
+  // ── Auth loading (waiting for onAuthStateChanged on mount) ──
+  if (authLoading) {
+    return (
+      <>
+        <SkeletonStyles />
+        <AppShellSkeleton />
+      </>
+    );
+  }
+
+  // ── Data load error - show manual retry button ──
+  if (dataLoadError) {
+    return <DataLoadError error={dataLoadError} onRetry={refreshData} />;
+  }
+
+  // ── Not logged in ──
   if (!auth) {
-    return <LoginPage onLogin={handleLogin} />;
+    return (
+      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
+        <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} />
+      </Suspense>
+    );
   }
 
+  // ── Member role ──
   if (auth.role === 'member') {
-    return <MemberApp memberId={auth.memberId} onLogout={handleLogout} visible={dashVisible} />;
+    return (
+      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
+        <MemberApp memberId={auth.memberId} onLogout={handleLogout} visible={dashVisible} />
+      </Suspense>
+    );
   }
 
+  // ── Management role ──
   if (auth.role === 'management') {
-    return <ManagementApp memberId={auth.memberId} onLogout={handleLogout} visible={dashVisible} />;
+    return (
+      <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        {/* Management Dashboard (blurred when setup/loader is showing) */}
+        <div style={{
+          width: '100%', height: '100%',
+          opacity: dashVisible ? 1 : 0,
+          transform: dashVisible ? 'translateY(0)' : 'translateY(10px)',
+          transition: 'opacity 0.7s ease, transform 0.7s ease',
+          filter: showWorkspaceSetup || showLoader ? 'blur(4px) brightness(0.85)' : 'none',
+          pointerEvents: showWorkspaceSetup || showLoader ? 'none' : 'auto',
+        }}>
+          <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
+            <ManagementApp 
+              memberId={auth.memberId} 
+              onLogout={handleLogout} 
+              visible={dashVisible}
+              triggerWelcomeAnimation={triggerMgmtAnimation}
+            />
+          </Suspense>
+        </div>
+
+        {/* WorkspaceSetup overlay */}
+        {showWorkspaceSetup && (
+          <WorkspaceSetup
+            existingWorkspace={workspace}
+            isManagement={true}
+            onComplete={(ws) => {
+              console.log('✅ Management WorkspaceSetup completed, triggering animation flow');
+              setWorkspace(ws);
+              setShowWorkspaceSetup(false);
+              isFirstSetupRef.current = true; // Mark first setup for welcome animation
+              setShowLoader(true);
+            }}
+          />
+        )}
+
+        {/* Loader overlay */}
+        <MultiStepLoader
+          loadingStates={loadingStates}
+          loading={showLoader}
+          duration={1200}
+          loop={false}
+          onComplete={() => {
+            setShowLoader(false);
+            console.log('🎬 Management loader complete, checking animation:', { 
+              isFirstSetupRef: isFirstSetupRef.current, 
+              hasSeenWelcome: currentUser?.hasSeenWelcomeAnimation,
+              hasSeenDonutWelcome,
+              alreadyTriggered: mgmtAnimationTriggeredRef.current
+            });
+            
+            // Prevent duplicate triggers
+            if (mgmtAnimationTriggeredRef.current) {
+              console.log('⚠️ Management animation already triggered, skipping');
+              setDashVisible(true);
+              return;
+            }
+            
+            // Show welcome animation only on very first setup (ref set by WorkspaceSetup)
+            if (isFirstSetupRef.current) {
+              isFirstSetupRef.current = false;
+              mgmtAnimationTriggeredRef.current = true; // Mark as triggered
+              
+              // Check if user has seen donut welcome animation
+              console.log('🎬 Checking donut welcome animation status (Management):', hasSeenDonutWelcome);
+              
+              if (!hasSeenDonutWelcome) {
+                console.log('🎬 Triggering profile card + donut welcome for first time (Management)');
+                // Trigger profile card animation in ManagementApp
+                setTriggerMgmtAnimation(true);
+              } else {
+                console.log('🎬 Skipping animations - already seen (Management)');
+              }
+            }
+            
+            setDashVisible(true);
+          }}
+        />
+
+        {/* Welcome animation overlay - ProfileUserCardOverlay for management */}
+        {showWelcome && (
+          <ProfileUserCardOverlay onDone={() => {
+            console.log('🎬 ProfileUserCard animation completed (Management)');
+            setShowWelcome(false);
+            // Trigger donut welcome after dashboard has had time to render
+            console.log('🍩 Checking donut welcome status (Management):', { hasSeenDonutWelcome });
+            if (!hasSeenDonutWelcome) {
+              console.log('🍩 Triggering donut welcome in 600ms (Management)');
+              setTimeout(() => setShowDonutWelcome(true), 600);
+            } else {
+              console.log('🍩 Donut welcome already seen - skipping (Management)');
+            }
+          }} />
+        )}
+      </div>
+    );
   }
 
+  // ── Admin role ──
   const page = pageConfig[activeItem] || pageConfig['dashboard'];
   const SkeletonComp = SKELETON_MAP[activeItem] || DashboardSkeleton;
 
-  // Callback from Dashboard empty state — navigate to Tasks and open create modal
   const handleCreateTaskFromDashboard = () => {
     setOpenCreateOnMount(true);
     handleNav('tasks');
   };
 
-  // Extra props passed to the active page
   const extraProps = activeItem === 'tasks'
-    ? { openCreateOnMount, onCreateMounted: () => setOpenCreateOnMount(false) }
+    ? { openCreateOnMount, onCreateMounted: () => setOpenCreateOnMount(false), currentUser }
     : activeItem === 'dashboard'
     ? { onCreateTask: handleCreateTaskFromDashboard }
+    : activeItem === 'team'
+    ? { currentUser }
     : {};
 
-  // Show full shell skeleton only on the first load after login
   if (initialLoading) {
     return (
       <>
@@ -283,7 +1122,6 @@ function AppShell() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      {/* Dashboard — blurred when workspace setup is showing */}
       <div style={{
         display: 'flex', width: '100%', height: '100%',
         background: 'var(--bg-main)',
@@ -296,49 +1134,160 @@ function AppShell() {
         <SkeletonStyles />
         <Sidebar activeItem={activeItem} setActiveItem={handleNav} onLogout={handleLogout} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', background: 'var(--bg-main)', overflow: 'hidden', transition: 'background 0.25s ease', position: 'relative' }}>
-          <Header title={page.title} subtitle={page.subtitle} />
+          <Header 
+            title={page.title} 
+            subtitle={page.subtitle} 
+            currentPage={activeItem}
+            onSearchResultClick={handleSearchResultClick}
+            pageFilteredData={pageFilteredData}
+          />
           <div
             key={pageKey}
             className="page-enter"
             style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', position: 'relative' }}
           >
-            {pageLoading ? <SkeletonComp /> : renderPage(activeItem, extraProps)}
+            {pageLoading
+              ? <SkeletonComp />
+              : (
+                <Suspense fallback={<SkeletonComp />}>
+                  {renderPage(activeItem, handleNav, { 
+                    ...extraProps, 
+                    ...pageExtraProps,
+                    selectedScribeId,
+                    onScribeOpened: () => {
+                      console.log('🧹 Clearing selectedScribeId (App.jsx)');
+                      setSelectedScribeId(null);
+                    }
+                  }, (noteId) => {
+                    console.log('📥 App.jsx received note ID:', noteId);
+                    setSelectedScribeId(noteId);
+                    handleNav('notes');
+                  }, setPageFilteredData)}
+                </Suspense>
+              )
+            }
             {!isPlanActive && activeItem !== 'settings' && <PlanInactiveOverlay />}
           </div>
         </div>
       </div>
 
-      {/* Workspace setup overlay */}
       {showWorkspaceSetup && (
         <WorkspaceSetup
+          existingWorkspace={workspace}
+          isManagement={auth?.role === 'management'}
           onComplete={(ws) => {
+            console.log('✅ WorkspaceSetup completed, triggering animation flow');
             setWorkspace(ws);
             setShowWorkspaceSetup(false);
+            isFirstSetupRef.current = true; // mark first setup for welcome animation
             setShowLoader(true);
           }}
         />
       )}
 
-      {/* Multi-step loader */}
+      {showMgmtPwdPrompt && (
+        <MgmtPasswordPrompt
+          onComplete={() => {
+            setShowMgmtPwdPrompt(false);
+            setShowLoader(true);
+          }}
+        />
+      )}
+
       <MultiStepLoader
         loadingStates={loadingStates}
         loading={showLoader}
         duration={1200}
         loop={false}
-        onComplete={() => { setShowLoader(false); setShowWelcome(true); }}
+        onComplete={() => {
+          setShowLoader(false);
+          console.log('🎬 Loader complete, checking animation:', { 
+            isFirstSetupRef: isFirstSetupRef.current, 
+            hasSeenWelcome: currentUser?.hasSeenWelcomeAnimation 
+          });
+          // Show welcome animation only on very first setup (ref set by WorkspaceSetup)
+          // OR if user hasn't seen the welcome animation before
+          if (isFirstSetupRef.current) {
+            isFirstSetupRef.current = false;
+            
+            // Check if user has seen welcome animation
+            const hasSeenWelcome = currentUser?.hasSeenWelcomeAnimation;
+            console.log('🎬 Checking welcome animation status:', hasSeenWelcome);
+            
+            if (!hasSeenWelcome) {
+              console.log('🎬 Playing welcome animation for first time');
+              setShowWelcome(true);
+              
+              // Mark as seen in Firestore
+              const markWelcomeSeen = async () => {
+                try {
+                  const { getAuth } = await import('firebase/auth');
+                  const { updateProfile } = await import('./lib/userProfileService');
+                  const auth = getAuth();
+                  const uid = auth.currentUser?.uid;
+                  
+                  if (uid) {
+                    await updateProfile(uid, { hasSeenWelcomeAnimation: true });
+                    console.log('✅ Welcome animation marked as seen (Admin)');
+                    
+                    // Update currentUser state immediately so it doesn't show again
+                    setCurrentUser(prev => ({
+                      ...prev,
+                      hasSeenWelcomeAnimation: true
+                    }));
+                  }
+                } catch (error) {
+                  console.error('❌ Failed to mark welcome animation as seen:', error);
+                }
+              };
+              
+              markWelcomeSeen();
+            }
+          }
+        }}
       />
 
-      {/* Welcome lottie overlay */}
       {showWelcome && (
-        <WelcomeOverlay onDone={() => { 
-          setShowWelcome(false); 
-          // Only show donut welcome if user hasn't seen it before
-          const hasSeenWelcome = localStorage.getItem('hasSeenDonutWelcome');
-          if (hasSeenWelcome !== 'true') {
-            setShowDonutWelcome(true);
+        <WelcomeOverlay onDone={() => {
+          console.log('🎬 Welcome animation completed');
+          setShowWelcome(false);
+          // Trigger donut welcome after dashboard has had time to render
+          console.log('🍩 Checking donut welcome status:', { hasSeenDonutWelcome });
+          if (!hasSeenDonutWelcome) {
+            console.log('🍩 Triggering donut welcome in 600ms');
+            setTimeout(() => setShowDonutWelcome(true), 600);
+          } else {
+            console.log('🍩 Donut welcome already seen - skipping');
           }
         }} />
       )}
+
+      {/* Feedback Modal - Shows when admin sends feedback request */}
+      {feedbackRequest && currentUser && (
+        <FeedbackModal
+          feedbackRequest={feedbackRequest}
+          organizationId={workspaceId}
+          organizationName={workspaceName || 'Your Organization'}
+          userId={currentUid}
+          userName={currentUser.name}
+          userEmail={currentUser.email}
+          userPhone={currentUser.phone || ''}
+          userRole={currentUser.role}
+        />
+      )}
+      
+      {/* Debug: Show feedback request state */}
+      {console.log('🔍 FeedbackModal render check:', {
+        hasFeedbackRequest: !!feedbackRequest,
+        hasCurrentUser: !!currentUser,
+        hasWorkspaceId: !!workspaceId,
+        feedbackRequest,
+        workspaceId,
+        currentUser: currentUser ? {
+          name: currentUser.name,
+          role: currentUser.role
+        } : null
+      })}
     </div>
   );
 }

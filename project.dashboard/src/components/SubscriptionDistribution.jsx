@@ -3,9 +3,10 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 import { Bone } from './Skeleton';
 
 const PLAN_COLORS = {
-  Starter: '#9CA3AF',
+  Free: '#9CA3AF',
+  Starter: '#D97706',
   Professional: '#3B5BFC',
-  Business: '#7C3AED',
+  Business: '#12C479',
   Enterprise: '#F97316'
 };
 
@@ -37,34 +38,12 @@ const CustomLegend = ({ payload }) => {
   return null;
 };
 
-const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage }) => {
-  const RADIAN = Math.PI / 180;
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-  if (percentage < 5) return null; // Don't show label for very small segments
-
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="#fff"
-      textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central"
-      style={{
-        fontSize: 14,
-        fontWeight: 800,
-        fontFamily: 'Inter, sans-serif',
-        textShadow: '0 1px 3px rgba(0,0,0,0.3)'
-      }}
-    >
-      {`${percentage}%`}
-    </text>
-  );
+// Removed: Percentages now only show on hover in tooltip, not on chart segments
+const renderCustomLabel = () => {
+  return null;
 };
 
-export default function SubscriptionDistribution({ data = [], isLoading = false }) {
+export default function SubscriptionDistribution({ data = [], isLoading = false, selectedView = 'monthly' }) {
   const [hoveredPlan, setHoveredPlan] = useState(null);
 
   if (isLoading) {
@@ -107,14 +86,18 @@ export default function SubscriptionDistribution({ data = [], isLoading = false 
   }
 
   // Prepare data for the chart
-  const chartData = data.map(item => ({
-    plan: item.plan,
-    count: item.count,
-    percentage: item.percentage,
-    color: PLAN_COLORS[item.plan] || '#9CA3AF'
-  }));
-
-  const totalOrganizations = data.reduce((sum, item) => sum + item.count, 0);
+  const totalOrganizations = data.reduce((sum, item) => sum + (item.value || item.count || 0), 0);
+  
+  const chartData = data.map(item => {
+    const count = item.value || item.count || 0;
+    const percentage = totalOrganizations > 0 ? Math.round((count / totalOrganizations) * 100) : 0;
+    return {
+      plan: item.name || item.plan,
+      count: count,
+      percentage: percentage,
+      color: item.color || PLAN_COLORS[item.name || item.plan] || '#9CA3AF'
+    };
+  });
 
   // Empty state
   if (totalOrganizations === 0) {
@@ -187,7 +170,14 @@ export default function SubscriptionDistribution({ data = [], isLoading = false 
       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
       border: '1.5px solid #E8EAEF',
       transition: 'all 0.3s ease',
+      animation: 'fadeIn 0.4s ease-in-out',
     }}>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0.7; transform: scale(0.98); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
           fontSize: 16,
@@ -212,7 +202,7 @@ export default function SubscriptionDistribution({ data = [], isLoading = false 
         justifyContent: 'center',
         alignItems: 'center'
       }}>
-        <ResponsiveContainer width="100%" height={300} minWidth={0}>
+        <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
           <PieChart>
             <Pie
               data={chartData}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, TrendingUp, ArrowUpRight, Wallet, Calendar, ChevronLeft, ChevronRight, X, Download } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -18,7 +18,7 @@ function PaymentDetailPanel({ task, member, onClose }) {
       <div style={{ padding: '22px 24px 18px', borderBottom: '1.5px solid #F0F2F8', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#1A1D2E' }}>Payment Receipt</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>{task.id}</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>#{task.id}</div>
         </div>
         <button onClick={onClose} style={{ background: '#F0F2F8', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
           <X size={14} color="#6B7280" />
@@ -41,11 +41,21 @@ function PaymentDetailPanel({ task, member, onClose }) {
           <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 12 }}>Payment Information</div>
           <div style={{ background: '#FAFBFF', borderRadius: 12, padding: '14px 16px', border: '1px solid #F0F2F8', display: 'flex', flexDirection: 'column', gap: 11 }}>
             {[
-              { label: 'Task ID',    value: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{task.id}</span> },
+              { label: 'Task ID',    value: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>#{task.id}</span> },
               { label: 'Task Title', value: task.title },
               { label: 'Member',     value: (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: member.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{member.avatar}</div>
+                  {member.avatarImg ? (
+                    <img 
+                      src={member.avatarImg} 
+                      alt={member.name}
+                      style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: member.color || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>
+                      {member.avatar || member.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  )}
                   <span>{member.name}</span>
                 </div>
               )},
@@ -88,6 +98,16 @@ function PaymentDetailPanel({ task, member, onClose }) {
           </div>
         )}
 
+        {/* Update Instructions - Show when member or task is in Update stage */}
+        {(stage === 'Update' || task.stage === 'Update') && task.updateNote && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>Update Instructions</div>
+            <div style={{ background: '#FFFBEB', borderRadius: 12, padding: '12px 14px', border: '1.5px solid #FDE68A' }}>
+              <p style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6, margin: 0 }}>{task.updateNote}</p>
+            </div>
+          </div>
+        )}
+
         {/* Download */}
         <button style={{ width: '100%', padding: '13px 20px', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', border: 'none', borderRadius: 12, fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(59,91,252,0.25)' }}>
           <Download size={15} /> Download PDF Receipt
@@ -97,8 +117,8 @@ function PaymentDetailPanel({ task, member, onClose }) {
   );
 }
 
-export default function MemberPayments({ member }) {
-  const { tasks, financials, STAGE_COLORS, STAGE_BG } = useApp();
+export default function MemberPayments({ member, setPageFilteredData = null, filterToTaskId = null }) {
+  const { tasks, financials, STAGE_COLORS, STAGE_BG, payments, getPaymentsForTask } = useApp();
   const [hoveredDescription, setHoveredDescription] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
@@ -110,24 +130,199 @@ export default function MemberPayments({ member }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const rowsPerPage = 15;
 
-  const myTasks        = tasks.filter(t => t.members.some(m => m.id === member.id));
-  const myEarnings     = financials.memberEarnings.find(e => e.id === member.id) || { total: 0, paid: 0, pending: 0 };
-  const completedTasks = myTasks.filter(t => t.stage === 'Complete' || t.paid);
-  const activeTasks    = myTasks.filter(t => t.stage !== 'Complete' && !t.paid);
-  const progressPct    = myEarnings.total > 0 ? Math.round((myEarnings.paid / myEarnings.total) * 100) : 0;
+  // ⭐ PHASE 8: Get only payments for this specific member
+  console.log('💰 Member Payment Filter - Input:', {
+    memberId: member.id,
+    memberName: member.name,
+    memberUid: member.uid,
+    memberRole: member.role,
+    memberUserRole: member.userRole,
+    totalPayments: payments.length,
+    allPaymentMemberIds: payments.map(p => ({ 
+      paymentId: p.id,
+      taskId: p.taskId, 
+      memberId: p.memberId,
+      memberName: p.memberName,
+      amount: p.amount,
+      paymentType: p.paymentType,
+      assignedTo: p.assignedTo 
+    }))
+  });
+  
+  const myPayments = payments.filter(p => {
+    // ⭐ EXCLUDE all payments if member is on hold
+    if (member.isOnHold) {
+      console.log('❌ Member is on hold - excluding all payments');
+      return false;
+    }
+    
+    // ⭐ EXCLUDE additional payments for team members (admin only)
+    if (p.paymentType === 'additional') {
+      console.log('❌ Excluding additional payment for team member:', p.id, p.taskId);
+      return false;
+    }
+    
+    // ⭐ EXCLUDE task budget payments (only for admin dashboard)
+    if (p.paymentType === 'task-budget') {
+      console.log('❌ Excluding task budget payment:', p.id);
+      return false;
+    }
+    
+    // Check if payment is assigned to this member by memberId
+    if (p.memberId && p.memberId === member.id) {
+      console.log('✅ Payment matched by memberId:', p.id, p.taskId);
+      return true;
+    }
+    
+    // Check by memberUid if available
+    if (p.memberUid && member.uid && p.memberUid === member.uid) {
+      console.log('✅ Payment matched by memberUid:', p.id, p.taskId);
+      return true;
+    }
+    
+    // Check assignedTo array
+    if (p.assignedTo && Array.isArray(p.assignedTo)) {
+      const isAssigned = p.assignedTo.some(a => a.id === member.id || (a.uid && member.uid && a.uid === member.uid));
+      if (isAssigned) {
+        console.log('✅ Payment matched by assignedTo:', p.id, p.taskId);
+        return true;
+      }
+    }
+    
+    // Fallback: check if payment is for a task assigned to this member (old format)
+    if (p.taskId && !p.memberId) {
+      const task = tasks.find(t => t.id === p.taskId);
+      const isTaskMember = task && task.members.some(m => m.id === member.id || (m.uid && member.uid && m.uid === member.uid));
+      if (isTaskMember) {
+        console.log('✅ Payment matched by task membership:', p.id, p.taskId);
+        return true;
+      }
+    }
+    
+    return false;
+  });
+  
+  console.log('💰 Member payments filtered:', {
+    memberId: member.id,
+    memberName: member.name,
+    totalPayments: payments.length,
+    myPayments: myPayments.length,
+    paymentDetails: myPayments.map(p => ({ 
+      taskId: p.taskId, 
+      memberId: p.memberId, 
+      amount: p.amount, 
+      status: p.status 
+    }))
+  });
+  
+  // ⭐ Calculate earnings from payments - Total = Paid + Pending
+  const paidPayments = myPayments.filter(p => p.status === 'Paid' || p.status === 'paid');
+  const pendingPayments = myPayments.filter(p => p.status !== 'Paid' && p.status !== 'paid');
+  
+  const paidEarnings = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const pendingEarnings = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalEarnings = paidEarnings + pendingEarnings; // ⭐ Total = Paid + Pending
+  const totalPotential = paidEarnings + pendingEarnings; // Total if all payments are made
+  const progressPct = totalPotential > 0 ? Math.round((paidEarnings / totalPotential) * 100) : 0;
+  
+  const myEarnings = { total: totalEarnings, paid: paidEarnings, pending: pendingEarnings };
+  
+  console.log('💰 Earnings calculation:', {
+    totalPayments: myPayments.length,
+    paidPayments: paidPayments.length,
+    pendingPayments: pendingPayments.length,
+    totalEarned: totalEarnings,
+    paidAmount: paidEarnings,
+    pendingAmount: pendingEarnings,
+    totalPotential,
+    progressPct
+  });
 
   const getMyBudget = (task) => task.members.find(m => m.id === member.id)?.budget || 0;
   const getMyStage  = (task) => task.members.find(m => m.id === member.id)?.stage || task.stage;
 
-  // Merged list: pending first, then completed
-  let allRows = [
-    ...activeTasks.map(t => ({ ...t, _status: 'pending' })),
-    ...completedTasks.map(t => ({ ...t, _status: 'paid' })),
-  ];
+  // ⭐ Build rows from payments (not tasks)
+  let allRows = myPayments.map(payment => {
+    const isPaid = payment.status === 'Paid' || payment.status === 'paid';
+    
+    // ⭐ Check if this is a manual payment (taskId = "PAYMENT" or isManualPayment flag)
+    const isManualPayment = payment.isManualPayment || payment.taskId === 'PAYMENT';
+    
+    if (isManualPayment) {
+      // ⭐ Manual payment - create row without task data
+      return {
+        id: payment.taskId || 'PAYMENT',
+        taskId: payment.taskId || 'PAYMENT',
+        paymentId: payment.id,
+        title: payment.taskTitle || 'Manual Payment',
+        description: payment.notes || '',
+        deadline: payment.dueDate || payment.createdAt,
+        amount: payment.amount || 0,
+        _status: isPaid ? 'paid' : 'pending',
+        isPaid: isPaid,
+        paidOn: payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null,
+        createdOn: payment.createdAt ? (payment.createdAt.toDate ? payment.createdAt.toDate() : payment.createdAt) : null,
+        stage: '', // ⭐ Manual payment - no stage (empty)
+        members: payment.assignedTo || [],
+        isManualPayment: true,
+      };
+    }
+    
+    // ⭐ Task-linked payment - find the task
+    const task = tasks.find(t => t.id === payment.taskId);
+    
+    // ⭐ Handle case where task might not exist (deleted or archived)
+    if (!task) {
+      console.warn('⚠️ Task not found for payment:', payment.id, payment.taskId);
+      // Create a minimal row with payment data
+      return {
+        id: payment.taskId,
+        taskId: payment.taskId,
+        paymentId: payment.id,
+        title: payment.taskTitle || 'Task Not Found',
+        description: payment.notes || '',
+        deadline: payment.dueDate || payment.createdAt,
+        amount: payment.amount || 0,
+        _status: isPaid ? 'paid' : 'pending',
+        isPaid: isPaid,
+        paidOn: payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null,
+        createdOn: payment.createdAt ? (payment.createdAt.toDate ? payment.createdAt.toDate() : payment.createdAt) : null,
+        stage: '', // ⭐ Deleted task - no stage (empty)
+        members: payment.assignedTo || [],
+        isTaskDeleted: true,
+      };
+    }
+    
+    return {
+      ...task,
+      paymentId: payment.id,
+      amount: payment.amount || 0, // ⭐ Ensure amount is always a number
+      // ⭐ Only use payment notes (from admin dashboard), NOT task description
+      description: payment.notes || '',
+      _status: isPaid ? 'paid' : 'pending',
+      isPaid: isPaid,
+      paidOn: payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null,
+      createdOn: payment.createdAt ? (payment.createdAt.toDate ? payment.createdAt.toDate() : payment.createdAt) : null,
+    };
+  });
+  
+  console.log('💰 Built payment rows:', {
+    totalRows: allRows.length,
+    manualPayments: allRows.filter(r => r.isManualPayment).length,
+    taskLinkedPayments: allRows.filter(r => !r.isManualPayment && !r.isTaskDeleted).length,
+    deletedTaskPayments: allRows.filter(r => r.isTaskDeleted).length,
+    pendingRows: allRows.filter(r => r._status === 'pending').length,
+    paidRows: allRows.filter(r => r._status === 'paid').length,
+    rowAmounts: allRows.map(r => ({ id: r.id, amount: r.amount, status: r._status, isManual: r.isManualPayment }))
+  });
 
-  // Filter by date range
+  // ⭐ Store unfiltered count for "All" button
+  const unfilteredCount = allRows.length;
+
+  // Filter by date range (BEFORE status filter)
+  let dateFilteredRows = allRows;
   if (dateFrom || dateTo) {
-    allRows = allRows.filter(task => {
+    dateFilteredRows = allRows.filter(task => {
       const taskDate = new Date(task.deadline);
       taskDate.setHours(0, 0, 0, 0);
       
@@ -148,18 +343,63 @@ export default function MemberPayments({ member }) {
     });
   }
 
-  // Filter by status
+  // ⭐ Filter by status (AFTER date filter)
+  let filteredRows = dateFilteredRows;
   if (statusFilter === 'Pending') {
-    allRows = allRows.filter(t => t._status === 'pending');
+    filteredRows = dateFilteredRows.filter(t => t._status === 'pending');
   } else if (statusFilter === 'Paid') {
-    allRows = allRows.filter(t => t._status === 'paid');
+    filteredRows = dateFilteredRows.filter(t => t._status === 'paid');
+  }
+  // ⭐ If statusFilter === 'All', show all rows (no additional filtering)
+  
+  console.log('💰 After filtering:', {
+    statusFilter,
+    dateFrom,
+    dateTo,
+    unfilteredCount,
+    dateFilteredCount: dateFilteredRows.length,
+    finalFilteredCount: filteredRows.length,
+    pendingRows: filteredRows.filter(r => r._status === 'pending').length,
+    paidRows: filteredRows.filter(r => r._status === 'paid').length
+  });
+
+  // Use filtered rows for display
+  allRows = filteredRows;
+  
+  // ⭐ Sort by due date (deadline) AFTER filtering - newest first
+  allRows = allRows.sort((a, b) => {
+    const dateA = new Date(a.deadline);
+    const dateB = new Date(b.deadline);
+    return dateB - dateA; // Newest deadline first
+  });
+  
+  // Apply search filter if filterToTaskId is provided (show only that task)
+  if (filterToTaskId) {
+    allRows = allRows.filter(r => r.id === filterToTaskId || r.taskId === filterToTaskId);
   }
 
   // Pagination
-  const totalPages = Math.ceil(allRows.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(allRows.length / rowsPerPage)); // ⭐ Ensure at least 1 page
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
   const paginatedRows = allRows.slice(startIndex, endIndex);
+  
+  // Update filtered data for search
+  useEffect(() => {
+    if (setPageFilteredData) {
+      setPageFilteredData({ tasks: allRows });
+    }
+  }, [allRows.length, statusFilter, dateFrom, dateTo, filterToTaskId, setPageFilteredData]);
+  
+  console.log('💰 Pagination:', {
+    totalRows: allRows.length,
+    totalPages,
+    currentPage,
+    rowsPerPage,
+    startIndex,
+    endIndex,
+    paginatedRowsCount: paginatedRows.length
+  });
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
@@ -173,7 +413,7 @@ export default function MemberPayments({ member }) {
         transition: 'background 0.25s, border-color 0.25s',
       }}>
         {[
-          { label: 'Total Earned', value: `₹${myEarnings.total.toLocaleString()}`,   color: '#3B5BFC', bg: '#EEF2FF',  icon: Wallet },
+          { label: 'Total', value: `₹${myEarnings.total.toLocaleString()}`,   color: '#3B5BFC', bg: '#EEF2FF',  icon: Wallet },
           { label: 'Paid',         value: `₹${myEarnings.paid.toLocaleString()}`,    color: '#12C479', bg: '#ECFDF5',  icon: CheckCircle },
           { label: 'Pending',      value: `₹${myEarnings.pending.toLocaleString()}`, color: '#F97316', bg: '#FFF7ED',  icon: Clock },
           { label: 'Paid Rate',    value: `${progressPct}%`,                         color: '#7C3AED', bg: '#F5F3FF',  icon: TrendingUp },
@@ -346,13 +586,51 @@ export default function MemberPayments({ member }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {paginatedRows.map((task, idx) => {
-              const budget  = getMyBudget(task);
+              const budget  = task.amount || 0; // ⭐ Use payment amount, not task member budget
               const stage   = getMyStage(task);
               const isPaid  = task._status === 'paid';
               const isLast  = idx === paginatedRows.length - 1;
+              
+              // ⭐ Check if current member is on hold for this task
+              const currentMemberInTask = task.members?.find(m => String(m.id) === String(member.id));
+              const isMemberOnHold = currentMemberInTask?.isOnHold || false;
+              
+              // ⭐ Check if entire task is paused OR if current member is on hold
+              const isTaskPaused = task.paused || task.isPaused || false;
+              const showHold = isTaskPaused || isMemberOnHold;
+              
+              // ⭐ Use member-specific stage if available, otherwise use task stage
+              const displayStage = currentMemberInTask?.stage || stage;
+              
+              // ⭐ Debug: Log paused status for task B6I41C7A
+              if (task.id === 'B6I41C7A') {
+                console.log('🔍 Task B6I41C7A payment entry:', {
+                  taskId: task.id,
+                  paused: task.paused,
+                  isPaused: task.isPaused,
+                  isTaskPaused: isTaskPaused,
+                  isMemberOnHold: isMemberOnHold,
+                  showHold: showHold,
+                  stage: stage,
+                  displayStage: displayStage,
+                  memberId: member.id,
+                  memberIdType: typeof member.id,
+                  currentMemberInTask: currentMemberInTask,
+                  allTaskMembers: task.members,
+                  taskMemberIds: task.members?.map(m => ({ id: m.id, type: typeof m.id, isOnHold: m.isOnHold })),
+                  taskObject: task
+                });
+              }
+              
+              // ⭐ Generate unique key - use paymentId if available, otherwise create unique composite key
+              const uniqueKey = task.paymentId 
+                ? task.paymentId 
+                : task.manualId 
+                  ? `manual-${task.manualId}` 
+                  : `${task.id || 'NOTASK'}-${task.memberId || 'NOMEMBER'}-${idx}`;
 
               return (
-                <div key={task.id} style={{
+                <div key={uniqueKey} style={{
                   display: 'grid', gridTemplateColumns: '520px 1.5fr 180px 120px 110px 150px',
                   alignItems: 'center',
                   padding: '14px 20px',
@@ -379,7 +657,7 @@ export default function MemberPayments({ member }) {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: isPaid ? '#12C479' : '#3B5BFC', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>{task.id}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: isPaid ? '#12C479' : '#3B5BFC', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>#{task.id}</span>
                         <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
                       </div>
                     </div>
@@ -436,9 +714,14 @@ export default function MemberPayments({ member }) {
 
                   {/* Stage */}
                   <div style={{ paddingLeft: 16 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: isPaid ? '#ECFDF5' : STAGE_BG[stage], color: isPaid ? '#12C479' : STAGE_COLORS[stage] }}>
-                      {isPaid ? 'Complete' : stage}
-                    </span>
+                    {/* ⭐ Show stage only if not empty (manual payments have empty stage) */}
+                    {displayStage && displayStage.trim() !== '' ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: showHold ? '#FFF7ED' : (isPaid ? '#ECFDF5' : STAGE_BG[displayStage]), color: showHold ? '#F97316' : (isPaid ? '#12C479' : STAGE_COLORS[displayStage]) }}>
+                        {showHold ? 'Hold' : (isPaid ? 'Complete' : displayStage)}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#9CA3AF' }}>—</span>
+                    )}
                   </div>
 
                   {/* Due date */}

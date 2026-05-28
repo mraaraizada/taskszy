@@ -20,7 +20,7 @@ const menuSections = [
   {
     label: 'SYSTEM',
     items: [
-      { icon: Settings, label: 'Settings', id: 'settings' },
+      { icon: HelpCircle, label: 'Feedback', id: 'feedback' },
     ],
   },
 ];
@@ -53,7 +53,7 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
         </div>
         <div>
           <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>Taskzy</span>
-          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Admin Portal</div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Admin</div>
         </div>
       </div>
 
@@ -105,54 +105,36 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
         ))}
       </nav>
 
-      {/* Admin user card + logout */}
+      {/* Logout button */}
       <div style={{ padding: '0 4px 20px' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)',
-          borderRadius: 14, padding: '12px 14px', border: '1.5px solid #E0E7FF',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 800, color: '#fff', flexShrink: 0,
-              boxShadow: '0 4px 10px rgba(59,91,252,0.35)',
-            }}>FA</div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1D2E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ferra Alexandra</div>
-              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 700 }}>Administrator</div>
-            </div>
+        {!confirmLogout ? (
+          <button
+            onClick={() => setConfirmLogout(true)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', padding: '12px 16px', borderRadius: 12,
+              background: '#FEF2F2', border: '1.5px solid #FECACA',
+              fontSize: 13, fontWeight: 700, color: '#EF4444', cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = '#FEE2E2';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = '#FEF2F2';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <LogOut size={16} strokeWidth={2.5} /> Logout
+          </button>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', borderRadius: 12, padding: '10px 12px', border: '1.5px solid #FECACA' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#EF4444', flex: 1 }}>Sure?</span>
+            <button onClick={onLogout} style={{ background: '#EF4444', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>Yes</button>
+            <button onClick={() => setConfirmLogout(false)} style={{ background: '#fff', border: '1px solid #E8EAEF', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>No</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#12C479', boxShadow: '0 0 0 3px #DCFCE7', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: '#12C479', fontWeight: 700 }}>Active</span>
-            <span style={{ fontSize: 10, color: '#B0B8CC', marginLeft: 'auto' }}>Since Jan 2025</span>
-          </div>
-
-          {!confirmLogout ? (
-            <button
-              onClick={() => setConfirmLogout(true)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                width: '100%', padding: '7px 10px', borderRadius: 9,
-                background: '#FEF2F2', border: '1px solid #FECACA',
-                fontSize: 12, fontWeight: 700, color: '#EF4444', cursor: 'pointer',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
-              onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}
-            >
-              <LogOut size={13} /> Logout
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#FEF2F2', borderRadius: 9, padding: '6px 8px', border: '1px solid #FECACA' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#EF4444', flex: 1 }}>Sure?</span>
-              <button onClick={onLogout} style={{ background: '#EF4444', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>Yes</button>
-              <button onClick={() => setConfirmLogout(false)} style={{ background: '#fff', border: '1px solid #E8EAEF', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>No</button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
       {showPasswordModal && (
         <AdminPasswordModal

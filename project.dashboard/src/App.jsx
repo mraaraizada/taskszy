@@ -1,101 +1,84 @@
-import { useState } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { onAuthChanged, signOutUser } from './lib/authService';
+import { getProfile } from './lib/userProfileService';
 import { Toaster } from './components/ui/sonner';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import AdminProjectDashboardPage from './pages/AdminProjectDashboardPage';
-import LoginPage from './pages/LoginPage';
-import TasksPage from './pages/TasksPage';
-import TeamPage from './pages/TeamPage';
-import FinancialPage from './pages/FinancialPage';
-import RolesPage from './pages/RolesPage';
-import SettingsPage from './pages/SettingsPage';
-import PerformancePage from './pages/PerformancePage';
-import ReportsPage from './pages/ReportsPage';
-import NotesPage from './pages/NotesPage';
-import HelpPage from './pages/HelpPage';
-import TrashPage from './pages/TrashPage';
 import {
   SkeletonStyles,
-  DashboardSkeleton, TasksSkeleton, TeamSkeleton,
-  FinancialSkeleton, RolesSkeleton, ReportsSkeleton,
-  PerformanceSkeleton, NotesSkeleton, SettingsSkeleton,
+  DashboardSkeleton, TeamSkeleton,
+  FinancialSkeleton, FeedbackSkeleton, SidebarSkeleton, FullDashboardSkeleton,
 } from './components/Skeleton';
 
-const HelpSkeleton = () => (
-  <div style={{ flex: 1, padding: '24px 28px', display: 'flex', gap: 20 }}>
-    <div className="skeleton" style={{ flex: 1, height: 500, borderRadius: 18 }} />
-    <div className="skeleton" style={{ width: 400, height: 500, borderRadius: 18 }} />
-  </div>
-);
+// ── Lazy-loaded pages ─────────────────────────────────────────────────────────
+const LoginPage                = lazy(() => import('./pages/LoginPage'));
+const AdminProjectDashboardPage = lazy(() => import('./pages/AdminProjectDashboardPage'));
+const TeamPage                 = lazy(() => import('./pages/TeamPage'));
+const FeedbackPage             = lazy(() => import('./pages/FeedbackPage'));
+const FinancialPage            = lazy(() => import('./pages/FinancialPage'));
 
 const pageConfig = {
   dashboard:   { title: 'Project Dashboard', subtitle: 'Monitor organizations and subscriptions' },
-  tasks:       { title: 'Tasks',          subtitle: 'Manage and track all tasks' },
   team:        { title: 'Team',           subtitle: 'View and manage team members' },
+  feedback:    { title: 'Feedback',       subtitle: 'Share your thoughts and suggestions' },
   financial:   { title: 'Financial',      subtitle: 'Track budgets and payments' },
-  roles:       { title: 'Management',     subtitle: 'Tags, categories, roles & permissions' },
-  performance: { title: 'Performance',    subtitle: 'Team performance metrics and goals' },
-  reports:     { title: 'Reports',        subtitle: 'Analytics and insights' },
-  notes:       { title: 'Notes',          subtitle: 'Your personal notes and ideas' },
-  help:        { title: 'Help & Support', subtitle: 'Team help requests and support' },
-  settings:    { title: 'Settings',       subtitle: 'Customize your workspace' },
-  trash:       { title: 'Archive',        subtitle: 'Deleted tasks and notes' },
 };
 
 const SKELETON_MAP = {
   dashboard:   DashboardSkeleton,
-  tasks:       TasksSkeleton,
   team:        TeamSkeleton,
+  feedback:    FeedbackSkeleton,
   financial:   FinancialSkeleton,
-  roles:       RolesSkeleton,
-  performance: PerformanceSkeleton,
-  reports:     ReportsSkeleton,
-  notes:       NotesSkeleton,
-  help:        HelpSkeleton,
-  settings:    SettingsSkeleton,
-  trash:       NotesSkeleton,
 };
 
 function renderPage(activeItem) {
   switch (activeItem) {
-    case 'tasks':       return <TasksPage currentUser={{ name: 'Admin', role: 'Administrator', avatar: 'A', color: '#3B5BFC' }} />;
     case 'team':        return <TeamPage />;
+    case 'feedback':    return <FeedbackPage />;
     case 'financial':   return <FinancialPage />;
-    case 'roles':       return <RolesPage />;
-    case 'performance': return <PerformancePage />;
-    case 'reports':     return <ReportsPage />;
-    case 'notes':       return <NotesPage />;
-    case 'help':        return <HelpPage />;
-    case 'trash':       return <TrashPage />;
-    case 'settings':    return <SettingsPage />;
     default:            return <AdminProjectDashboardPage />;
   }
 }
 
 function AppShell() {
-  const [auth, setAuth]             = useState(null);
-  const [activeItem, setActiveItem] = useState('dashboard');
+  const [auth, setAuth]               = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [activeItem, setActiveItem]   = useState('dashboard');
   const [dashVisible, setDashVisible] = useState(false);
   const [visitedPages, setVisitedPages] = useState({});
   const [loadingPage, setLoadingPage] = useState(null);
-  const { dataLoaded, refreshData } = useApp();
+  const { refreshData, navigationRequest, setNavigationRequest } = useApp();
+
+  // ── Persistent session via onAuthStateChanged ──
+  useEffect(() => {
+    const unsubscribe = onAuthChanged(async (user) => {
+      if (user) {
+        const profile = await getProfile(user.uid);
+        if (profile) {
+          // dashboardRole maps to "admin" for both superadmin and viewer
+          handleLogin('admin', null, profile.email);
+        }
+      }
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleLogin = (role, memberId, email) => {
     if (email) localStorage.setItem('userEmail', email);
     setAuth({ role, memberId });
-    // Clear visited pages on fresh login so skeletons show
     setVisitedPages({});
     setLoadingPage('dashboard');
     setTimeout(() => setDashVisible(true), 50);
-    // Mark dashboard as visited after skeleton duration
     setTimeout(() => {
       setLoadingPage(null);
       setVisitedPages({ dashboard: true });
     }, 900);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await signOutUser(); } catch (err) { console.error('signOut error', err); }
     localStorage.removeItem('userEmail');
     setAuth(null);
     setDashVisible(false);
@@ -105,12 +88,8 @@ function AppShell() {
   };
 
   const handleNav = (item) => {
-    if (item === activeItem) {
-      refreshData();
-      return;
-    }
+    if (item === activeItem) { refreshData(); return; }
     setActiveItem(item);
-    // Show skeleton only if this page hasn't been visited yet this session
     if (!visitedPages[item]) {
       setLoadingPage(item);
       setTimeout(() => {
@@ -120,8 +99,29 @@ function AppShell() {
     }
   };
 
+  // Listen for navigation requests from child components
+  useEffect(() => {
+    console.log('📍 Navigation listener triggered. navigationRequest:', navigationRequest);
+    if (navigationRequest) {
+      console.log('📍 Navigation request received:', navigationRequest);
+      console.log('📍 Current activeItem:', activeItem);
+      handleNav(navigationRequest);
+      console.log('📍 handleNav called, clearing navigationRequest');
+      setNavigationRequest(null);
+    }
+  }, [navigationRequest, setNavigationRequest]);
+
+  // ── Auth loading (waiting for onAuthStateChanged on mount) ──
+  if (authLoading) {
+    return <FullDashboardSkeleton />;
+  }
+
   if (!auth) {
-    return <LoginPage onLogin={handleLogin} />;
+    return (
+      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
+        <LoginPage onLogin={handleLogin} />
+      </Suspense>
+    );
   }
 
   const page = pageConfig[activeItem] || pageConfig['dashboard'];
@@ -141,7 +141,14 @@ function AppShell() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', background: 'var(--bg-main)', overflow: 'hidden', transition: 'background 0.25s ease' }}>
         <Header title={page.title} subtitle={page.subtitle} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-          {showSkeleton ? <SkeletonComp /> : renderPage(activeItem)}
+          {showSkeleton
+            ? <SkeletonComp />
+            : (
+              <Suspense fallback={<SkeletonComp />}>
+                {renderPage(activeItem)}
+              </Suspense>
+            )
+          }
         </div>
       </div>
     </div>

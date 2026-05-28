@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Shield, X, AlertCircle } from 'lucide-react';
 
-export function AdminPasswordModal({ onClose, onConfirm, action = 'perform this action', label = 'Admin Password' }) {
+export function AdminPasswordModal({ onClose, onConfirm, action = 'perform this action', label = 'Account Password' }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -11,11 +11,12 @@ export function AdminPasswordModal({ onClose, onConfirm, action = 'perform this 
     setError('');
     setLoading(true);
 
-    // Get stored admin password (default: admin123)
-    const storedPassword = localStorage.getItem('adminPassword') || 'admin123';
+    // Get logged-in user's account password from localStorage
+    const userEmail = localStorage.getItem('userEmail');
+    const userPassword = localStorage.getItem('userPassword');
 
     setTimeout(() => {
-      if (password === storedPassword) {
+      if (password === userPassword) {
         onConfirm();
         onClose();
       } else {

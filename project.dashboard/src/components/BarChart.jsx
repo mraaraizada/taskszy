@@ -84,7 +84,7 @@ export default function TaskCompletionChart({ groupBy = 'tag' }) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={200} minWidth={0}>
+      <ResponsiveContainer width="100%" height={200} minWidth={0} minHeight={200}>
         <BarChart data={data} barCategoryGap="20%" barGap={8}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
           <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF' }} />

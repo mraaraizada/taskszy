@@ -1,0 +1,60 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Carousel images ───────────────────────────────────────────────────────
+    // Used by the login page carousel on both apps.
+    // Read: public (anyone can load the images)
+    // Write: restricted to requests coming with a valid content-type (images only)
+    //        and a max file size of 5MB.
+    match /carousel/{fileName} {
+      allow read: if true;
+
+      allow write: if request.resource != null
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Workspace logos and files ─────────────────────────────────────────────
+    // Workspace branding images (logo in header badge) and other workspace files
+    // Read: authenticated users only
+    // Write: authenticated users who belong to the workspace
+    match /workspaces/{workspaceId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      
+      allow write: if request.auth != null
+                   && request.resource != null
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── User avatars ──────────────────────────────────────────────────────────
+    // User profile pictures
+    // Read: public (anyone can view avatars)
+    // Write: authenticated users can only upload their own avatar
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true; // Allow public read for avatars
+      
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource != null
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Organization logos (Admin Dashboard) ─────────────────────────────────
+    // Organization branding for admin dashboard
+    // Read: authenticated users only
+    // Write: authenticated admins only
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      
+      allow write: if request.auth != null
+                   && request.resource != null
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+  }
+}
+

@@ -1,4 +1,4 @@
-import { CheckCircle, RotateCcw, UserPlus, DollarSign, AlertCircle, Plus, Edit, MinusCircle, Shield, Play } from 'lucide-react';
+﻿import { CheckCircle, RotateCcw, UserPlus, DollarSign, AlertCircle, Plus, Edit, MinusCircle, Shield, Play } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 const TYPE_CONFIG = {
@@ -142,7 +142,7 @@ export default function RecentActivity({ compact = false }) {
 
         {displayed.length === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#9CA3AF', gap: 6 }}>
-            <div style={{ fontSize: 24 }}>📋</div>
+            <div style={{ fontSize: 24 }}>[Clip]</div>
             <div style={{ fontSize: 12, fontWeight: 600 }}>No activity yet</div>
           </div>
         )}

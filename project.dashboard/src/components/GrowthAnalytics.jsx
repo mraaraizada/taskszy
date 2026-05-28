@@ -47,7 +47,7 @@ export default function GrowthAnalytics({ monthlyData, yearlyData, selectedView,
             Organizational Growth
           </h2>
           <p style={{ fontSize: 12, color: '#9CA3AF' }}>
-            {selectedView === 'monthly' ? 'Monthly growth trends' : 'Yearly growth comparison'}
+            {selectedView === 'monthly' ? 'Monthly Growth' : 'Yearly growth comparison'}
           </p>
         </div>
 
@@ -142,7 +142,7 @@ export default function GrowthAnalytics({ monthlyData, yearlyData, selectedView,
             </div>
           </div>
         ) : selectedView === 'monthly' ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
@@ -175,7 +175,7 @@ export default function GrowthAnalytics({ monthlyData, yearlyData, selectedView,
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
             <BarChart data={data} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
               <XAxis 

@@ -1,0 +1,569 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Get user's profile data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Check if user belongs to the workspace
+    function belongsToWorkspace(workspaceId) {
+      return isSignedIn() && getUserData().workspaceId == workspaceId;
+    }
+    
+    // Check if user is admin
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+    
+    // Check if user is admin of the workspace
+    function isWorkspaceAdmin(workspaceId) {
+      return belongsToWorkspace(workspaceId) && isAdmin();
+    }
+    
+    // Check if user is management role
+    function isManagement() {
+      return isSignedIn() && 
+             (getUserData().role == 'management' || 
+              getUserData().role == 'Management');
+    }
+    
+    // Check if user is member
+    function isMember() {
+      return isSignedIn() && 
+             (getUserData().role == 'member' || 
+              getUserData().role == 'Member');
+    }
+    
+    // Check if user is admin or management
+    function isAdminOrManagement() {
+      return isAdmin() || isManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // USER DOCUMENTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Users can read/write their own user document
+    // Admins and management can read team member profiles in their workspace
+    match /users/{uid} {
+      // Super admins (project.dashboard) can read all user profiles
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Users can read their own profile
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      
+      // Admin and management can read profiles of users in their workspace (only if their profile exists)
+      allow read: if isSignedIn() 
+                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                  && isAdminOrManagement() 
+                  && getUserData().workspaceId != null;
+      
+      // Users can update their own profile (includes hasSeenWelcomeAnimation)
+      allow update: if isSignedIn() && request.auth.uid == uid;
+      
+      // Admin and management can update profiles of users in their workspace (only if their profile exists)
+      allow update: if isSignedIn() 
+                    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                    && isAdminOrManagement() 
+                    && getUserData().workspaceId != null
+                    && get(/databases/$(database)/documents/users/$(uid)).data.workspaceId == getUserData().workspaceId;
+      
+      // Users can create their own profile (CRITICAL: Allow first-time user creation)
+      // OR admins can create profiles for team members (only if admin profile exists)
+      allow create: if (isSignedIn() && request.auth.uid == uid) 
+                    || (isSignedIn() 
+                        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                        && isAdmin());
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // WORKSPACE DOCUMENTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Workspace root document (contains settings and plan)
+    match /workspaces/{workspaceId} {
+      // Super admins (project.dashboard) can read all workspaces
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Anyone in the workspace can read workspace settings (only if their profile exists)
+      allow read: if isSignedIn() 
+                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                  && belongsToWorkspace(workspaceId);
+      
+      // Allow workspace creation for new users (workspaceId format: ws_<uid>)
+      allow create: if isSignedIn() 
+                    && workspaceId == 'ws_' + request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid;
+      
+      // Workspace admin can update/delete workspace settings (only if their profile exists)
+      allow update, delete: if isSignedIn() 
+                            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                            && isWorkspaceAdmin(workspaceId);
+      
+      // Super admins can update workspace settings (for admin dashboard management)
+      allow update: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // WORKSPACE TEAM (for super admins to read team counts)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/team/{memberId} {
+      // Super admins can read all team members (for organization stats)
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // All workspace members can read team data
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Only admin and management can create/delete team members
+      allow create, delete: if belongsToWorkspace(workspaceId) 
+                            && isAdminOrManagement();
+      
+      // Admin and management can update any team member
+      allow update: if belongsToWorkspace(workspaceId) 
+                    && isAdminOrManagement();
+      
+      // Members can update their own profile fields (name, phone, location, about, avatarImg)
+      allow update: if belongsToWorkspace(workspaceId) 
+                    && isMember()
+                    && getUserData().memberId == int(memberId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['name', 'phone', 'location', 'about', 'avatarImg', 'updatedAt']);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // NOTES & SHEETS (SCRIBES) - Shared with Access Control
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Notes are shared - users can access notes where they're in the accessList
+    match /workspaces/{workspaceId}/notes/{noteId} {
+      // Users can read notes where they're in the accessList OR when searching by joinCode
+      // This allows users to find notes by join code before they're added to accessList
+      allow read: if belongsToWorkspace(workspaceId) 
+                  && isSignedIn() 
+                  && (resource.data.accessList.hasAny([request.auth.uid])
+                      || resource.data.joinCode != null);
+      
+      // Users can create notes (accessList must include their uid)
+      allow create: if belongsToWorkspace(workspaceId)
+                    && isSignedIn()
+                    && request.resource.data.accessList.hasAny([request.auth.uid]);
+      
+      // Users can update notes where they're in the accessList
+      // OR if they're the creator (check createdBy.uid)
+      // OR if they're adding themselves to accessList via join code
+      allow update: if belongsToWorkspace(workspaceId) 
+                    && isSignedIn()
+                    && (resource.data.accessList.hasAny([request.auth.uid])
+                        || request.auth.uid == resource.data.createdBy.uid
+                        || (resource.data.joinCode != null 
+                            && request.resource.data.accessList.hasAny([request.auth.uid])
+                            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['joinCode', 'createdBy', 'archived'])));
+      
+      // Only creator can delete (check createdBy.uid)
+      allow delete: if belongsToWorkspace(workspaceId) 
+                    && isSignedIn()
+                    && request.auth.uid == resource.data.createdBy.uid;
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // ROLES & PERMISSIONS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/roles/{roleId} {
+      // All workspace members can read roles
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can create/update/delete roles
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TAGS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/tags/{tagId} {
+      // All workspace members can read tags
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can create/update/delete tags
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // CATEGORIES
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/categories/{categoryId} {
+      // All workspace members can read categories
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can create/update/delete categories
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // ACTIVITY LOG
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/activity/{activityId} {
+      // All workspace members can read activity
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // All workspace members can create activity entries
+      allow create: if belongsToWorkspace(workspaceId);
+      
+      // Only admin can update/delete activity
+      allow update, delete: if isWorkspaceAdmin(workspaceId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // BROADCASTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/broadcasts/{broadcastId} {
+      // All workspace members can read broadcasts
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Only admin and management can create/update/delete broadcasts
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TASK REQUESTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/taskRequests/{requestId} {
+      // All workspace members can read task requests
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Members can create task requests
+      allow create: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can update/delete task requests
+      allow update, delete: if belongsToWorkspace(workspaceId) 
+                            && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // HELP SUBMISSIONS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/helpSubmissions/{submissionId} {
+      // All workspace members can read help submissions
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // All workspace members can create help submissions
+      allow create: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can mark as solved (first response)
+      // Only the user who solved it can edit the response later
+      allow update: if belongsToWorkspace(workspaceId) 
+                    && (
+                      // Can mark as solved if admin/management and not yet solved
+                      (isAdminOrManagement() && resource.data.status == 'pending')
+                      ||
+                      // Can edit response if you're the one who solved it
+                      (resource.data.status == 'solved' && resource.data.resolvedBy == request.auth.uid)
+                    );
+      
+      // Only admin can delete help submissions
+      allow delete: if isWorkspaceAdmin(workspaceId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TRASH / ARCHIVE
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/trash/{itemId} {
+      // All workspace members can read trash
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can create/update/delete trash items
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // SCHEDULED TASKS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/scheduledTasks/{taskId} {
+      // All workspace members can read scheduled tasks
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Only admin and management can create/update/delete scheduled tasks
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TASKS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/tasks/{taskId} {
+      // Super admins can read all tasks (for organization stats)
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // All workspace members can read tasks
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Admin and management can create/update/delete tasks
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+      
+      // Members can update tasks assigned to them (limited fields)
+      allow update: if belongsToWorkspace(workspaceId) 
+                    && isMember()
+                    && resource.data.assignedTo.hasAny([getUserData().memberId]);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TASK CHAT - PHASE 9: Simplified Access Control
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/tasks/{taskId}/chat/{messageId} {
+      // All workspace members can read/write chat
+      // Access control is handled at the application level (TaskChatPanel)
+      allow read, create: if belongsToWorkspace(workspaceId);
+      
+      // Users can update/delete their own messages
+      allow update, delete: if belongsToWorkspace(workspaceId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // READ RECEIPTS - PHASE 9: Simplified Access Control
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/tasks/{taskId}/readReceipts/{userId} {
+      // All workspace members can read/write receipts
+      // Access control is handled at the application level
+      allow read, write: if belongsToWorkspace(workspaceId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // SUPER ADMINS (for project.dashboard)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /superAdmins/{uid} {
+      // Super admins can read their own profile
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      
+      // Only allow writes through Firebase Console (no write rules)
+      allow write: if false;
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TASK DRAFTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/taskDrafts/{draftId} {
+      // All workspace members can read/write task drafts
+      allow read, write: if belongsToWorkspace(workspaceId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // COUPONS (for project.dashboard and root project checkout)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /coupons/{couponId} {
+      // Anyone can read active coupons (for checkout)
+      allow read: if true;
+      
+      // Authenticated users can increment usage counters (totalUsed, usageByWorkspace)
+      // This allows coupon usage tracking during checkout
+      allow update: if isSignedIn() 
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['totalUsed', 'usageByWorkspace']);
+      
+      // Only authenticated super admins can create/delete coupons or modify other fields
+      allow create, delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Super admins can update any field
+      allow update: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // SUBSCRIPTION PAYMENTS (for checkout component - root level)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /payments/{paymentId} {
+      // Super admins can read all payments (for project dashboard)
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Authenticated users can create payment entries for their own workspace
+      allow create: if isSignedIn() 
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own payment entries (for status updates)
+      allow update: if isSignedIn() 
+                    && resource.data.userId == request.auth.uid;
+      
+      // Only super admins can delete payments
+      allow delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // CALENDAR EVENTS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Shared calendar for admin and management (all users in admin/management dashboards)
+    match /workspaces/{workspaceId}/calendar/shared {
+      // All workspace members can read/write shared calendar when using admin/management dashboard
+      allow read, write: if belongsToWorkspace(workspaceId);
+    }
+    
+    // Personal calendar for team members (each user has their own)
+    match /workspaces/{workspaceId}/calendar/users/{userId}/events {
+      // Users can only read/write their own calendar
+      allow read, write: if belongsToWorkspace(workspaceId) 
+                         && isSignedIn()
+                         && request.auth.uid == userId;
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // USER READ STATE (for Admin/Management dashboards - tracks read broadcasts)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/userReadState/{userId} {
+      // Users can only read/write their own read state
+      allow read, write: if belongsToWorkspace(workspaceId) 
+                         && isSignedIn()
+                         && request.auth.uid == userId;
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // MEMBER READ STATE (for Team member dashboards - tracks read broadcasts)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/memberReadState/{memberId} {
+      // Members can only read/write their own read state
+      allow read, write: if belongsToWorkspace(workspaceId) 
+                         && isSignedIn()
+                         && getUserData().memberId == int(memberId);
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // PAYMENTS (for task payment tracking)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/payments/{paymentId} {
+      // All workspace members can read payments
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Only admin and management can create/update/delete payments
+      allow create, update, delete: if belongsToWorkspace(workspaceId) 
+                                     && isAdminOrManagement();
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // TASK TIMELINE (for task change history)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /workspaces/{workspaceId}/tasks/{taskId}/timeline/{eventId} {
+      // All workspace members can read timeline
+      allow read: if belongsToWorkspace(workspaceId);
+      
+      // Only system (via AppContext functions) can write timeline
+      // Users cannot directly create/update/delete timeline events
+      allow create: if belongsToWorkspace(workspaceId);
+      allow update, delete: if false; // Timeline events are immutable
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // FEEDBACK (for user feedback submissions to admin)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /feedback/{feedbackId} {
+      // Super admins can read all feedback
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Any authenticated user can submit feedback
+      allow create: if isSignedIn();
+      
+      // Only super admins can update/delete feedback
+      allow update, delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // FEEDBACK BROADCASTS (for admin to request feedback from organizations)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /feedbackBroadcasts/{broadcastId} {
+      // Any authenticated user can read feedback broadcasts (to see if there's a request)
+      allow read: if isSignedIn();
+      
+      // Only super admins can create/update feedback broadcasts
+      allow create, update: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Only super admins can delete broadcasts
+      allow delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // FEEDBACK DISMISSALS (for users to dismiss feedback requests)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /feedbackDismissals/{dismissalId} {
+      // Users can read their own dismissals
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Users can create dismissals for themselves
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      
+      // No updates or deletes allowed
+      allow update, delete: if false;
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // CUSTOM PLAN REQUESTS (for contact sales submissions)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /customPlanRequests/{requestId} {
+      // Super admins can read all custom plan requests
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+      
+      // Any authenticated user can create custom plan requests
+      allow create: if isSignedIn();
+      
+      // Only super admins can update/delete custom plan requests
+      allow update, delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // CAROUSELS (for login page - public read access)
+    // ══════════════════════════════════════════════════════════════════════
+    
+    match /carousels/{carouselId} {
+      // Anyone can read carousels (for login page display)
+      allow read: if true;
+      
+      // Only super admins can create/update/delete carousels
+      allow create, update, delete: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // DENY ALL OTHER PATHS
+    // ══════════════════════════════════════════════════════════════════════
+    
+    // Explicitly deny access to any other paths not defined above
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

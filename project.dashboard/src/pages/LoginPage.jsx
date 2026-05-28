@@ -1,25 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
-import { USERS } from '../context/AppContext';
-import PlanSelection from '../components/PlanSelection';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Eye, EyeOff } from 'lucide-react';
+import { signIn, mapAuthError } from '../lib/authService';
+import { getProfile } from '../lib/userProfileService';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { useLottie } from 'lottie-react';
-import emailSentAnimation from '../lottie/Email Sent by Todd Rocheford.json';
-import loginAnimation from '../lottie/Login.json';
-import carouselE from '../assets/carousel-e.png';
-import carouselG from '../assets/carousel-g.png';
-import carouselJ from '../assets/carousel-j.png';
-import carouselQ from '../assets/carousel-q.png';
-import carouselZ from '../assets/carousel-z.png';
+import { getCarouselImages, DEFAULT_CAROUSEL_IMAGES } from '../lib/carouselService';
 
-const portfolioSlides = [
-  { imageUrl: carouselE },
-  { imageUrl: carouselG },
-  { imageUrl: carouselJ },
-  { imageUrl: carouselQ },
-  { imageUrl: carouselZ },
-];
+// Dynamic lottie loaders — keep heavy JSONs out of the initial bundle
+function useEmailSentAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Email Sent by Todd Rocheford.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+function useLoginAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Login.json').then(m => setData(m.default)); }, []);
+  return data;
+}
+
+// Fallback hardcoded images (high quality URLs from service)
+const FALLBACK_IMAGES = DEFAULT_CAROUSEL_IMAGES;
 
 function GoogleIcon() {
   return (
@@ -92,16 +92,17 @@ const slideAnimStyle = `
 `;
 
 function EmailSentLottie() {
+  const animationData = useEmailSentAnimation();
   const { View, animationItem } = useLottie({
-    animationData: emailSentAnimation,
+    animationData: animationData ?? null,
     loop: false,
-    autoplay: true,
+    autoplay: !!animationData,
   });
 
   useEffect(() => {
-    if (!animationItem) return;
+    if (!animationItem || !animationData) return;
 
-    let phase = 1; // phase 1: play 0→124, phase 2: play 0→2 then stop
+    let phase = 1;
 
     const onEnterFrame = () => {
       try {
@@ -118,18 +119,21 @@ function EmailSentLottie() {
     return () => {
       try { animationItem.removeEventListener('enterFrame', onEnterFrame); } catch {}
     };
-  }, [animationItem]);
+  }, [animationItem, animationData]);
 
+  if (!animationData) return <div style={{ width: 120, height: 120 }} />;
   return <div style={{ width: 120, height: 120, pointerEvents: 'none' }}>{View}</div>;
 }
 
 function LoginLottie() {
+  const animationData = useLoginAnimation();
   const { View } = useLottie({
-    animationData: loginAnimation,
+    animationData: animationData || {},
     loop: true,
-    autoplay: true,
+    autoplay: !!animationData,
     style: { width: '100%', height: '100%', objectFit: 'contain' },
   });
+  if (!animationData) return <div style={{ width: '100%', height: '100%' }} />;
   return View;
 }
 
@@ -142,21 +146,27 @@ export default function LoginPage({ onLogin }) {
   const [passFocus, setPassFocus] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPlanSelection, setShowPlanSelection] = useState(false);
-  const [authenticatedUser, setAuthenticatedUser] = useState(null);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [forgotError, setForgotError] = useState('');
-  const [forgotSuccess, setForgotSuccess] = useState('');
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [carouselApi, setCarouselApi] = useState(null);
+  
+  // Carousel images state - starts with fallback, then loads from cache/Firebase
+  const [carouselImages, setCarouselImages] = useState(FALLBACK_IMAGES);
 
+  // Load carousel images on mount
+  useEffect(() => {
+    console.log('🎠 Initializing carousel images...');
+    const initialImages = getCarouselImages((updatedImages) => {
+      console.log('🎠 Carousel images updated:', updatedImages.length);
+      setCarouselImages(updatedImages);
+    });
+    
+    // If we got different images immediately (from cache), use them
+    if (JSON.stringify(initialImages) !== JSON.stringify(FALLBACK_IMAGES)) {
+      setCarouselImages(initialImages);
+    }
+  }, []);
+
+  // Convert carousel images to slides format
+  const portfolioSlides = carouselImages.map(img => ({ imageUrl: img }));
   const slide = portfolioSlides[slideIndex];
 
   // Update slideIndex when carousel changes
@@ -179,120 +189,26 @@ export default function LoginPage({ onLogin }) {
     return () => clearInterval(autoplay);
   }, [carouselApi]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
-    // Auto-fill admin credentials if fields are empty
-    const loginEmail = email.trim() || 'admin@taskzy.io';
-    const loginPassword = password || 'admin123';
-    
-    setTimeout(() => {
-      const match = USERS.find(u => u.email === loginEmail.toLowerCase() && u.password === loginPassword);
-      if (match) {
-        setLoading(false);
-        // Go directly to dashboard without plan selection
-        onLogin(match.role, match.memberId, match.email);
-      } else {
-        setLoading(false);
-        setError('Invalid email or password. Please try again.');
+    try {
+      const credential = await signIn(email, password);
+      const user = credential.user;
+      const profile = await getProfile(user.uid);
+      setLoading(false);
+      if (!profile) {
+        setError('Account setup incomplete. Please contact your administrator.');
+        return;
       }
-    }, 900);
-  };
-
-  const handlePlanSelect = (plan, billingCycle) => {
-    console.log('Selected plan:', plan, 'Billing:', billingCycle);
-    // Proceed with login after plan selection
-    setTimeout(() => {
-      onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email);
-    }, 300);
-  };
-
-  const handleBackToLogin = () => {
-    setShowPlanSelection(false);
-    setAuthenticatedUser(null);
-    setPassword('');
-  };
-
-  const handleForgotPassword = () => {
-    setShowForgotPassword(true);
-    setForgotEmail(email);
-    setForgotError('');
-    setForgotSuccess('');
-    setOtpSent(false);
-    setOtp('');
-  };
-
-  const handleSendOTP = (e) => {
-    e.preventDefault();
-    setForgotError('');
-    
-    // Check if email exists
-    const userExists = USERS.find(u => u.email === forgotEmail.trim().toLowerCase());
-    if (!userExists) {
-      setForgotError('Email not found in our system.');
-      return;
+      // Store password in localStorage for admin action verification
+      localStorage.setItem('userPassword', password);
+      onLogin('admin', null, profile.email);
+    } catch (err) {
+      setLoading(false);
+      setError(mapAuthError(err.code));
     }
-
-    // Simulate sending OTP
-    setOtpSent(true);
-    setForgotSuccess(`OTP sent to ${forgotEmail}. Demo OTP: 123456`);
-  };
-
-  const handleVerifyOTP = (e) => {
-    e.preventDefault();
-    setForgotError('');
-    
-    // Demo OTP verification (in real app, verify with backend)
-    if (otp === '123456') {
-      setOtpVerified(true);
-      setForgotSuccess('OTP verified successfully!');
-      setTimeout(() => setForgotSuccess(''), 2000);
-    } else {
-      setForgotError('Invalid OTP. Please try again.');
-    }
-  };
-
-  const handleResetPassword = (e) => {
-    e.preventDefault();
-    setForgotError('');
-
-    // Validation
-    if (newPassword.length < 6) {
-      setForgotError('Password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setForgotError('Passwords do not match.');
-      return;
-    }
-
-    // Simulate password reset
-    setForgotSuccess('Password updated successfully! Redirecting to login...');
-    setTimeout(() => {
-      setShowForgotPassword(false);
-      setOtpSent(false);
-      setOtpVerified(false);
-      setOtp('');
-      setForgotEmail('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setForgotSuccess('');
-    }, 2000);
-  };
-
-  const handleBackToLoginForm = () => {
-    setShowForgotPassword(false);
-    setOtpSent(false);
-    setOtpVerified(false);
-    setOtp('');
-    setForgotEmail('');
-    setForgotError('');
-    setForgotSuccess('');
-    setNewPassword('');
-    setConfirmPassword('');
   };
 
   // Carousel autoplay — no unused variables needed
@@ -337,8 +253,11 @@ export default function LoginPage({ onLogin }) {
         <Carousel
           opts={{
             loop: true,
+            watchDrag: false, // Disable drag/swipe interaction
+            watchSlides: false, // Disable slide watching for better performance
           }}
           setApi={setCarouselApi}
+          style={{ pointerEvents: 'none' }} // Disable all pointer interactions
         >
           <CarouselContent style={{ height: '100vh', marginLeft: 0, display: 'flex' }}>
             {portfolioSlides.map((slideData, index) => (
@@ -363,7 +282,7 @@ export default function LoginPage({ onLogin }) {
         <div
           className="login-panel-right flex items-center justify-center flex-1"
           style={{
-            padding: showPlanSelection ? 0 : '32px 56px',
+            padding: '32px 56px',
             height: '100%',
             position: 'relative',
           }}
@@ -393,8 +312,6 @@ export default function LoginPage({ onLogin }) {
             pointerEvents: 'none',
           }} />
           
-          {!showPlanSelection ? (
-            <>
           {/* Top nav — absolute so it doesn't affect centering */}
           <div className="flex items-center" style={{ position: 'absolute', top: 32, left: 56, zIndex: 12 }}>
             <div className="flex items-center gap-2">
@@ -424,8 +341,6 @@ export default function LoginPage({ onLogin }) {
             boxShadow: '0 4px 32px rgba(59,91,252,0.08), 0 1px 4px rgba(0,0,0,0.04)',
             border: '1px solid rgba(255,255,255,0.9)',
           }}>
-            {!showForgotPassword ? (
-              <>
             <h1
               style={{
                 fontSize: 28,
@@ -516,24 +431,6 @@ export default function LoginPage({ onLogin }) {
                 </button>
               </div>
 
-              {/* Forgot */}
-              <div style={{ textAlign: 'right', marginTop: -6 }}>
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#3B5BFC',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Forgot password ?
-                </button>
-              </div>
-
               {/* Error */}
               {error && (
                 <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
@@ -588,309 +485,7 @@ export default function LoginPage({ onLogin }) {
                 )}
               </button>
             </form>
-            </>
-            ) : (
-              <>
-                {/* Forgot Password UI */}
-                <div style={{ marginBottom: 20 }}>
-                  <button
-                    onClick={handleBackToLoginForm}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#6B7280',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      marginBottom: 16,
-                    }}
-                  >
-                    <ChevronLeft size={16} /> Back to login
-                  </button>
-                  <h1
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 800,
-                      color: '#1A1D2E',
-                      letterSpacing: '-0.8px',
-                      lineHeight: 1.1,
-                      marginBottom: 6,
-                    }}
-                  >
-                    {otpVerified ? 'Reset Password' : otpSent ? 'Verify OTP' : 'Forgot Password?'}
-                  </h1>
-                  <p style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 20 }}>
-                    {otpVerified 
-                      ? 'Enter your new password' 
-                      : otpSent 
-                        ? 'Enter the 6-digit code sent to your email' 
-                        : 'Enter your email to receive a verification code'}
-                  </p>
-                </div>
-
-                {!otpSent ? (
-                  <form onSubmit={handleSendOTP} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        required
-                        style={{
-                          width: '100%',
-                          height: 48,
-                          borderRadius: 10,
-                          border: '1.5px solid #E5E7EB',
-                          padding: '0 16px',
-                          fontSize: 14,
-                          color: '#1A1D2E',
-                          outline: 'none',
-                          background: '#FAFBFF',
-                        }}
-                      />
-                    </div>
-
-                    {forgotError && (
-                      <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-                        {forgotError}
-                      </div>
-                    )}
-
-                    {forgotSuccess && (
-                      <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
-                        {forgotSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      style={{
-                        width: '100%',
-                        height: 50,
-                        borderRadius: 12,
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)',
-                        color: '#fff',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        transition: 'transform 0.15s, box-shadow 0.2s',
-                        boxShadow: '0 6px 20px rgba(59,91,252,0.35)',
-                        letterSpacing: '0.3px',
-                      }}
-                    >
-                      Send OTP
-                    </button>
-                  </form>
-                ) : !otpVerified ? (
-                  <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                      <InputOTP 
-                        maxLength={6} 
-                        value={otp}
-                        onChange={(value) => setOtp(value)}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
-                      
-                      <p style={{ fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
-                        Sent to: <span style={{ fontWeight: 600, color: '#1A1D2E' }}>{forgotEmail}</span>
-                      </p>
-                    </div>
-
-                    {forgotError && (
-                      <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-                        {forgotError}
-                      </div>
-                    )}
-
-                    {forgotSuccess && (
-                      <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
-                        {forgotSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={otp.length !== 6}
-                      style={{
-                        width: '100%',
-                        height: 50,
-                        borderRadius: 12,
-                        border: 'none',
-                        background: otp.length === 6 ? 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)' : '#E5E7EB',
-                        color: '#fff',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        cursor: otp.length === 6 ? 'pointer' : 'not-allowed',
-                        transition: 'transform 0.15s, box-shadow 0.2s',
-                        boxShadow: otp.length === 6 ? '0 6px 20px rgba(59,91,252,0.35)' : 'none',
-                        letterSpacing: '0.3px',
-                      }}
-                    >
-                      Verify OTP
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSendOTP}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#3B5BFC',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                      }}
-                    >
-                      Resend OTP
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {/* New Password */}
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showNewPass ? 'text' : 'password'}
-                        placeholder="New Password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        required
-                        style={{
-                          width: '100%',
-                          height: 48,
-                          borderRadius: 10,
-                          border: '1.5px solid #E5E7EB',
-                          padding: '0 44px 0 16px',
-                          fontSize: 14,
-                          color: '#1A1D2E',
-                          outline: 'none',
-                          background: '#FAFBFF',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPass(!showNewPass)}
-                        style={{
-                          position: 'absolute',
-                          right: 14,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: 0,
-                          color: '#9CA3AF',
-                        }}
-                      >
-                        {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-
-                    {/* Confirm Password */}
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showConfirmPass ? 'text' : 'password'}
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                        style={{
-                          width: '100%',
-                          height: 48,
-                          borderRadius: 10,
-                          border: '1.5px solid #E5E7EB',
-                          padding: '0 44px 0 16px',
-                          fontSize: 14,
-                          color: '#1A1D2E',
-                          outline: 'none',
-                          background: '#FAFBFF',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPass(!showConfirmPass)}
-                        style={{
-                          position: 'absolute',
-                          right: 14,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: 0,
-                          color: '#9CA3AF',
-                        }}
-                      >
-                        {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-
-                    {/* Password requirements */}
-                    <div style={{ background: '#F0F4FF', border: '1.5px solid #C7D4FF', borderRadius: 10, padding: '10px 14px' }}>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: '#3B5BFC', marginBottom: 4 }}>Password Requirements:</p>
-                      <ul style={{ fontSize: 11, color: '#6B7280', margin: 0, paddingLeft: 20 }}>
-                        <li>At least 6 characters long</li>
-                        <li>Both passwords must match</li>
-                      </ul>
-                    </div>
-
-                    {forgotError && (
-                      <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-                        {forgotError}
-                      </div>
-                    )}
-
-                    {forgotSuccess && (
-                      <div style={{ background: '#F0FDF4', border: '1.5px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#16A34A', fontWeight: 500 }}>
-                        {forgotSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      style={{
-                        width: '100%',
-                        height: 50,
-                        borderRadius: 12,
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #3B5BFC 0%, #2142D9 100%)',
-                        color: '#fff',
-                        fontSize: 15,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        transition: 'transform 0.15s, box-shadow 0.2s',
-                        boxShadow: '0 6px 20px rgba(59,91,252,0.35)',
-                        letterSpacing: '0.3px',
-                      }}
-                    >
-                      Reset Password
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
           </div>
-          </>
-          ) : (
-            <PlanSelection 
-              email={email} 
-              onSelectPlan={handlePlanSelect}
-              onBack={handleBackToLogin}
-            />
-          )}
         </div>
 
       <style>{`

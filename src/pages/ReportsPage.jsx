@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Download } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -153,17 +153,17 @@ export default function ReportsPage() {
   const kpis = [
     {
       label: 'Tasks Completed', value: String(dashStats.completedTasks),
-      change: `${completionRate}% rate`, up: true, color: '#3B5BFC', bg: '#EEF2FF', icon: '✅',
+      change: `${completionRate}% rate`, up: true, color: '#3B5BFC', bg: '#EEF2FF', icon: '[Check]',
     },
     {
       label: 'Completion Rate', value: `${completionRate}%`,
       change: completionRate >= 50 ? `+${completionRate - 50}% above mid` : `-${50 - completionRate}% below mid`,
-      up: completionRate >= 50, color: '#12C479', bg: '#ECFDF5', icon: '📈',
+      up: completionRate >= 50, color: '#12C479', bg: '#ECFDF5', icon: '[Up]',
     },
     {
       label: 'Overdue Tasks', value: String(overdueTasks),
       change: overdueTasks === 0 ? 'All on track' : `${overdueTasks} late`,
-      up: overdueTasks === 0, color: '#EF4444', bg: '#FEF2F2', icon: '⚠️',
+      up: overdueTasks === 0, color: '#EF4444', bg: '#FEF2F2', icon: '[Warn]️',
     },
     {
       label: 'Team Efficiency', value: `${teamEfficiency}%`,

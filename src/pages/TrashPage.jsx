@@ -80,7 +80,22 @@ function TrashDetailModal({ item, onClose, onRestore, onDelete }) {
               {item.tags?.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {item.tags.map(tag => (
-                    <span key={tag.label} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: tag.bg, color: tag.color }}>{tag.emoji} {tag.label}</span>
+                    <span key={tag.label} style={{ 
+                      fontSize: 11, 
+                      fontWeight: 600, 
+                      padding: '4px 10px', 
+                      borderRadius: 50, 
+                      background: tag.bg, 
+                      color: '#1A1D2E',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      {tag.image && (
+                        <img src={tag.image} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                      )}
+                      {tag.label}
+                    </span>
                   ))}
                 </div>
               )}

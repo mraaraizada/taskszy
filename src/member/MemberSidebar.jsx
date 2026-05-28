@@ -1,7 +1,15 @@
 import { LayoutDashboard, Wallet, FileText, User, LogOut, StickyNote, HelpCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import Avatar from '../components/Avatar';
+import { useLottie } from 'lottie-react';
+
+// Dynamic wallet animation loader
+function useWalletAnimation() {
+  const [data, setData] = useState(null);
+  useEffect(() => { import('../lottie/Wallet animation.json').then(m => setData(m.default)); }, []);
+  return data;
+}
 
 const NAV = [
   { id: 'home',     icon: LayoutDashboard, label: 'Dashboard',   badge: null },
@@ -13,9 +21,139 @@ const NAV = [
 ];
 
 export default function MemberSidebar({ activePage, setActivePage, member, onLogout }) {
-  const { tasks, unreadDescMembers } = useApp();
+  const { tasks, roles, payments, currentUser } = useApp();
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const hasUnreadDesc = unreadDescMembers.has(member.id);
+  const [hasUnreadDesc, setHasUnreadDesc] = useState(false);
+  
+  // ⭐ KEY FIX: Use currentUser directly BUT keep a stable reference to prevent avatar flickering
+  // Store the last valid avatarImg so it doesn't disappear during updates
+  const prevAvatarRef = useRef(null);
+  
+  const displayMember = useMemo(() => {
+    if (!currentUser) return null;
+    
+    // If currentUser has avatarImg, update our reference
+    if (currentUser.avatarImg) {
+      prevAvatarRef.current = currentUser.avatarImg;
+    }
+    
+    // Always use the stored avatarImg if current one is missing
+    return {
+      ...currentUser,
+      avatarImg: currentUser.avatarImg || prevAvatarRef.current
+    };
+  }, [currentUser?.id, currentUser?.name, currentUser?.avatarImg, currentUser?.avatar, currentUser?.color, currentUser?.role, currentUser?.status]);
+  
+  // Debug: Log when displayMember changes
+  useEffect(() => {
+    console.log('👤 MemberSidebar: displayMember updated:', {
+      id: displayMember?.id,
+      name: displayMember?.name,
+      avatarImg: displayMember?.avatarImg,
+      hasAvatar: !!displayMember?.avatarImg,
+      avatar: displayMember?.avatar,
+      color: displayMember?.color
+    });
+  }, [displayMember?.id, displayMember?.name, displayMember?.avatarImg, displayMember?.avatar, displayMember?.color]);
+  
+  // Track paid earnings and show animation when it increases
+  const [lastSeenPaidAmount, setLastSeenPaidAmount] = useState(null);
+  const [showWalletAnimation, setShowWalletAnimation] = useState(false);
+  
+  // Calculate current paid earnings for this user
+  const currentPaidAmount = payments ? payments
+    .filter(p => 
+      (p.status === 'Paid' || p.isPaid) && 
+      (p.memberId === displayMember?.id || p.assignedTo?.some(a => String(a.id) === String(displayMember?.id)))
+    )
+    .reduce((sum, p) => sum + (p.amount || 0), 0) : 0;
+  
+  // Wallet animation
+  const walletAnimData = useWalletAnimation();
+  const WalletLottie = () => {
+    const { View } = useLottie({
+      animationData: walletAnimData ?? null,
+      loop: true,
+      autoplay: true,
+    });
+    return View;
+  };
+  
+  console.log('💰 Wallet animation check (Member):', {
+    currentPaidAmount,
+    lastSeenPaidAmount,
+    showWalletAnimation,
+    activePage,
+    hasWalletAnimData: !!walletAnimData,
+    memberId: displayMember?.id
+  });
+  
+  // Load last seen paid amount from localStorage on mount
+  useEffect(() => {
+    if (!displayMember?.id) return;
+    
+    const storageKey = `wallet_seen_${member.id}`;
+    const stored = localStorage.getItem(storageKey);
+    
+    if (stored) {
+      const lastSeen = parseFloat(stored);
+      setLastSeenPaidAmount(lastSeen);
+      console.log('💰 Loaded last seen amount from storage:', lastSeen);
+      
+      // Show animation if current amount is greater than last seen
+      if (currentPaidAmount > lastSeen) {
+        console.log('✅ Showing wallet animation - paid amount increased since last seen!');
+        setShowWalletAnimation(true);
+      }
+    } else {
+      // First time - set current amount as last seen
+      setLastSeenPaidAmount(currentPaidAmount);
+      localStorage.setItem(storageKey, currentPaidAmount.toString());
+      console.log('💰 First time - set initial amount:', currentPaidAmount);
+    }
+  }, [displayMember?.id, currentPaidAmount]);
+  
+  // Mark as seen when user clicks on payments page
+  useEffect(() => {
+    if (activePage === 'payments' && displayMember?.id) {
+      console.log('❌ Hiding wallet animation - on payments page, marking as seen');
+      setShowWalletAnimation(false);
+      
+      // Update last seen amount in localStorage
+      const storageKey = `wallet_seen_${member.id}`;
+      localStorage.setItem(storageKey, currentPaidAmount.toString());
+      setLastSeenPaidAmount(currentPaidAmount);
+      console.log('💾 Saved last seen amount:', currentPaidAmount);
+    }
+  }, [activePage, displayMember?.id, currentPaidAmount]);
+
+  // Check if there's an unread description update
+  useEffect(() => {
+    if (!displayMember?.id || !displayMember?.role) return;
+    
+    // Find the role's work description update timestamp
+    const memberRole = roles.find(r => r.name === member.role);
+    const roleUpdatedAt = memberRole?.workDescriptionUpdatedAt || 0;
+    
+    if (roleUpdatedAt > 0 && memberRole?.workDescription) {
+      // Check if user has viewed this version of the description
+      const storageKey = `desc_viewed_${member.id}_${roleUpdatedAt}`;
+      const hasViewed = localStorage.getItem(storageKey) === 'true';
+      
+      console.log('🔔 Checking unread description for sidebar:', {
+        memberId: member.id,
+        memberName: member.name,
+        roleUpdatedAt,
+        storageKey,
+        hasViewed,
+        shouldShowDot: !hasViewed
+      });
+      
+      setHasUnreadDesc(!hasViewed);
+    } else {
+      setHasUnreadDesc(false);
+    }
+  }, [displayMember?.id, displayMember?.role, roles]);
 
 
   return (
@@ -88,53 +226,78 @@ export default function MemberSidebar({ activePage, setActivePage, member, onLog
         })}
       </nav>
 
-      {/* Member card with logout merged inside */}
-      <div style={{ padding: '0 4px 20px' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)',
-          borderRadius: 14, padding: '12px 14px', border: '1.5px solid #E0E7FF',
-        }}>
-          {/* Avatar + name + role */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <Avatar member={member} size={36} style={{ boxShadow: `0 4px 10px ${member.color}55` }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1D2E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name}</div>
-              <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 700 }}>{member.role}</div>
-            </div>
+      {/* Wallet Animation - Show only when paid amount increases and not on payments page */}
+      {showWalletAnimation && walletAnimData && (
+        <div style={{ padding: '0 4px 12px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: 120, height: 120 }}>
+            <WalletLottie />
           </div>
-
-          {/* Status + since */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: member.status === 'Active' ? '#12C479' : '#9CA3AF', boxShadow: member.status === 'Active' ? '0 0 0 3px #DCFCE7' : 'none', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: member.status === 'Active' ? '#12C479' : '#6B7280', fontWeight: 700 }}>{member.status}</span>
-            <span style={{ fontSize: 10, color: '#B0B8CC', marginLeft: 'auto' }}>Since {member.joined}</span>
-          </div>
-
-          {/* Logout — merged into card */}
-          {!confirmLogout ? (
-            <button
-              onClick={() => setConfirmLogout(true)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                width: '100%', padding: '7px 10px', borderRadius: 9,
-                background: '#FEF2F2', border: '1px solid #FECACA',
-                fontSize: 12, fontWeight: 700, color: '#EF4444', cursor: 'pointer',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
-              onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}
-            >
-              <LogOut size={13} /> Logout
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#FEF2F2', borderRadius: 9, padding: '6px 8px', border: '1px solid #FECACA' }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#EF4444', flex: 1 }}>Sure?</span>
-              <button onClick={onLogout} style={{ background: '#EF4444', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>Yes</button>
-              <button onClick={() => setConfirmLogout(false)} style={{ background: '#fff', border: '1px solid #E8EAEF', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>No</button>
-            </div>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* Member card with logout merged inside */}
+      {displayMember && (
+        <div style={{ padding: '0 4px 20px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)',
+            borderRadius: 14, padding: '12px 14px', border: '1.5px solid #E0E7FF',
+          }}>
+            {/* Avatar + name + role */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Avatar member={displayMember} size={36} style={{ boxShadow: `0 4px 10px ${displayMember.color}55` }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1D2E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayMember.name}</div>
+                <div style={{ fontSize: 10, color: '#7C3AED', fontWeight: 700 }}>{displayMember.role}</div>
+              </div>
+            </div>
+
+            {/* Status + since */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <div style={{ 
+                width: 7, 
+                height: 7, 
+                borderRadius: '50%', 
+                background: displayMember.status === 'Active' ? '#12C479' : '#EF4444', 
+                boxShadow: displayMember.status === 'Active' ? '0 0 0 3px #DCFCE7' : '0 0 0 3px #FEE2E2', 
+                flexShrink: 0 
+              }} />
+              <span style={{ 
+                fontSize: 11, 
+                color: displayMember.status === 'Active' ? '#12C479' : '#EF4444', 
+                fontWeight: 700 
+              }}>
+                {displayMember.status === 'Active' ? 'Active' : 'Inactive'}
+              </span>
+              <span style={{ fontSize: 10, color: '#B0B8CC', marginLeft: 'auto' }}>Since {displayMember.joined}</span>
+            </div>
+
+            {/* Logout — merged into card */}
+            {!confirmLogout ? (
+              <button
+                onClick={() => setConfirmLogout(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  width: '100%', padding: '7px 10px', borderRadius: 9,
+                  background: '#FEF2F2', border: '1px solid #FECACA',
+                  fontSize: 12, fontWeight: 700, color: '#EF4444', cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
+                onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}
+              >
+                <LogOut size={13} /> Logout
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#FEF2F2', borderRadius: 9, padding: '6px 8px', border: '1px solid #FECACA' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#EF4444', flex: 1 }}>Sure?</span>
+                <button onClick={onLogout} style={{ background: '#EF4444', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>Yes</button>
+                <button onClick={() => setConfirmLogout(false)} style={{ background: '#fff', border: '1px solid #E8EAEF', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>No</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

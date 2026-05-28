@@ -8,6 +8,8 @@ import { DashboardSkeleton } from './Skeleton';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from './ui/empty';
 import { Button } from './ui/button';
 
+console.log('📊 Dashboard.jsx loaded at:', new Date().toISOString());
+
 const TYPE_ICONS = {
   complete: { icon: CheckCircle, bg: '#E8FBF1', color: '#12C479' },
   review:   { icon: RotateCcw,   bg: '#FFF7ED', color: '#F97316' },
@@ -382,40 +384,61 @@ function TaskDonut({ tasks }) {
   const [hovered, setHovered] = useState(null);
 
   const now = new Date();
-  const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay());
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 7);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
 
-  const inRange = tasks.filter(t => { const d = new Date(t.deadline); return d >= start && d < end; });
-  const completed = inRange.filter(t => t.stage === 'Complete').length;
-  const pending   = inRange.length - completed;
-  const total     = inRange.length;
+  // Completed: Tasks completed in last 7 days
+  const completed = tasks.filter(t => {
+    if (t.stage !== 'Complete') return false;
+    // Check if completed in last 7 days (using history or updatedAt)
+    const completedDate = t.history?.find(h => h.stage === 'Complete')?.date;
+    if (completedDate) {
+      const date = completedDate?.toDate ? completedDate.toDate() : new Date(completedDate);
+      return date >= sevenDaysAgo;
+    }
+    return true; // Include if no history available
+  }).length;
+
+  // Active: Tasks active (not complete) with deadline in last 7 days or future
+  const active = tasks.filter(t => {
+    if (t.stage === 'Complete') return false;
+    const deadline = new Date(t.extendedDeadline || t.deadline);
+    return deadline >= sevenDaysAgo;
+  }).length;
+
+  // Pending: ALL pending tasks from any date (overdue tasks)
+  const pending = tasks.filter(t => {
+    if (t.stage === 'Complete') return false;
+    const deadline = new Date(t.extendedDeadline || t.deadline);
+    return deadline < sevenDaysAgo;
+  }).length;
+
+  const total = completed + active + pending;
 
   const data = [
-    { name: 'Complete', value: completed || 0, color: '#12C479' },
-    { name: 'Pending',  value: pending  || 0, color: '#3B5BFC' },
-  ];
+    { name: 'Complete', value: completed, color: '#12C479' },
+    { name: 'Active',   value: active,    color: '#3B5BFC' },
+    { name: 'Pending',  value: pending,   color: '#F59E0B' },
+  ].filter(d => d.value > 0);
 
-  const active = hovered ? data.find(d => d.name === hovered) : null;
-  const centerValue = active ? active.value : total;
-  const centerLabel = active ? active.name : 'Total';
-  const centerColor = active ? active.color : 'var(--text-primary)';
+  const hoveredData = hovered ? data.find(d => d.name === hovered) : null;
+  const centerValue = hoveredData ? hoveredData.value : total;
+  const centerLabel = hoveredData ? hoveredData.name : 'Total';
+  const centerColor = hoveredData ? hoveredData.color : 'var(--text-primary)';
 
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 18, padding: '18px 22px', border: '1.5px solid var(--border)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>Task Overview</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed vs pending</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed · Active · Pending</div>
         </div>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '3px 9px', borderRadius: 6, border: '1px solid var(--border)' }}>This Week</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '3px 9px', borderRadius: 6, border: '1px solid var(--border)' }}>All Tasks</span>
       </div>
 
       {/* Donut centered with label inside */}
       <div style={{ position: 'relative', width: 160, height: 160, margin: '0 auto 12px' }}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={160}>
           <PieChart>
             <Pie
               data={total > 0 ? data : [{ name: 'Empty', value: 1, color: '#E5E7EB' }]}
@@ -455,8 +478,17 @@ function TaskDonut({ tasks }) {
 export default function Dashboard({ hideBudget = false, member = null }) {
   const { tasks, activity, STAGE_COLORS, STAGE_BG, STAGES, updateTaskStage, deleteTask, markTaskPaid, fmt, scheduledTasks, addScheduledTask, removeScheduledTask, createTask, refreshTrigger } = useApp();
 
+  console.log('📊 Dashboard: Component rendered', {
+    tasksCount: tasks?.length || 0,
+    activityCount: activity?.length || 0,
+    scheduledTasksCount: scheduledTasks?.length || 0,
+    hideBudget,
+    member: member?.name || 'All'
+  });
+
   // React to refresh trigger - this will cause component to re-render with fresh data
   useEffect(() => {
+    console.log('🔄 Dashboard: Refresh trigger changed, re-rendering with fresh data');
     // Component will automatically re-render when refreshTrigger changes
     // In a real app, you might fetch fresh data here
   }, [refreshTrigger]);
@@ -501,6 +533,16 @@ export default function Dashboard({ hideBudget = false, member = null }) {
   const startIndex = (currentPage - 1) * tasksPerPage;
   const endIndex = startIndex + tasksPerPage;
   const paginatedTasks = filtered.slice(startIndex, endIndex);
+
+  console.log('📄 Dashboard: Pagination info', {
+    filter,
+    totalTasks: filtered.length,
+    tasksPerPage,
+    totalPages,
+    currentPage,
+    displayedTasks: paginatedTasks.length,
+    selectedDate: selectedCalendarDate ? `${selectedCalendarDate.day}/${selectedCalendarDate.month + 1}/${selectedCalendarDate.year}` : 'None'
+  });
 
   const counts = {
     Active: allTasks.filter(t => t.stage !== 'Complete').length,
@@ -583,7 +625,7 @@ export default function Dashboard({ hideBudget = false, member = null }) {
                   >
                     <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, fontWeight: 700, color: task.paid ? '#12C479' : '#F97316', background: task.paid ? '#E8FBF1' : '#FFF7ED', padding: '2px 7px', borderRadius: 20 }}>{task.paid ? 'Paid' : 'Pending'}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '2px 6px', borderRadius: 4 }}>{task.id}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#3B5BFC', padding: '2px 6px', borderRadius: 4 }}>#{task.id}</span>
                       <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? '#EF4444' : days <= 2 ? '#F97316' : 'var(--text-muted)' }}>{dateLabel}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -737,16 +779,49 @@ export default function Dashboard({ hideBudget = false, member = null }) {
                     {/* Main info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>{task.id}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>#{task.id}</span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
                         {task.category && (
-                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: task.category.bg, color: task.category.color, fontWeight: 700, border: `1px solid ${task.category.color}30`, flexShrink: 0, marginLeft: 4 }}>{task.category.emoji} {task.category.label}</span>
+                          <span style={{ 
+                            fontSize: 10, 
+                            padding: '4px 10px', 
+                            borderRadius: 50, 
+                            background: task.category.bg, 
+                            color: '#1A1D2E', 
+                            fontWeight: 700, 
+                            border: `1px solid ${task.category.color}30`, 
+                            flexShrink: 0, 
+                            marginLeft: 4,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            {task.category.image && (
+                              <img src={task.category.image} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                            )}
+                            {task.category.label}
+                          </span>
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: STAGE_BG[task.stage], color: STAGE_COLORS[task.stage] }}>{task.stage}</span>
                         {task.tags && task.tags.map(tag => (
-                          <span key={tag.label} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 20, background: tag.bg, color: tag.color, fontWeight: 600 }}>{tag.emoji} {tag.label}</span>
+                          <span key={tag.label} style={{ 
+                            fontSize: 10, 
+                            padding: '4px 10px', 
+                            borderRadius: 50, 
+                            background: tag.bg, 
+                            color: '#1A1D2E', 
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            {tag.image && (
+                              <img src={tag.image} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                            )}
+                            {tag.label}
+                          </span>
                         ))}
                       </div>
                     </div>

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, Search, Filter } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 // Member-controllable stages from the admin workflow
-const MEMBER_STAGES = ['Start', 'Issue', 'Review A', 'Review B', 'Update'];
+const MEMBER_STAGES = ['New', 'Start', 'Issue', 'Review A', 'Review B'];
 const FILTERS = ['Active', 'Completed', 'All'];
 
 const STAGE_DESCRIPTIONS = {
@@ -12,7 +12,7 @@ const STAGE_DESCRIPTIONS = {
   'Review B': 'Submit for final review',
 };
 
-export default function MemberTasks({ member, onNavigateToNotes = null }) {
+export default function MemberTasks({ member, onNavigateToNotes = null, setPageFilteredData = null, filterToTaskId = null }) {
   const { tasks, updateTaskStage, STAGE_COLORS, STAGE_BG, STAGES, notes: globalNotes } = useApp();
   const [filter, setFilter] = useState('Active');
   const [updating, setUpdating] = useState(null);
@@ -21,9 +21,14 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
   const [expanded, setExpanded] = useState(null);
   const [search, setSearch] = useState('');
 
-  const myTasks = tasks.filter(t => t.members.some(m => m.id === member.id));
+  const myTasks = tasks.filter(t => {
+    // ⭐ Exclude tasks if member is on hold
+    if (member.isOnHold) return false;
+    
+    return t.members.some(m => m.id === member.id);
+  });
 
-  const filtered = myTasks.filter(t => {
+  let filtered = myTasks.filter(t => {
     const matchesFilter =
       filter === 'Active' ? t.stage !== 'Complete' :
       filter === 'Completed' ? t.stage === 'Complete' :
@@ -37,10 +42,22 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
     if (b.stage === 'Complete' && a.stage !== 'Complete') return -1;
     return new Date(a.deadline) - new Date(b.deadline);
   });
+  
+  // Apply search filter if filterToTaskId is provided (show only that task)
+  if (filterToTaskId) {
+    filtered = filtered.filter(t => t.id === filterToTaskId);
+  }
+  
+  // Update filtered data for search
+  useEffect(() => {
+    if (setPageFilteredData) {
+      setPageFilteredData({ tasks: filtered });
+    }
+  }, [filtered.length, filter, search, filterToTaskId, setPageFilteredData]);
 
   // Check if member is on hold for a task
   const isMemberOnHold = (task) => {
-    const mem = task.members.find(m => m.id === member.id);
+    const mem = task.members.find(m => String(m.id) === String(member.id));
     return mem?.isOnHold || false;
   };
 
@@ -144,18 +161,21 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
 
       {/* Task cards */}
       {filtered.map(task => {
-        const mem = task.members.find(m => m.id === member.id);
+        const mem = task.members.find(m => String(m.id) === String(member.id));
         const overdueFlag = isOverdue(task);
         const isExpanded  = expanded === task.id;
         const isComplete  = task.stage === 'Complete' || mem?.stage === 'Complete';
-        const onHold = mem?.isOnHold || false;
+        const onHold = mem?.isOnHold || task.paused || task.isPaused || false;
         const days = daysUntil(task.deadline, task.extendedDeadline);
         const currentStage = mem?.stage || task.stage;
 
-        // Members can only select: Issue, Review A, or Review B
-        const allowedNext = ['Issue', 'Review A', 'Review B'].filter(s => {
+        // Members can only select stages defined in MEMBER_STAGES
+        // Prevent going back from Start to New
+        const allowedNext = MEMBER_STAGES.filter(s => {
           // Don't show current stage as an option
           if (s === currentStage) return false;
+          // If current stage is Start or later, don't allow going back to New
+          if (currentStage !== 'New' && s === 'New') return false;
           return true;
         });
 
@@ -196,27 +216,42 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: isComplete ? '#12C479' : '#3B5BFC', padding: '2px 7px', borderRadius: 5 }}>{task.id}</span>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#1A1D2E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {onHold && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: '#FFF7ED', color: '#F97316', border: '1px solid #F97316' }}>
-                      🔒 On Hold
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {onHold && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: '#FFF7ED', color: '#F97316', border: '1px solid #F97316' }}>
+                        [Lock] On Hold
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: (task.paused || task.isPaused) ? '#FFF7ED' : STAGE_BG[currentStage], color: (task.paused || task.isPaused) ? '#F97316' : STAGE_COLORS[currentStage] }}>
+                      {(task.paused || task.isPaused) ? 'Hold' : currentStage}
                     </span>
-                  )}
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: STAGE_BG[currentStage], color: STAGE_COLORS[currentStage] }}>
-                    {currentStage}
-                  </span>
-                  <span style={{ fontSize: 11, color: overdueFlag ? '#EF4444' : days <= 2 ? '#F97316' : '#9CA3AF', fontWeight: overdueFlag || days <= 2 ? 600 : 400 }}>
-                    {isComplete
-                      ? 'Completed'
-                      : overdueFlag
-                        ? `${Math.abs(days)}d overdue`
-                        : days === 0 ? 'Due today'
-                        : days === 1 ? 'Due tomorrow'
-                        : `${task.extendedDeadline ? 'Extended: ' : 'Due '}${new Date(task.extendedDeadline || task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                    }
-                  </span>
+                    <span style={{ fontSize: 11, color: overdueFlag ? '#EF4444' : days <= 2 ? '#F97316' : '#9CA3AF', fontWeight: overdueFlag || days <= 2 ? 600 : 400 }}>
+                      {isComplete
+                        ? 'Completed'
+                        : overdueFlag
+                          ? `${Math.abs(days)}d overdue`
+                          : days === 0 ? 'Due today'
+                          : days === 1 ? 'Tomorrow'
+                          : `${task.extendedDeadline ? 'Extended: ' : 'Due '}${new Date(task.extendedDeadline || task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                      }
+                    </span>
                   {task.tags && task.tags.map(tag => (
-                    <span key={tag.label} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: tag.bg, color: tag.color, fontWeight: 600 }}>{tag.emoji} {tag.label}</span>
+                    <span key={tag.label} style={{ 
+                      fontSize: 10, 
+                      padding: '4px 10px', 
+                      borderRadius: 50, 
+                      background: tag.bg, 
+                      color: '#1A1D2E', 
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      {tag.image && (
+                        <img src={tag.image} alt="" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                      )}
+                      {tag.label}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -244,9 +279,19 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
                   {mem?.memberDesc && (
                     <div style={{ background: 'linear-gradient(135deg, #F0F4FF, #F5F3FF)', border: '1.5px solid #C7D4FF', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: '#3B5BFC', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Instructions</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#3B5BFC', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Instructions</span>
                       </div>
                       <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, margin: 0 }}>{mem.memberDesc}</p>
+                    </div>
+                  )}
+
+                  {/* Update Instructions - Show member-specific update note when member is in Update stage */}
+                  {mem?.stage === 'Update' && mem?.updateNote && (
+                    <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Update Instructions</span>
+                      </div>
+                      <p style={{ fontSize: 13, color: '#92400E', lineHeight: 1.7, margin: 0 }}>{mem.updateNote}</p>
                     </div>
                   )}
 
@@ -272,52 +317,133 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
                     </div>
                   </div>
 
-                  {/* Issue Note - Read Only */}
-                  {task.issueNote && (
-                    <div style={{ marginBottom: 16, padding: '14px 16px', background: '#FEF2F2', borderRadius: 12, border: '1.5px solid #FED7D7' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <AlertCircle size={16} color="#EF4444" strokeWidth={2.5} />
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reported Issue</div>
-                      </div>
-                      <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #FED7D7' }}>
-                        {task.issueNote}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Scribes */}
+                  {/* Issue Note - Read Only - Show current member's issue note if their stage is Issue */}
                   {(() => {
-                    const taskScribes = (globalNotes || []).filter(n =>
-                      n.taskId === task.id && (
-                        n.assignMode === 'all' ||
-                        (n.assignees || []).includes(String(member.id))
-                      )
+                    const currentMember = task.members?.find(m => String(m.id) === String(member.id));
+                    if (!currentMember || currentMember.stage !== 'Issue' || !currentMember.issueNote) return null;
+                    
+                    return (
+                      <div style={{ marginBottom: 16, padding: '14px 16px', background: '#FEF2F2', borderRadius: 12, border: '1.5px solid #FED7D7' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <AlertCircle size={16} color="#EF4444" strokeWidth={2.5} />
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Reported Issue</div>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #FED7D7' }}>
+                          {currentMember.issueNote}
+                        </div>
+                      </div>
                     );
-                    if (!taskScribes.length) return null;
+                  })()}
+
+                  {/* Scribes - Only show scribes the member has access to */}
+                  {(() => {
+                    if (!task.scribes || task.scribes.length === 0) return null;
+                    
+                    // Filter scribes based on member access
+                    const accessibleScribes = task.scribes.filter((s) => {
+                      // Check if member has access based on assignMode
+                      if (s.assignMode === 'all') return true;
+                      if (s.assignees && s.assignees.some(id => String(id) === String(member.id))) return true;
+                      
+                      return false;
+                    });
+                    
+                    // Don't show section if no accessible scribes
+                    if (accessibleScribes.length === 0) return null;
+                    
                     return (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Scribes</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {taskScribes.map((s, i) => (
-                            <button key={i} type="button"
-                              onClick={() => { if (onNavigateToNotes) onNavigateToNotes(); }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#F5F3FF', borderRadius: 10, border: '1.5px solid #DDD6FE', cursor: 'pointer', textAlign: 'left', width: '100%' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#EDE9FE'}
-                              onMouseLeave={e => e.currentTarget.style.background = '#F5F3FF'}
-                            >
-                              <div style={{ width: 26, height: 26, borderRadius: 7, background: s.type === 'sheet' ? '#ECFDF5' : '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1.5px solid #DDD6FE' }}>
-                                {s.type === 'sheet'
-                                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-                                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                }
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#1A1D2E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
-                                <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{s.type === 'sheet' ? 'Sheet' : 'Note'} � Tap to open</div>
-                              </div>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
-                          ))}
+                        <div style={{ display: 'flex', flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                          {accessibleScribes.map((s, i) => {
+                            const maxTitleLength = 25;
+                            const displayTitle = s.title.length > maxTitleLength 
+                              ? s.title.substring(0, maxTitleLength) + '...' 
+                              : s.title;
+                            
+                            return (
+                              <button key={i} type="button"
+                                onClick={() => { 
+                                  console.log('🖱️ Scribe card clicked (MemberTasks):', { title: s.title, type: s.type, taskId: task.id });
+                                  // Find the actual note ID from globalNotes by matching title and taskId
+                                  const actualNote = (globalNotes || []).find(n => 
+                                    n.taskId === task.id && 
+                                    n.title === s.title && 
+                                    n.type === s.type
+                                  );
+                                  const noteId = actualNote?.id;
+                                  console.log('📝 Found note ID:', noteId);
+                                  if (onNavigateToNotes && noteId) {
+                                    console.log('📞 Calling onNavigateToNotes with ID:', noteId);
+                                    onNavigateToNotes(noteId);
+                                  }
+                                }}
+                                style={{ 
+                                  display: 'flex', 
+                                  flexDirection: 'row',
+                                  alignItems: 'center', 
+                                  gap: 10, 
+                                  padding: '10px 12px', 
+                                  background: '#fff', 
+                                  borderRadius: 10, 
+                                  border: '1.5px solid #E8EAEF', 
+                                  cursor: 'pointer', 
+                                  textAlign: 'left', 
+                                  flex: '1 1 calc(50% - 4px)',
+                                  minWidth: 160,
+                                  maxWidth: 'calc(50% - 4px)',
+                                  boxSizing: 'border-box',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = s.type === 'sheet' ? '#12C479' : '#7C3AED';
+                                  e.currentTarget.style.background = s.type === 'sheet' ? '#F0FDF4' : '#F5F3FF';
+                                  e.currentTarget.style.transform = 'translateX(2px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = '#E8EAEF';
+                                  e.currentTarget.style.background = '#fff';
+                                  e.currentTarget.style.transform = 'translateX(0)';
+                                }}
+                              >
+                                <div style={{ 
+                                  width: 32, 
+                                  height: 32, 
+                                  borderRadius: 8, 
+                                  background: s.type === 'sheet' ? '#ECFDF5' : '#F5F3FF', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  flexShrink: 0,
+                                  border: `1.5px solid ${s.type === 'sheet' ? '#BBF7D0' : '#DDD6FE'}`
+                                }}>
+                                  {s.type === 'sheet'
+                                    ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#12C479" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                  }
+                                </div>
+                                
+                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
+                                  <div style={{ 
+                                    fontSize: 12, 
+                                    fontWeight: 700, 
+                                    color: '#1A1D2E', 
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: 1.3
+                                  }} title={s.title}>
+                                    {displayTitle}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 600 }}>
+                                    {s.assignMode === 'all' ? 'All members' : `${(s.assignees || []).length} member${(s.assignees || []).length !== 1 ? 's' : ''}`}
+                                  </div>
+                                </div>
+                                
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={s.type === 'sheet' ? '#12C479' : '#7C3AED'} strokeWidth="2.5" style={{ flexShrink: 0 }}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -437,12 +563,12 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
                   )}
 
                   {/* On Hold Notice */}
-                  {onHold && !isComplete && (
+                  {(onHold || task.paused || task.isPaused) && !isComplete && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#FFF7ED', borderRadius: 12, border: '1.5px solid #F97316' }}>
                       <Clock size={18} color="#F97316" strokeWidth={2.5} />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#F97316' }}>Task is on hold</div>
-                        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Admin has paused this task. You cannot update your stage until it's reactivated.</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#F97316' }}>Task Hold</div>
+                        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Admin has hold this task, you cannot update your stage.</div>
                       </div>
                     </div>
                   )}
@@ -452,7 +578,6 @@ export default function MemberTasks({ member, onNavigateToNotes = null }) {
                       <CheckCircle size={18} color="#12C479" strokeWidth={2.5} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed — great work!</div>
-                        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Your payment of ${mem?.budget?.toLocaleString()} is being processed</div>
                       </div>
                     </div>
                   )}

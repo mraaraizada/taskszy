@@ -15,7 +15,7 @@ export default function OrganizationManagementPanel({
   const [sortBy, setSortBy] = useState('name'); // name, plan, status, joinDate
   const [sortOrder, setSortOrder] = useState('asc'); // asc, desc
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 15;
 
   // Filter and sort organizations
   const filteredAndSortedOrganizations = useMemo(() => {
@@ -29,7 +29,7 @@ export default function OrganizationManagementPanel({
       filtered = filtered.filter(
         (org) =>
           org.name.toLowerCase().includes(query) ||
-          org.contactEmail.toLowerCase().includes(query)
+          org.email.toLowerCase().includes(query)
       );
     }
 
@@ -52,8 +52,8 @@ export default function OrganizationManagementPanel({
           compareValue = a.name.localeCompare(b.name);
           break;
         case 'plan':
-          const planOrder = { Basic: 1, Pro: 2, Enterprise: 3 };
-          compareValue = planOrder[a.subscriptionPlan] - planOrder[b.subscriptionPlan];
+          const planOrder = { Free: 1, Starter: 2, Professional: 3, Business: 4, Enterprise: 5 };
+          compareValue = (planOrder[a.subscriptionPlan] || 0) - (planOrder[b.subscriptionPlan] || 0);
           break;
         case 'status':
           compareValue = a.subscriptionStatus.localeCompare(b.subscriptionStatus);
@@ -194,8 +194,10 @@ export default function OrganizationManagementPanel({
           }}
         >
           <option value="All">All Plans</option>
-          <option value="Basic">Basic</option>
-          <option value="Pro">Pro</option>
+          <option value="Free">Free</option>
+          <option value="Starter">Starter</option>
+          <option value="Professional">Professional</option>
+          <option value="Business">Business</option>
           <option value="Enterprise">Enterprise</option>
         </select>
 
@@ -343,73 +345,61 @@ export default function OrganizationManagementPanel({
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             alignItems: 'center',
             paddingTop: 16,
             borderTop: '1px solid var(--border-color)',
+            gap: 6,
           }}
         >
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
             style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              border: '1.5px solid var(--border)',
+              background: currentPage === 1 ? 'var(--bg-subtle)' : 'var(--bg-surface)',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '8px 12px',
-              borderRadius: 6,
-              border: '1px solid var(--border-color)',
-              background: currentPage === 1 ? 'var(--bg-surface)' : 'var(--bg-surface)',
-              color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              justifyContent: 'center',
               opacity: currentPage === 1 ? 0.5 : 1,
-              transition: 'all 0.15s',
             }}
           >
-            <ChevronLeft size={16} />
-            Previous
+            <ChevronLeft size={12} color="var(--text-muted)" />
           </button>
 
-          <div
+          <span
             style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+              minWidth: 50,
+              textAlign: 'center',
             }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                color: 'var(--text-muted)',
-              }}
-            >
-              Page {currentPage} of {totalPages}
-            </span>
-          </div>
+            {currentPage} / {totalPages}
+          </span>
 
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              border: '1.5px solid var(--border)',
+              background: currentPage === totalPages ? 'var(--bg-subtle)' : 'var(--bg-surface)',
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '8px 12px',
-              borderRadius: 6,
-              border: '1px solid var(--border-color)',
-              background: currentPage === totalPages ? 'var(--bg-surface)' : 'var(--bg-surface)',
-              color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+              justifyContent: 'center',
               opacity: currentPage === totalPages ? 0.5 : 1,
-              transition: 'all 0.15s',
             }}
           >
-            Next
-            <ChevronRight size={16} />
+            <ChevronRight size={12} color="var(--text-muted)" />
           </button>
         </div>
       )}

@@ -1,33 +1,161 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { notify } from '../lib/notify';
-import { CheckCircle, Clock, X, HelpCircle, MessageSquare, Edit2 } from 'lucide-react';
+import { CheckCircle, Clock, X, HelpCircle, MessageSquare, Edit2, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { subscribeToHelpSubmissions, resolveHelpSubmission, updateHelpResponse } from '../lib/helpService';
+import { AdminPasswordModal } from '../components/AdminPasswordModal';
+import { useAdminPassword } from '../hooks/useAdminPassword';
 
-export default function HelpPage() {
-  const { helpSubmissions, setHelpSubmissions } = useApp();
+export default function HelpPage({ setPageFilteredData = null }) {
+  const { workspaceId, currentUid, currentUser } = useApp();
+  const [allSubmissions, setAllSubmissions] = useState([]); // Store all submissions
+  const [displayedSubmissions, setDisplayedSubmissions] = useState([]); // Submissions to display
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [editingResponse, setEditingResponse] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(10); // How many to display
+  
+  // Password protection hook
+  const { 
+    showPasswordModal, 
+    pendingAction, 
+    requestAdminPassword, 
+    handlePasswordConfirm, 
+    handlePasswordCancel 
+  } = useAdminPassword();
 
-  const submissions = helpSubmissions;
-  const setSubmissions = setHelpSubmissions;
+  // Subscribe to help submissions from Firebase
+  useEffect(() => {
+    if (!workspaceId) return;
 
-  const handleResolve = (submissionId, responseText) => {
-    setSubmissions(prev => prev.map(sub => 
-      sub.id === submissionId 
-        ? { ...sub, status: 'solved', response: responseText }
-        : sub
-    ));
-    setSelectedSubmission(prev => 
-      prev?.id === submissionId 
-        ? { ...prev, status: 'solved', response: responseText }
-        : prev
-    );
-    setEditingResponse(false);
-    notify.helpResolved();
+    const unsubscribe = subscribeToHelpSubmissions(workspaceId, (loadedSubmissions) => {
+      // Sort: Pending submissions first, then solved submissions
+      // Within each group, sort by timestamp (newest first)
+      const sortedSubmissions = loadedSubmissions.sort((a, b) => {
+        // First, sort by status (pending before solved)
+        if (a.status === 'pending' && b.status === 'solved') return -1;
+        if (a.status === 'solved' && b.status === 'pending') return 1;
+        
+        // If same status, sort by timestamp (newest first)
+        return b.timestamp - a.timestamp;
+      });
+      
+      setAllSubmissions(sortedSubmissions);
+    }, 50); // Load 50 at a time from Firebase
+
+    return () => unsubscribe();
+  }, [workspaceId]);
+  
+  // Apply display limit
+  useEffect(() => {
+    const displayed = allSubmissions.slice(0, displayLimit);
+    setDisplayedSubmissions(displayed);
+  }, [allSubmissions, displayLimit]);
+  
+  // Update filtered data for search - use FULL data, not just paginated
+  useEffect(() => {
+    if (setPageFilteredData) {
+      setPageFilteredData({ help: allSubmissions }); // Search all submissions, not just current page
+    }
+  }, [allSubmissions.length, setPageFilteredData]);
+  
+  // Function to load more submissions
+  const loadMore = () => {
+    setDisplayLimit(prev => prev + 10);
+  };
+  
+  const hasMore = allSubmissions.length > displayLimit;
+
+  const handleResolve = async (submissionId, responseText) => {
+    try {
+      if (editingResponse) {
+        // Update existing response
+        await updateHelpResponse(workspaceId, submissionId, responseText);
+        
+        // Optimistically update local state
+        setAllSubmissions((prev) =>
+          prev.map((sub) =>
+            sub.id === submissionId
+              ? { ...sub, response: responseText, updatedAt: new Date() }
+              : sub
+          )
+        );
+        
+        // Update selected submission
+        if (selectedSubmission?.id === submissionId) {
+          setSelectedSubmission((prev) => ({
+            ...prev,
+            response: responseText,
+            updatedAt: new Date()
+          }));
+        }
+      } else {
+        // Mark as solved with new response
+        await resolveHelpSubmission(workspaceId, submissionId, responseText, currentUid, {
+          name: currentUser?.name || 'Admin',
+          avatar: currentUser?.avatar || '👤',
+          avatarImg: currentUser?.avatarImg || null,
+          color: currentUser?.color || '#3B5BFC',
+          role: currentUser?.role || 'admin'
+        });
+        
+        // Optimistically update local state
+        setAllSubmissions((prev) =>
+          prev.map((sub) =>
+            sub.id === submissionId
+              ? {
+                  ...sub,
+                  status: 'solved',
+                  response: responseText,
+                  resolvedBy: currentUid,
+                  resolvedByInfo: {
+                    name: currentUser?.name || 'Admin',
+                    avatar: currentUser?.avatar || '👤',
+                    avatarImg: currentUser?.avatarImg || null,
+                    color: currentUser?.color || '#3B5BFC',
+                    role: currentUser?.role || 'admin'
+                  },
+                  resolvedAt: new Date(),
+                  updatedAt: new Date()
+                }
+              : sub
+          )
+        );
+        
+        // Update selected submission
+        if (selectedSubmission?.id === submissionId) {
+          setSelectedSubmission((prev) => ({
+            ...prev,
+            status: 'solved',
+            response: responseText,
+            resolvedBy: currentUid,
+            resolvedByInfo: {
+              name: currentUser?.name || 'Admin',
+              avatar: currentUser?.avatar || '👤',
+              avatarImg: currentUser?.avatarImg || null,
+              color: currentUser?.color || '#3B5BFC',
+              role: currentUser?.role || 'admin'
+            },
+            resolvedAt: new Date(),
+            updatedAt: new Date()
+          }));
+        }
+      }
+      
+      setEditingResponse(false);
+      notify.helpResolved();
+    } catch (error) {
+      console.error('Error resolving help submission:', error);
+      notify.error('Failed to update submission');
+    }
+  };
+  
+  // Handle password-protected resolve
+  const handleResolveWithPassword = (submissionId, responseText) => {
+    requestAdminPassword('resolve help submission', () => handleResolve(submissionId, responseText));
   };
 
-  const pendingCount = submissions.filter(s => s.status === 'pending').length;
-  const solvedCount = submissions.filter(s => s.status === 'solved').length;
+  const pendingCount = allSubmissions.filter(s => s.status === 'pending').length;
+  const solvedCount = allSubmissions.filter(s => s.status === 'solved').length;
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '24px 28px', display: 'flex', gap: 20 }}>
@@ -43,16 +171,21 @@ export default function HelpPage() {
                     width: 40, 
                     height: 40, 
                     borderRadius: '50%', 
-                    background: selectedSubmission.member.color,
+                    background: selectedSubmission.member.avatarImg ? 'transparent' : selectedSubmission.member.color,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
                     fontSize: 13,
                     fontWeight: 800,
                     color: '#fff',
-                    boxShadow: `0 4px 10px ${selectedSubmission.member.color}55`,
+                    boxShadow: selectedSubmission.member.avatarImg ? 'none' : `0 4px 10px ${selectedSubmission.member.color}55`,
+                    overflow: 'hidden'
                   }}>
-                    {selectedSubmission.member.avatar}
+                    {selectedSubmission.member.avatarImg ? (
+                      <img src={selectedSubmission.member.avatarImg} alt={selectedSubmission.member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      selectedSubmission.member.avatar
+                    )}
                   </div>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{selectedSubmission.member.name}</div>
@@ -117,25 +250,57 @@ export default function HelpPage() {
                 {selectedSubmission.status === 'solved' && !editingResponse ? (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Response</label>
-                      <button
-                        onClick={() => setEditingResponse(true)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 12px',
-                          background: '#EEF2FF',
-                          border: 'none',
-                          borderRadius: 8,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#3B5BFC',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Edit2 size={12} /> Edit
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Response</label>
+                        {/* Show resolver info */}
+                        {selectedSubmission.resolvedByInfo && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ 
+                              width: 20, 
+                              height: 20, 
+                              borderRadius: '50%', 
+                              background: selectedSubmission.resolvedByInfo.avatarImg ? 'transparent' : selectedSubmission.resolvedByInfo.color,
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              fontSize: 9,
+                              fontWeight: 800,
+                              color: '#fff',
+                              overflow: 'hidden'
+                            }}>
+                              {selectedSubmission.resolvedByInfo.avatarImg ? (
+                                <img src={selectedSubmission.resolvedByInfo.avatarImg} alt={selectedSubmission.resolvedByInfo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                selectedSubmission.resolvedByInfo.avatar
+                              )}
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                              by {selectedSubmission.resolvedByInfo.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Only show Edit button if current user resolved it */}
+                      {selectedSubmission.resolvedBy === currentUid && (
+                        <button
+                          onClick={() => setEditingResponse(true)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '6px 12px',
+                            background: '#EEF2FF',
+                            border: 'none',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: '#3B5BFC',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Edit2 size={12} /> Edit
+                        </button>
+                      )}
                     </div>
                     <div style={{
                       padding: '14px 16px',
@@ -152,7 +317,7 @@ export default function HelpPage() {
                 ) : (
                   <ResponseForm 
                     submissionId={selectedSubmission.id} 
-                    onResolve={handleResolve}
+                    onResolve={handleResolveWithPassword}
                     initialResponse={editingResponse ? selectedSubmission.response : ''}
                     isEditing={editingResponse}
                     onCancelEdit={() => setEditingResponse(false)}
@@ -197,7 +362,7 @@ export default function HelpPage() {
 
           {/* List */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-            {submissions.length === 0 ? (
+            {displayedSubmissions.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 20px', gap: 12, textAlign: 'center' }}>
                 <div style={{ width: 56, height: 56, borderRadius: 16, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <HelpCircle size={24} color="#F97316" strokeWidth={1.8} />
@@ -206,10 +371,12 @@ export default function HelpPage() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 220 }}>Team members can submit help requests from their dashboard</div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {submissions.map(sub => (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {displayedSubmissions.map(sub => (
                   <div
                     key={sub.id}
+                    data-help-id={sub.id}
                     onClick={() => setSelectedSubmission(sub)}
                     style={{
                       background: sub.status === 'solved' ? '#F9FAFB' : '#FFFBEB',
@@ -234,7 +401,7 @@ export default function HelpPage() {
                         width: 32, 
                         height: 32, 
                         borderRadius: '50%', 
-                        background: sub.member.color,
+                        background: sub.member.avatarImg ? 'transparent' : sub.member.color,
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
@@ -242,8 +409,13 @@ export default function HelpPage() {
                         fontWeight: 800,
                         color: '#fff',
                         flexShrink: 0,
+                        overflow: 'hidden'
                       }}>
-                        {sub.member.avatar}
+                        {sub.member.avatarImg ? (
+                          <img src={sub.member.avatarImg} alt={sub.member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          sub.member.avatar
+                        )}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub.member.name}</div>
@@ -270,10 +442,52 @@ export default function HelpPage() {
                   </div>
                 ))}
               </div>
+              
+              {/* Load More Button */}
+              {hasMore && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, paddingBottom: 8 }}>
+                  <button 
+                    onClick={loadMore}
+                    style={{ 
+                      padding: '10px 20px', 
+                      borderRadius: 10, 
+                      border: '1.5px solid var(--border)', 
+                      background: 'var(--bg-surface)', 
+                      fontSize: 13, 
+                      fontWeight: 600, 
+                      color: 'var(--text-secondary)', 
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = '#3B5BFC';
+                      e.currentTarget.style.color = '#3B5BFC';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                  >
+                    <Plus size={14} /> Load More
+                  </button>
+                </div>
+              )}
+            </>
             )}
           </div>
         </div>
       </div>
+      
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <AdminPasswordModal
+          onConfirm={handlePasswordConfirm}
+          onClose={handlePasswordCancel}
+        />
+      )}
     </div>
   );
 }

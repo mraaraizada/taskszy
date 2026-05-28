@@ -1,49 +1,89 @@
-import { Search, X, PanelRight, Plus, ImagePlus } from 'lucide-react';
+import { Search, X, PanelRight, Plus, ImagePlus, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { storage, db } from '../lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, doc, setDoc, query as firestoreQuery, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { compressCarouselImage } from '../lib/imageCompression';
+import carouselE from '../assets/carousel-e.png';
+import carouselG from '../assets/carousel-g.png';
+import carouselJ from '../assets/carousel-j.png';
+import carouselQ from '../assets/carousel-q.png';
+import carouselZ from '../assets/carousel-z.png';
 
 const STAGE_COLOR = {
   New: '#9CA3AF', Start: '#3B5BFC', Accept: '#7C3AED',
   Review: '#F97316', Update: '#EF4444', Complete: '#12C479',
 };
 
-export default function Header({ title, subtitle }) {
-  const { tasks, currentUser } = useApp();
-  const [query, setQuery] = useState('');
-  const [focused, setFocused] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [dashTitle, setDashTitle] = useState('');
-  const [dashboards, setDashboards] = useState([
+// Persist dashboards to localStorage so LoginPage carousel picks them up
+const LS_KEY = 'carouselDashboards';
+
+// Default carousel images from local assets
+const DEFAULT_CAROUSEL_IMAGES = [
+  carouselE,
+  carouselG,
+  carouselJ,
+  carouselQ,
+  carouselZ,
+];
+
+function loadDashboards() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
     {
       id: 'default',
       label: 'Default',
       active: true,
-      images: [
-        'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=80&q=60',
-        'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=80&q=60',
-        'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=80&q=60',
-        'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=80&q=60',
-        'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=80&q=60',
-      ],
+      images: DEFAULT_CAROUSEL_IMAGES,
     },
-  ]);
-  const [selectedImages, setSelectedImages] = useState([]);
+  ];
+}
+
+function saveDashboards(dashboards) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(dashboards)); } catch {}
+}
+
+export default function Header({ title, subtitle }) {
+  const { tasks, currentUser, globalSearchQuery, setGlobalSearchQuery, organizations, setNavigationRequest, setSelectedOrganizationId } = useApp();
+  const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [dashTitle, setDashTitle] = useState('');
+  const [dashboards, setDashboards] = useState(loadDashboards);
+  const [selectedImages, setSelectedImages] = useState([]);   // { localUrl, file } pairs
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const imageInputRef = useRef(null);
   const inputRef = useRef(null);
   const dropRef = useRef(null);
+
+  // Sync dashboards to localStorage whenever they change
+  useEffect(() => { saveDashboards(dashboards); }, [dashboards]);
 
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const results = query.trim().length > 0
-    ? (tasks || []).filter(t =>
-        t.id.toLowerCase().includes(query.toLowerCase()) ||
-        t.title.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 6)
-    : [];
+  // Get search results - filter organizations by search query
+  const getSearchResults = () => {
+    const q = globalSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    
+    return (organizations || [])
+      .filter(org => 
+        org.name?.toLowerCase().includes(q) ||
+        org.workspaceSub?.toLowerCase().includes(q)
+      )
+      .slice(0, 5)
+      .map(org => ({ ...org, type: 'organization' }));
+  };
 
-  const showDrop = focused && query.trim().length > 0;
+  const results = getSearchResults();
+  const showDrop = focused && globalSearchQuery.trim().length > 0;
 
   useEffect(() => {
     const handler = (e) => {
@@ -66,17 +106,99 @@ export default function Header({ title, subtitle }) {
   function handleAddDashboard() {
     const label = dashTitle.trim();
     if (!label) return;
-    const id = 'dash-' + Date.now();
-    setDashboards(prev => [...prev.map(d => ({ ...d, active: false })), { id, label, images: selectedImages, active: true }]);
-    setDashTitle('');
-    setSelectedImages([]);
+
+    const filesToUpload = selectedImages.filter(img => img.file);
+    const alreadyUploaded = selectedImages.filter(img => !img.file).map(img => img.localUrl);
+
+    // Validate: Must have at least one image
+    if (filesToUpload.length === 0 && alreadyUploaded.length === 0) {
+      alert('Please select at least one image for the carousel');
+      return;
+    }
+
+    if (filesToUpload.length === 0) {
+      // No new files — just add with already-uploaded URLs
+      const id = 'dash-' + Date.now();
+      const updated = [...dashboards, { id, label, images: alreadyUploaded, active: false }];
+      setDashboards(updated);
+      setDashTitle('');
+      setSelectedImages([]);
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    // Compress images before uploading
+    const compressionPromises = filesToUpload.map(async (img) => {
+      try {
+        console.log('🗜️ Compressing carousel image...');
+        const compressedFile = await compressCarouselImage(img.file);
+        return { ...img, file: compressedFile };
+      } catch (err) {
+        console.error('Failed to compress image, using original:', err);
+        return img; // Fallback to original if compression fails
+      }
+    });
+
+    Promise.all(compressionPromises)
+      .then((compressedImages) => {
+        const uploadPromises = compressedImages.map((img, idx) => {
+          return new Promise((resolve, reject) => {
+            const storageRef = ref(storage, `carousel/${Date.now()}_${idx}_${img.file.name}`);
+            
+            // Add cache control metadata
+            const metadata = {
+              cacheControl: 'public, max-age=604800', // Cache for 7 days
+              contentType: img.file.type
+            };
+            
+            const task = uploadBytesResumable(storageRef, img.file, metadata);
+            task.on(
+              'state_changed',
+              (snap) => {
+                const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+                setUploadProgress(pct);
+              },
+              reject,
+              async () => {
+                const url = await getDownloadURL(task.snapshot.ref);
+                console.log('✅ Carousel image uploaded with cache headers');
+                resolve(url);
+              }
+            );
+          });
+        });
+
+        return Promise.all(uploadPromises);
+      })
+      .then((downloadUrls) => {
+        const allImages = [...alreadyUploaded, ...downloadUrls];
+        const id = 'dash-' + Date.now();
+        const updated = [...dashboards, { id, label, images: allImages, active: false }];
+        setDashboards(updated);
+        setDashTitle('');
+        setSelectedImages([]);
+      })
+      .catch((err) => {
+        console.error('Upload failed:', err);
+      })
+      .finally(() => {
+        setUploading(false);
+        setUploadProgress(0);
+      });
   }
 
   function handleImageChange(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setSelectedImages(prev => [...prev, url]);
+    
+    // Use FileReader instead of createObjectURL to avoid blob URL errors
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSelectedImages(prev => [...prev, { localUrl: event.target.result, file }]);
+    };
+    reader.readAsDataURL(file);
     e.target.value = '';
   }
 
@@ -90,8 +212,68 @@ export default function Header({ title, subtitle }) {
     });
   }
 
-  function handleSetActive(id) {
+  async function handleSetActive(id) {
     setDashboards(prev => prev.map(d => ({ ...d, active: d.id === id })));
+    
+    // If default carousel is selected, clear Firebase cache and set default images
+    if (id === 'default') {
+      console.log('⏭️ Default carousel selected - using local asset images');
+      
+      try {
+        // Save default local asset images to cache immediately
+        localStorage.setItem('login_carousel_images', JSON.stringify(DEFAULT_CAROUSEL_IMAGES));
+        localStorage.setItem('login_carousel_timestamp', Date.now().toString());
+        console.log('💾 Cached default carousel images (local assets):', DEFAULT_CAROUSEL_IMAGES.length);
+        
+        // Deactivate all Firebase carousels
+        const carouselsRef = collection(db, 'carousels');
+        const activeQuery = firestoreQuery(carouselsRef, where('active', '==', true));
+        const activeSnapshot = await getDocs(activeQuery);
+        
+        const deactivatePromises = activeSnapshot.docs.map(docSnapshot => 
+          setDoc(docSnapshot.ref, { active: false }, { merge: true })
+        );
+        await Promise.all(deactivatePromises);
+        
+        console.log('✅ Default carousel activated - all 5 local images cached');
+      } catch (error) {
+        console.error('❌ Error activating default carousel:', error);
+      }
+      
+      return;
+    }
+    
+    // Save active carousel to Firebase (only for custom carousels)
+    const activeDashboard = dashboards.find(d => d.id === id);
+    if (activeDashboard) {
+      try {
+        console.log('💾 Saving active carousel to Firebase:', activeDashboard);
+        
+        // First, set all existing carousels to inactive
+        const carouselsRef = collection(db, 'carousels');
+        const activeQuery = firestoreQuery(carouselsRef, where('active', '==', true));
+        const activeSnapshot = await getDocs(activeQuery);
+        
+        const deactivatePromises = activeSnapshot.docs.map(docSnapshot => 
+          setDoc(docSnapshot.ref, { active: false }, { merge: true })
+        );
+        await Promise.all(deactivatePromises);
+        
+        // Then save/update the new active carousel
+        const carouselDocRef = doc(db, 'carousels', activeDashboard.id);
+        await setDoc(carouselDocRef, {
+          id: activeDashboard.id,
+          label: activeDashboard.label,
+          images: activeDashboard.images || [],
+          active: true,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        
+        console.log('✅ Active carousel saved to Firebase');
+      } catch (error) {
+        console.error('❌ Error saving carousel to Firebase:', error);
+      }
+    }
   }
 
   return (
@@ -130,14 +312,17 @@ export default function Header({ title, subtitle }) {
             <Search size={14} color={focused ? '#3B5BFC' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
             <input
               ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
+              value={globalSearchQuery}
+              onChange={e => {
+                console.log('🔍 Header: Search changed to:', e.target.value);
+                setGlobalSearchQuery(e.target.value);
+              }}
               onFocus={() => setFocused(true)}
-              placeholder="Search by ID or title…"
+              placeholder="Search organizations…"
               style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--text-primary)', width: '100%' }}
             />
-            {query && (
-              <button onClick={() => { setQuery(''); inputRef.current?.focus(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            {globalSearchQuery && (
+              <button onClick={() => { setGlobalSearchQuery(''); inputRef.current?.focus(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
                 <X size={13} color="var(--text-muted)" />
               </button>
             )}
@@ -153,34 +338,95 @@ export default function Header({ title, subtitle }) {
             }}>
               {results.length === 0 ? (
                 <div style={{ padding: '18px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                  No tasks found for "<strong>{query}</strong>"
+                  No organizations found for "<strong>{globalSearchQuery}</strong>"
                 </div>
               ) : (
-                <>
-                  <div style={{ padding: '8px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.6px', textTransform: 'uppercase' }}>
-                    {results.length} result{results.length !== 1 ? 's' : ''}
-                  </div>
-                  {results.map(task => (
-                    <div key={task.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', borderTop: '1px solid var(--border-light)',
-                      transition: 'background 0.12s', cursor: 'pointer',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#3B5BFC', padding: '2px 7px', borderRadius: 5, flexShrink: 0 }}>{task.id}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        color: STAGE_COLOR[task.stage],
-                        background: STAGE_COLOR[task.stage] + '18',
-                        border: `1px solid ${STAGE_COLOR[task.stage]}33`,
-                        padding: '2px 8px', borderRadius: 20, flexShrink: 0,
-                      }}>{task.stage}</span>
-                    </div>
-                  ))}
-                </>
+                results.map((org, idx) => {
+                    const getPlanColor = (plan) => {
+                      switch (plan) {
+                        case 'Starter': return { bg: '#FEF3C7', color: '#D97706' };
+                        case 'Professional': return { bg: '#DBEAFE', color: '#1D4ED8' };
+                        case 'Business': return { bg: '#F3E8FF', color: '#9333EA' };
+                        case 'Enterprise': return { bg: '#FFF7ED', color: '#F97316' };
+                        default: return { bg: '#F3F4F6', color: '#6B7280' };
+                      }
+                    };
+                    
+                    const planColors = getPlanColor(org.subscriptionPlan);
+                    const getInitials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+                    
+                    return (
+                      <div key={org.id || idx} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+                        transition: 'background 0.12s', cursor: 'pointer',
+                      }}
+                        onClick={() => {
+                          console.log('🔗 Search result clicked:', org.name);
+                          setSelectedOrganizationId(org.id);
+                          setNavigationRequest('team');
+                          setGlobalSearchQuery('');
+                          setFocused(false);
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        {/* Organization Logo */}
+                        {org.workspaceLogo ? (
+                          <img
+                            src={org.workspaceLogo}
+                            alt={org.name}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              objectFit: 'cover',
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            background: 'linear-gradient(135deg, #667EEA, #764BA2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: '#fff',
+                            flexShrink: 0,
+                          }}>
+                            {getInitials(org.name)}
+                          </div>
+                        )}
+                        
+                        {/* Organization Info */}
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                            {org.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                            {org.workspaceSub || 'No description'}
+                          </div>
+                        </div>
+                        
+                        {/* Plan Badge */}
+                        <div style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          background: planColors.bg,
+                          color: planColors.color,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {org.subscriptionPlan}
+                        </div>
+                      </div>
+                    );
+                  })
               )}
             </div>
           )}
@@ -248,7 +494,7 @@ export default function Header({ title, subtitle }) {
           }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Carousel Options</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Manage dashboard for organizations</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Manage carousel for organizations</div>
             </div>
             <button
               onClick={() => setPanelOpen(false)}
@@ -279,7 +525,7 @@ export default function Header({ title, subtitle }) {
                 value={dashTitle}
                 onChange={e => setDashTitle(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddDashboard()}
-                placeholder="Title…"
+                placeholder="Text"
                 autoFocus
                 style={{
                   flex: 1, padding: '9px 13px', borderRadius: 10,
@@ -300,54 +546,68 @@ export default function Header({ title, subtitle }) {
               />
               <button
                 onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
                 title="Select image"
                 style={{
                   width: 38, height: 38, borderRadius: 10, flexShrink: 0,
                   border: `1.5px solid ${selectedImages.length ? '#3B5BFC' : 'var(--border)'}`,
                   background: selectedImages.length ? '#EEF2FF' : 'var(--bg-subtle)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', transition: 'all 0.2s',
+                  cursor: uploading ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                  opacity: uploading ? 0.5 : 1,
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3B5BFC'; e.currentTarget.style.background = '#EEF2FF'; }}
-                onMouseLeave={e => { if (!selectedImages.length) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-subtle)'; } }}
+                onMouseEnter={e => { if (!uploading) { e.currentTarget.style.borderColor = '#3B5BFC'; e.currentTarget.style.background = '#EEF2FF'; } }}
+                onMouseLeave={e => { if (!selectedImages.length && !uploading) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-subtle)'; } }}
               >
                 <ImagePlus size={15} color={selectedImages.length ? '#3B5BFC' : '#6B7280'} strokeWidth={2} />
               </button>
               <button
                 onClick={handleAddDashboard}
-                disabled={!dashTitle.trim()}
+                disabled={!dashTitle.trim() || uploading || selectedImages.length === 0}
                 style={{
                   width: 38, height: 38, borderRadius: 10, border: 'none',
-                  background: dashTitle.trim() ? '#3B5BFC' : 'var(--border)',
+                  background: dashTitle.trim() && !uploading && selectedImages.length > 0 ? '#3B5BFC' : 'var(--border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: dashTitle.trim() ? 'pointer' : 'not-allowed',
+                  cursor: dashTitle.trim() && !uploading && selectedImages.length > 0 ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s', flexShrink: 0,
                 }}
-                onMouseEnter={e => { if (dashTitle.trim()) e.currentTarget.style.background = '#2D4AE8'; }}
-                onMouseLeave={e => { if (dashTitle.trim()) e.currentTarget.style.background = '#3B5BFC'; }}
+                onMouseEnter={e => { if (dashTitle.trim() && !uploading && selectedImages.length > 0) e.currentTarget.style.background = '#2D4AE8'; }}
+                onMouseLeave={e => { if (dashTitle.trim() && !uploading && selectedImages.length > 0) e.currentTarget.style.background = '#3B5BFC'; }}
               >
-                <Plus size={16} color="#fff" strokeWidth={2.5} />
+                {uploading
+                  ? <Loader2 size={15} color="#fff" strokeWidth={2.5} style={{ animation: 'spin 0.8s linear infinite' }} />
+                  : <Plus size={16} color="#fff" strokeWidth={2.5} />
+                }
               </button>
             </div>
+
+            {/* Upload progress bar */}
+            {uploading && (
+              <div style={{ marginTop: 8, height: 4, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${uploadProgress}%`, background: '#3B5BFC', borderRadius: 4, transition: 'width 0.2s ease' }} />
+              </div>
+            )}
 
             {/* Image previews — horizontal row */}
             {selectedImages.length > 0 && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                 {selectedImages.map((img, idx) => (
                   <div key={idx} style={{ position: 'relative', flexShrink: 0 }}>
-                    <img src={img} alt={`img-${idx}`} style={{ width: 36, height: 36, borderRadius: 7, objectFit: 'cover', border: '1.5px solid var(--border)', display: 'block' }} />
-                    <button
-                      onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
-                      style={{
-                        position: 'absolute', top: -5, right: -5,
-                        width: 16, height: 16, borderRadius: '50%',
-                        background: '#EF4444', border: '1.5px solid #fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', padding: 0,
-                      }}
-                    >
-                      <X size={9} color="#fff" strokeWidth={3} />
-                    </button>
+                    <img src={img.localUrl} alt={`img-${idx}`} style={{ width: 36, height: 36, borderRadius: 7, objectFit: 'cover', border: '1.5px solid var(--border)', display: 'block' }} />
+                    {!uploading && (
+                      <button
+                        onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                        style={{
+                          position: 'absolute', top: -5, right: -5,
+                          width: 16, height: 16, borderRadius: '50%',
+                          background: '#EF4444', border: '1.5px solid #fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer', padding: 0,
+                        }}
+                      >
+                        <X size={9} color="#fff" strokeWidth={3} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -357,7 +617,7 @@ export default function Header({ title, subtitle }) {
           {/* Dashboard list */}
           <div style={{ padding: '12px 16px 18px', display: 'flex', flexDirection: 'column', gap: 7 }}>
             {dashboards.map(d => (
-              <button
+              <div
                 key={d.id}
                 onClick={() => handleSetActive(d.id)}
                 style={{
@@ -401,8 +661,8 @@ export default function Header({ title, subtitle }) {
                   )}
                 </div>
 
-                {/* Image previews */}
-                {d.images && d.images.length > 0 && (
+                {/* Image previews - Only show for non-default dashboards */}
+                {d.id !== 'default' && d.images && d.images.length > 0 && (
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {d.images.map((img, idx) => (
                       <img
@@ -418,7 +678,7 @@ export default function Header({ title, subtitle }) {
                     ))}
                   </div>
                 )}
-              </button>
+              </div>
             ))}
           </div>
 

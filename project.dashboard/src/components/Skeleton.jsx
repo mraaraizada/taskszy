@@ -559,6 +559,151 @@ export function NotesSkeleton() {
   );
 }
 
+/* ── Feedback Skeleton (FeedbackPage - Table Layout) ─────────────────────────────────────── */
+export function FeedbackSkeleton() {
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-main)', padding: '20px 24px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* Table container */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1.5px solid var(--border)', borderRadius: 16, overflow: 'hidden', minHeight: 0 }}>
+          {/* Column headers */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1.5fr 1.2fr 1.5fr 1.2fr 1.3fr 2fr',
+            padding: '12px 20px',
+            borderBottom: '1.5px solid var(--border-light)',
+            background: 'var(--bg-subtle)',
+            flexShrink: 0,
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <Bone w={24} h={24} r={6} />
+            {[90, 75, 60, 80, 85].map((w, i) => (
+              <Bone key={i} w={w} h={10} />
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Bone w={80} h={10} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Bone w={26} h={26} r={7} />
+                <Bone w={50} h={11} />
+                <Bone w={26} h={26} r={7} />
+              </div>
+            </div>
+          </div>
+
+          {/* Rows */}
+          <div style={{ flex: 1, overflowY: 'auto', position: 'relative', minHeight: 0 }}>
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(i => (
+              <div
+                key={i}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1.5fr 1.2fr 1.5fr 1.2fr 1.3fr 2fr',
+                  padding: '8px 20px',
+                  borderBottom: '1px solid var(--border-light)',
+                  gap: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ paddingLeft: 16, paddingRight: 8 }}></div>
+                <Bone w="75%" h={13} />
+                <Bone w="65%" h={13} />
+                <Bone w="80%" h={12} />
+                <Bone w="70%" h={12} />
+                <Bone w="75%" h={11} />
+                <Bone w="90%" h={13} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Sidebar Skeleton ─────────────────────────────────────── */
+export function SidebarSkeleton() {
+  return (
+    <div style={{
+      width: 240,
+      height: '100vh',
+      background: 'var(--bg-surface)',
+      borderRight: '1.5px solid var(--border)',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '20px 16px',
+      gap: 20,
+      flexShrink: 0,
+    }}>
+      {/* Logo/Header */}
+      <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Bone w={32} h={32} r={10} />
+        <Bone w={80} h={18} />
+      </div>
+
+      {/* Navigation items */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+          <div key={i} style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 12, borderRadius: 10 }}>
+            <Bone w={20} h={20} r={6} />
+            <Bone w={`${Math.random() * 30 + 60}%`} h={13} />
+          </div>
+        ))}
+      </div>
+
+      {/* Logout button */}
+      <div style={{ padding: '12px', borderTop: '1px solid var(--border-light)' }}>
+        <Bone w="100%" h={40} r={10} />
+      </div>
+    </div>
+  );
+}
+
+/* ── Full Dashboard Skeleton (Sidebar + Header + Page) ─────────────────────────────────────── */
+export function FullDashboardSkeleton() {
+  return (
+    <div style={{
+      display: 'flex',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
+      background: 'var(--bg-main)',
+    }}>
+      <SkeletonStyles />
+      
+      {/* Sidebar */}
+      <SidebarSkeleton />
+
+      {/* Main content area */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        height: '100%',
+        background: 'var(--bg-main)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '20px 28px',
+          borderBottom: '1.5px solid var(--border)',
+          background: 'var(--bg-surface)',
+          flexShrink: 0,
+        }}>
+          <Bone w={200} h={24} style={{ marginBottom: 6 }} />
+          <Bone w={280} h={14} />
+        </div>
+
+        {/* Page content */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+          <DashboardSkeleton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Skeleton Styles Component ─────────────────────────────────────── */
 export function SkeletonStyles() {
   return null; // Styles are already in index.css
