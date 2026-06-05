@@ -19,13 +19,13 @@ export default function FinalCTA() {
             Join 500+ teams who've already replaced busywork with intelligent automation.
           </p>
           <div className="flex items-center gap-3 mt-2">
-            <button className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium font-body bg-background text-foreground hover:opacity-90 transition-opacity">
-              Book a demo
+            <a href="/app" className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium font-body bg-background text-foreground hover:opacity-90 transition-opacity cursor-pointer">
+              Start Free Trial
               <ArrowRight className="w-4 h-4" />
-            </button>
-            <button className="rounded-full px-7 py-3 text-sm font-medium font-body border border-background/30 text-background hover:bg-background/10 transition-colors">
+            </a>
+            <a href="#pricing" className="rounded-full px-7 py-3 text-sm font-medium font-body border border-background/30 text-background hover:bg-background/10 transition-colors cursor-pointer">
               View pricing
-            </button>
+            </a>
           </div>
         </motion.div>
       </div>

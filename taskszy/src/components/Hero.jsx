@@ -57,12 +57,12 @@ export default function Hero() {
 
         {/* 4. CTA Buttons */}
         <motion.div {...fadeUp(16, 0.3)} className="mt-5 flex flex-col items-center">
-          <button className="relative rounded-full px-7 py-3 text-sm font-medium font-body bg-foreground text-background overflow-hidden group transition-all shadow-sm hover:shadow-md active:scale-[0.98] border-2 border-foreground">
+          <a href="/app" className="relative rounded-full px-7 py-3 text-sm font-medium font-body bg-foreground text-background overflow-hidden group transition-all shadow-sm hover:shadow-md active:scale-[0.98] border-2 border-foreground cursor-pointer">
             <span className="relative z-10 transition-colors duration-300 group-hover:text-foreground">
               Create Workspace
             </span>
             <span className="absolute inset-0 bg-background transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out rounded-full"></span>
-          </button>
+          </a>
         </motion.div>
 
         {/* 5. Dashboard Preview - positioned with spacing */}

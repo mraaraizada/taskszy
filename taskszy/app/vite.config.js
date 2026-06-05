@@ -21,10 +21,11 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
     chunkSizeWarningLimit: 1000,
-    rolldownOptions: {
+    rollupOptions: {
       output: {
-        // rolldown requires manualChunks as a function
         manualChunks(id) {
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor-react';
           if (id.includes('node_modules/recharts') || id.includes('node_modules/chart.js') || id.includes('node_modules/react-chartjs-2')) return 'vendor-charts';
