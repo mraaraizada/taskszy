@@ -31,13 +31,13 @@ export class PaginatedQuery {
    */
   async loadPage(pageNumber) {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`📄 Loading page ${pageNumber} from ${this.collectionPath}`);
+
     }
 
     // Check cache first
     if (this.pageCache.has(pageNumber)) {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Page ${pageNumber} loaded from cache`);
+
       }
       const cached = this.pageCache.get(pageNumber);
       return {
@@ -60,7 +60,7 @@ export class PaginatedQuery {
       if (!prevPage || !prevPage.lastDoc) {
         // Need to load previous pages first
         if (process.env.NODE_ENV === 'development') {
-          console.warn(`⚠️ Previous page ${pageNumber - 1} not loaded, loading sequentially...`);
+
         }
         await this.loadPage(pageNumber - 1);
         return this.loadPage(pageNumber); // Retry after loading previous page
@@ -90,7 +90,7 @@ export class PaginatedQuery {
     });
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ Page ${pageNumber} loaded: ${docs.length} docs, hasMore: ${hasMore}`);
+
     }
 
     return {
@@ -110,7 +110,7 @@ export class PaginatedQuery {
       try {
         await this.loadPage(nextPage);
       } catch (error) {
-        console.error('Failed to preload next page:', error);
+
       }
     }
   }

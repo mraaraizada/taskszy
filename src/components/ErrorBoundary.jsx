@@ -19,7 +19,7 @@ class ErrorBoundary extends Component {
 
     if (isTemporaryError) {
       // Don't show error UI for temporary errors - just log and continue
-      console.warn('⚠️ Temporary error caught and suppressed:', error.message);
+
       return { hasError: false, error: null };
     }
 
@@ -39,13 +39,13 @@ class ErrorBoundary extends Component {
       error?.code === 'internal';
 
     if (isTemporaryError) {
-      console.warn('⚠️ Temporary error caught:', error.message);
+
       // Don't log to error reporting service
       return;
     }
 
     // Log other errors
-    console.error('Error caught by boundary:', error, errorInfo);
+
   }
 
   render() {

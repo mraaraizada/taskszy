@@ -88,16 +88,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
       // Find the selected role to get its roleType
       const selectedRole = roles.find(r => r.name === form.role);
       const roleType = selectedRole?.roleType || 'Team Member';
-      
-      console.log('🎭 Role mapping:', { 
-        selectedRoleName: form.role, 
-        selectedRole, 
-        roleType, 
-        '⚠️ ROLE TYPE': roleType,
-        '⚠️ THIS DETERMINES DASHBOARD ROLE': roleType === 'Admin' ? 'admin' : roleType === 'Management' ? 'management' : 'member',
-        allRoles: roles.map(r => ({ name: r.name, roleType: r.roleType }))
-      });
-      
+
       // Map roleType to dashboard role
       let dashboardRole = 'member'; // default
       if (roleType === 'Admin') {
@@ -107,9 +98,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
       } else {
         dashboardRole = 'member';
       }
-      
-      console.log('✅ Dashboard role mapped:', { roleType, dashboardRole });
-      
+
       // Generate member ID ONCE at the beginning for new members
       const memberId = member?.id || Date.now();
       
@@ -124,18 +113,6 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
         joined: member?.joined || new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         id: memberId,
       };
-      
-      console.log('👤 New member object created:', {
-        id: newMember.id,
-        name: newMember.name,
-        email: newMember.email,
-        role: newMember.role,
-        '⚠️ ROLE FROM FORM': form.role,
-        '⚠️ ROLE IN NEW MEMBER': newMember.role,
-        selectedRoleName: form.role,
-        roleType: roleType,
-        dashboardRole: dashboardRole
-      });
 
       if (!isEdit) {
         // New member — Create using client-side method
@@ -159,16 +136,10 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
             alert(`Team member created!\n\n${form.name} can log in with:\nEmail: ${form.email}\nPassword: ${form.password}\n\nYou will need to log in again.`);
           } else {
             // Admin stayed logged in - just show success
-            console.log('Team member created, admin still logged in');
+
           }
         } catch (createErr) {
-          console.error('❌ Failed to create member:', createErr);
-          console.error('❌ Error details:', {
-            message: createErr.message,
-            code: createErr.code,
-            stack: createErr.stack
-          });
-          
+
           // Display user-friendly error message
           const errorMessage = createErr.message || 'Failed to create member account. Please try again.';
           setModalError(errorMessage);
@@ -181,7 +152,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
         newMember.uid = uid;
         
         // Use actual current user info for addedBy field
-        console.log('🔍 Current user data:', currentUser);
+
         const addedByInfo = currentUser ? {
           uid: currentUser.uid || null, // Add uid for profile enrichment
           name: currentUser.name || 'Admin',
@@ -190,8 +161,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
           color: currentUser.color || '#3B5BFC',
           role: currentUser.role || 'Administrator' // Use display role name, not userRole
         } : { name: 'Admin', avatar: 'A', color: '#3B5BFC', role: 'Administrator' };
-        
-        console.log('👤 Adding member with addedBy info:', addedByInfo);
+
         onSave(newMember, addedByInfo);
         
         // Close modal
@@ -206,9 +176,9 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
               role: dashboardRole, // Use mapped dashboard role
               memberId: member.id 
             }); 
-            console.log('✅ User profile updated:', { name: form.name, phone: form.phone, role: dashboardRole });
+
           } catch (err) {
-            console.error('❌ Failed to update user profile:', err);
+
           }
         }
         
@@ -220,7 +190,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
             setModalError('');
             alert(`Password reset email sent to ${form.email}. The user can set a new password using the link in the email.`);
           } catch (err) {
-            console.error('Password reset error:', err);
+
             setModalError('Member updated, but failed to send password reset email. You can send it manually from Firebase Console.');
           }
         }
@@ -395,7 +365,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                       // Auto-fill desc from role's workDescription
                       if (roleWorkDesc) {
                         f('desc')(roleWorkDesc);
-                        console.log('📝 Auto-filled desc from role:', { roleName, workDescription: roleWorkDesc });
+
                       }
                     }} style={{
                       padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -760,8 +730,7 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
 
   // Load and enrich team members with profile data from Firestore
   useEffect(() => {
-    console.log('🔄 TeamPage: team prop changed, re-enriching...', team.map(m => ({ id: m.id, name: m.name, status: m.status })));
-    
+
     const enrichTeamWithProfiles = async () => {
       if (!team || team.length === 0) {
         setEnrichedTeam([]);
@@ -806,7 +775,7 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
                     };
                   }
                 } catch (err) {
-                  console.warn(`⚠️ Failed to load creator profile for ${member.addedBy.uid}:`, err);
+
                 }
               }
               
@@ -826,9 +795,7 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
                   // Explicitly preserve status from team data
                   status: member.status,
                 };
-                
-                console.log('👤 Enriched member:', { id: member.id, name: member.name, status: member.status, enrichedStatus: enrichedMember.status });
-                
+
                 // DON'T preload avatars - let the Avatar component handle loading
                 // This prevents unnecessary errors and the Avatar component has proper fallback
                 
@@ -838,7 +805,7 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
                 return enrichedMember;
               }
             } catch (err) {
-              console.error(`❌ Error loading profile for member ${member.id}:`, err);
+
             }
             
             return member;
@@ -848,9 +815,9 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
         setEnrichedTeam(enrichedMembers);
         setIsEnriching(false);
         hasEnrichedTeamOnce = true; // Mark as enriched - persists across component mounts
-        console.log('📖 Team enriched with profile data:', enrichedMembers.length, 'members');
+
       } catch (err) {
-        console.error('❌ Error enriching team with profiles:', err);
+
         setEnrichedTeam(team);
         setIsEnriching(false);
         hasEnrichedTeamOnce = true;

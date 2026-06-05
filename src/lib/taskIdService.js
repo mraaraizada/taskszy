@@ -23,8 +23,7 @@ export async function generateTaskId(workspaceId) {
     const result = await generateId({ workspaceId });
     return result.data.taskId;
   } catch (error) {
-    console.error('Error generating task ID:', error);
-    
+
     // Parse Firebase error codes
     if (error.code === 'functions/unauthenticated') {
       throw new Error('You must be signed in to generate task IDs.');
@@ -37,7 +36,7 @@ export async function generateTaskId(workspaceId) {
     }
     
     // Fallback to client-side generation if Cloud Function fails
-    console.warn('Falling back to client-side task ID generation');
+
     return generateTaskIdFallback();
   }
 }

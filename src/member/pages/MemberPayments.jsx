@@ -131,52 +131,35 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
   const rowsPerPage = 15;
 
   // ⭐ PHASE 8: Get only payments for this specific member
-  console.log('💰 Member Payment Filter - Input:', {
-    memberId: member.id,
-    memberName: member.name,
-    memberUid: member.uid,
-    memberRole: member.role,
-    memberUserRole: member.userRole,
-    totalPayments: payments.length,
-    allPaymentMemberIds: payments.map(p => ({ 
-      paymentId: p.id,
-      taskId: p.taskId, 
-      memberId: p.memberId,
-      memberName: p.memberName,
-      amount: p.amount,
-      paymentType: p.paymentType,
-      assignedTo: p.assignedTo 
-    }))
-  });
-  
+
   const myPayments = payments.filter(p => {
     // ⭐ EXCLUDE all payments if member is on hold
     if (member.isOnHold) {
-      console.log('❌ Member is on hold - excluding all payments');
+
       return false;
     }
     
     // ⭐ EXCLUDE additional payments for team members (admin only)
     if (p.paymentType === 'additional') {
-      console.log('❌ Excluding additional payment for team member:', p.id, p.taskId);
+
       return false;
     }
     
     // ⭐ EXCLUDE task budget payments (only for admin dashboard)
     if (p.paymentType === 'task-budget') {
-      console.log('❌ Excluding task budget payment:', p.id);
+
       return false;
     }
     
     // Check if payment is assigned to this member by memberId
     if (p.memberId && p.memberId === member.id) {
-      console.log('✅ Payment matched by memberId:', p.id, p.taskId);
+
       return true;
     }
     
     // Check by memberUid if available
     if (p.memberUid && member.uid && p.memberUid === member.uid) {
-      console.log('✅ Payment matched by memberUid:', p.id, p.taskId);
+
       return true;
     }
     
@@ -184,7 +167,7 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
     if (p.assignedTo && Array.isArray(p.assignedTo)) {
       const isAssigned = p.assignedTo.some(a => a.id === member.id || (a.uid && member.uid && a.uid === member.uid));
       if (isAssigned) {
-        console.log('✅ Payment matched by assignedTo:', p.id, p.taskId);
+
         return true;
       }
     }
@@ -194,27 +177,14 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
       const task = tasks.find(t => t.id === p.taskId);
       const isTaskMember = task && task.members.some(m => m.id === member.id || (m.uid && member.uid && m.uid === member.uid));
       if (isTaskMember) {
-        console.log('✅ Payment matched by task membership:', p.id, p.taskId);
+
         return true;
       }
     }
     
     return false;
   });
-  
-  console.log('💰 Member payments filtered:', {
-    memberId: member.id,
-    memberName: member.name,
-    totalPayments: payments.length,
-    myPayments: myPayments.length,
-    paymentDetails: myPayments.map(p => ({ 
-      taskId: p.taskId, 
-      memberId: p.memberId, 
-      amount: p.amount, 
-      status: p.status 
-    }))
-  });
-  
+
   // ⭐ Calculate earnings from payments - Total = Paid + Pending
   const paidPayments = myPayments.filter(p => p.status === 'Paid' || p.status === 'paid');
   const pendingPayments = myPayments.filter(p => p.status !== 'Paid' && p.status !== 'paid');
@@ -226,17 +196,6 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
   const progressPct = totalPotential > 0 ? Math.round((paidEarnings / totalPotential) * 100) : 0;
   
   const myEarnings = { total: totalEarnings, paid: paidEarnings, pending: pendingEarnings };
-  
-  console.log('💰 Earnings calculation:', {
-    totalPayments: myPayments.length,
-    paidPayments: paidPayments.length,
-    pendingPayments: pendingPayments.length,
-    totalEarned: totalEarnings,
-    paidAmount: paidEarnings,
-    pendingAmount: pendingEarnings,
-    totalPotential,
-    progressPct
-  });
 
   const getMyBudget = (task) => task.members.find(m => m.id === member.id)?.budget || 0;
   const getMyStage  = (task) => task.members.find(m => m.id === member.id)?.stage || task.stage;
@@ -273,7 +232,7 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
     
     // ⭐ Handle case where task might not exist (deleted or archived)
     if (!task) {
-      console.warn('⚠️ Task not found for payment:', payment.id, payment.taskId);
+
       // Create a minimal row with payment data
       return {
         id: payment.taskId,
@@ -304,16 +263,6 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
       paidOn: payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null,
       createdOn: payment.createdAt ? (payment.createdAt.toDate ? payment.createdAt.toDate() : payment.createdAt) : null,
     };
-  });
-  
-  console.log('💰 Built payment rows:', {
-    totalRows: allRows.length,
-    manualPayments: allRows.filter(r => r.isManualPayment).length,
-    taskLinkedPayments: allRows.filter(r => !r.isManualPayment && !r.isTaskDeleted).length,
-    deletedTaskPayments: allRows.filter(r => r.isTaskDeleted).length,
-    pendingRows: allRows.filter(r => r._status === 'pending').length,
-    paidRows: allRows.filter(r => r._status === 'paid').length,
-    rowAmounts: allRows.map(r => ({ id: r.id, amount: r.amount, status: r._status, isManual: r.isManualPayment }))
   });
 
   // ⭐ Store unfiltered count for "All" button
@@ -351,17 +300,6 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
     filteredRows = dateFilteredRows.filter(t => t._status === 'paid');
   }
   // ⭐ If statusFilter === 'All', show all rows (no additional filtering)
-  
-  console.log('💰 After filtering:', {
-    statusFilter,
-    dateFrom,
-    dateTo,
-    unfilteredCount,
-    dateFilteredCount: dateFilteredRows.length,
-    finalFilteredCount: filteredRows.length,
-    pendingRows: filteredRows.filter(r => r._status === 'pending').length,
-    paidRows: filteredRows.filter(r => r._status === 'paid').length
-  });
 
   // Use filtered rows for display
   allRows = filteredRows;
@@ -390,16 +328,6 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
       setPageFilteredData({ tasks: allRows });
     }
   }, [allRows.length, statusFilter, dateFrom, dateTo, filterToTaskId, setPageFilteredData]);
-  
-  console.log('💰 Pagination:', {
-    totalRows: allRows.length,
-    totalPages,
-    currentPage,
-    rowsPerPage,
-    startIndex,
-    endIndex,
-    paginatedRowsCount: paginatedRows.length
-  });
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
@@ -604,22 +532,7 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
               
               // ⭐ Debug: Log paused status for task B6I41C7A
               if (task.id === 'B6I41C7A') {
-                console.log('🔍 Task B6I41C7A payment entry:', {
-                  taskId: task.id,
-                  paused: task.paused,
-                  isPaused: task.isPaused,
-                  isTaskPaused: isTaskPaused,
-                  isMemberOnHold: isMemberOnHold,
-                  showHold: showHold,
-                  stage: stage,
-                  displayStage: displayStage,
-                  memberId: member.id,
-                  memberIdType: typeof member.id,
-                  currentMemberInTask: currentMemberInTask,
-                  allTaskMembers: task.members,
-                  taskMemberIds: task.members?.map(m => ({ id: m.id, type: typeof m.id, isOnHold: m.isOnHold })),
-                  taskObject: task
-                });
+
               }
               
               // ⭐ Generate unique key - use paymentId if available, otherwise create unique composite key

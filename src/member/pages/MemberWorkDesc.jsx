@@ -15,11 +15,9 @@ export default function MemberWorkDesc({ member }) {
 
   // Log component mount
   useEffect(() => {
-    console.log('🎬 MemberWorkDesc component MOUNTED for member:', member.id, member.name);
-    console.log('  📊 Role updated at:', roleUpdatedAt);
-    
+
     return () => {
-      console.log('🎬 MemberWorkDesc component UNMOUNTED for member:', member.id, member.name);
+
     };
   }, []);
 
@@ -28,25 +26,21 @@ export default function MemberWorkDesc({ member }) {
     if (!hasMarkedReadRef.current && roleUpdatedAt > 0) {
       const storageKey = `desc_viewed_${member.id}_${roleUpdatedAt}`;
       const readAt = Date.now();
-      
-      console.log('📖 User viewed description page - saving to localStorage and Firestore');
-      console.log('  📊 Storage key:', storageKey);
-      console.log('  📊 Read timestamp:', readAt);
-      
+
       // Save to localStorage
       try {
         localStorage.setItem(storageKey, 'true');
-        console.log('✅ Description view saved to localStorage');
+
       } catch (err) {
-        console.error('❌ Error saving to localStorage:', err);
+
       }
       
       // Save to Firestore
       try {
         saveMember({ ...member, descReadAt: readAt });
-        console.log('✅ Description view timestamp saved to Firestore');
+
       } catch (err) {
-        console.error('❌ Error saving to Firestore:', err);
+
       }
       
       hasMarkedReadRef.current = true;

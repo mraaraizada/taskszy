@@ -23,7 +23,7 @@ const PLANS = [
     price: 1599,
     users: 7,
     period: 'month',
-    features: ['Up to 7 users', 'Basic task management', 'Email support', '10GB storage'],
+    features: ['All Dashboards & Roles', 'Unlimited Task Management', 'Advanced Workspace Suite', 'Flexible Billing & Payment'],
     color: '#3B5BFC',
     popular: false,
   },
@@ -33,7 +33,7 @@ const PLANS = [
     price: 2499,
     users: 15,
     period: 'month',
-    features: ['Up to 15 users', 'Advanced analytics', 'Priority support', '50GB storage', 'Custom roles'],
+    features: ['All Dashboards & Roles', 'Unlimited Task Management', 'Advanced Workspace Suite', 'Flexible Billing & Payment', 'Performance Analytics'],
     color: '#7C3AED',
     popular: true,
   },
@@ -43,7 +43,7 @@ const PLANS = [
     price: 4599,
     users: 30,
     period: 'month',
-    features: ['Up to 30 users', 'Full analytics suite', '24/7 support', '200GB storage', 'API access', 'Custom integrations'],
+    features: ['All Dashboards & Roles', 'Unlimited Task Management', 'Advanced Workspace Suite', 'Flexible Billing & Payment', 'Performance Analytics', 'Unlimited Cloud Storage'],
     color: '#12C479',
     popular: false,
   },
@@ -53,7 +53,7 @@ const PLANS = [
     price: 7199,
     users: 50,
     period: 'month',
-    features: ['Up to 50 users', 'All features included', 'Premium support', 'Unlimited storage', 'White-label option', 'Dedicated account manager'],
+    features: ['All Dashboards & Roles', 'Unlimited Task Management', 'Advanced Workspace Suite', 'Flexible Billing & Payment', 'Performance Analytics', 'Unlimited Cloud Storage', 'Custom Reports'],
     color: '#F97316',
     popular: false,
   },
@@ -102,7 +102,7 @@ async function loadDynamicCoupons() {
     });
     return map;
   } catch (err) {
-    console.error('Failed to load coupons from Firestore:', err);
+
     return {};
   }
 }
@@ -154,8 +154,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
         const userDoc = await getDoc(doc(db, 'users', currentUid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          console.log('📋 Loaded user profile:', userData);
-          
+
           // Update state with user data
           if (userData.name && !fullName) setFullName(userData.name);
           if (userData.phone && !phone) setPhone(userData.phone);
@@ -170,7 +169,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
           }));
         }
       } catch (err) {
-        console.error('Failed to load user profile:', err);
+
       }
     };
     
@@ -227,16 +226,12 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
               
               setOriginalExpiryDate(expiryStr);
               setOriginalExpiryTimestamp(expiryTimestamp);
-              
-              console.log('📅 PlanSelection: Fetched ORIGINAL expiry from Firestore:', {
-                expiryStr,
-                expiryDate
-              });
+
             }
           }
         }
       } catch (err) {
-        console.warn('Could not fetch original expiry from Firestore:', err);
+
         // Fallback to context values
         setOriginalExpiryDate(planExpiryDate);
         setOriginalExpiryTimestamp(planExpiryTimestamp);
@@ -297,15 +292,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
         
         // Prorated difference for remaining months
         upgradeFee = Math.round((newMonthlyRate - oldMonthlyRate) * remainingMonths);
-        
-        console.log('💰 PlanSelection: Upgrade calculation', {
-          oldPlan: oldPlan.name,
-          newPlan: activePlan.name,
-          oldMonthlyRate,
-          newMonthlyRate,
-          remainingMonths,
-          upgradeFee
-        });
+
       }
     }
     // Downgrade = no fee
@@ -324,14 +311,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
         // New user or expired plan - extraMonths is the total subscription duration
         extraMonthsFee = Math.round(selectedMonthlyRate * extraMonths);
       }
-      
-      console.log('📅 PlanSelection: Extra months calculation', {
-        plan: activePlan.name,
-        monthlyRate: selectedMonthlyRate,
-        extraMonths,
-        extraMonthsFee,
-        hasActivePlan: !!(currentPlan && remainingMonths > 0)
-      });
+
     }
     
     // PART 3: Base subscription fee
@@ -341,23 +321,11 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       baseFee = activeBillingCycle === 'yearly' 
         ? Math.round(selectedMonthlyRate * 12) 
         : selectedMonthlyRate;
-      
-      console.log('🔄 PlanSelection: Active plan renewal', {
-        plan: activePlan.name,
-        billingCycle: activeBillingCycle,
-        monthlyRate: selectedMonthlyRate,
-        baseFee
-      });
+
     } else if (!currentPlan || remainingMonths === 0) {
       // New user or expired plan - base fee is covered by extraMonthsFee
       baseFee = 0;
-      
-      console.log('🆕 PlanSelection: New subscription (fee covered by extraMonths)', {
-        plan: activePlan.name,
-        monthlyRate: selectedMonthlyRate,
-        extraMonths,
-        totalFee: extraMonthsFee
-      });
+
     }
     
     // Apply coupon discount
@@ -370,22 +338,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
     const total = couponApplied && couponApplied.type !== 'percentage'
       ? (couponApplied.amount || 0)
       : subtotal - discount;
-    
-    console.log('💵 PlanSelection: Final pricing', {
-      selectedMonthlyRate,
-      upgradeFee,
-      extraMonthsFee,
-      baseFee,
-      subtotal,
-      discount,
-      total,
-      isUpgrade,
-      isDowngrade,
-      hasCurrentPlan: !!currentPlan,
-      remainingMonths,
-      extraMonths
-    });
-    
+
     return {
       selectedMonthlyRate,
       upgradeFee,
@@ -573,8 +526,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
         }
       }
     }
-    
-    console.log('✅ Coupon applied successfully (usage will be incremented after payment)');
+
   };
 
   const handleRemoveCoupon = () => {
@@ -618,7 +570,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
               // Only update if there are fields to update
               if (Object.keys(updates).length > 0) {
                 updateDoc(doc(db, 'users', currentUid), updates)
-                  .catch(err => console.error('Failed to save user profile:', err));
+                  .catch(err => {});
               }
             }
           });
@@ -635,33 +587,26 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       if (!currentUid) {
         throw new Error('You must be logged in to upgrade your plan. Please log in and try again.');
       }
-      
-      console.log('🔍 Current UID:', currentUid);
-      console.log('🔍 workspaceId prop:', workspaceId);
-      console.log('🔍 currentUser:', currentUser);
-      
+
       // Get workspace ID from prop, currentUser, or fetch from Firestore
       let wsId = workspaceId || currentUser?.workspaceId;
       
       if (!wsId) {
-        console.log('⚠️ workspaceId not in props/context, fetching from Firestore...');
+
         // Try to fetch workspaceId from user profile in Firestore
         const { getProfile } = await import('../lib/userProfileService');
         
         const profile = await getProfile(currentUid);
-        console.log('📄 User profile from Firestore:', profile);
-        
+
         if (profile && profile.workspaceId) {
           wsId = profile.workspaceId;
-          console.log('✅ Found workspaceId in profile:', wsId);
+
         } else {
           // If still no workspaceId, generate one based on UID (fallback for existing users)
           wsId = `ws_${currentUid}`;
-          console.log('⚠️ No workspaceId in profile, using generated ID:', wsId);
+
         }
       }
-      
-      console.log('🎯 Final workspaceId:', wsId);
 
       // Prepare checkout data
       const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
@@ -693,17 +638,17 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
           }
         }
       } catch (err) {
-        console.warn('Could not fetch actual expiry date:', err);
+
       }
       
       // If user has active plan with remaining time, extend from ACTUAL current expiry
       if (actualCurrentExpiryDate) {
         expiryDate = new Date(actualCurrentExpiryDate);
-        console.log('📅 Extending from actual current expiry:', actualCurrentExpiryDate);
+
       } else {
         // New subscription or expired plan - start from today
         expiryDate = new Date(now);
-        console.log('📅 Starting new subscription from today');
+
       }
       
       // Add base duration (1 month or 1 year)
@@ -719,7 +664,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       const additionalMonths = actualCurrentExpiryDate ? Math.max(0, extraMonths - 1) : 0;
       if (additionalMonths > 0) {
         expiryDate.setMonth(expiryDate.getMonth() + additionalMonths);
-        console.log('📅 Adding additional months:', additionalMonths);
+
       }
       
       // Prepare complete checkout data
@@ -779,13 +724,10 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
         status: 'pending',
         fromHeaderUpgrade: currentPlan ? true : false, // Track if upgrade from existing plan
       };
-      
-      console.log('💾 Checkout data prepared:', checkoutData);
-      
+
       // If total is 0, activate directly without payment
       if (pricing.total === 0) {
-        console.log('💰 Total is ₹0, activating plan directly');
-        
+
         checkoutData.status = 'completed';
         checkoutData.paymentId = 'free_upgrade';
         
@@ -810,8 +752,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       }
       
       // Create Razorpay order on backend
-      console.log('💳 Initiating Razorpay payment for ₹' + pricing.total);
-      
+
       const { httpsCallable } = await import('firebase/functions');
       const { functions } = await import('../lib/firebase');
       const createOrder = httpsCallable(functions, 'createRazorpayOrder');
@@ -829,15 +770,13 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       }
       
       const orderId = orderResult.data.orderId;
-      console.log('✅ Razorpay order created:', orderId);
-      
+
       // Create payment entry with pending status
       const paymentId = `${wsId}_${Date.now()}`;
       checkoutData.status = 'pending';
       checkoutData.orderId = orderId;
       await setDoc(doc(db, 'payments', paymentId), checkoutData);
-      console.log('💾 Payment entry created with pending status:', paymentId);
-      
+
       // Load Razorpay script
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -846,12 +785,13 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       
       script.onload = () => {
         const options = {
-          key: 'rzp_test_Skaa4Xfmz2vE2G',
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_SwQkTJ7VdTAUhE',
           order_id: orderId,
           amount: pricing.total * 100,
           currency: 'INR',
-          name: 'Taskzy',
+          name: 'TasksZy',
           description: `${activePlan.name} Plan - ${billingLabel}`,
+          image: 'https://firebasestorage.googleapis.com/v0/b/taskzy-9c2e5.firebasestorage.app/o/public%2Flogo.png?alt=media',
           prefill: {
             name: fullName,
             email: userEmail,
@@ -862,8 +802,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
           },
           handler: async function (response) {
             try {
-              console.log('✅ Razorpay payment successful:', response);
-              
+
               // Update payment entry with completed status
               checkoutData.status = 'completed';
               checkoutData.paymentId = response.razorpay_payment_id;
@@ -886,14 +825,14 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
               setProcessing(false);
               setShowRocket(true);
             } catch (err) {
-              console.error('Payment processing error:', err);
+
               setProcessing(false);
               alert('Payment processing failed. Please contact support.');
             }
           },
           modal: {
             ondismiss: function() {
-              console.log('⚠️ Payment cancelled by user');
+
               setProcessing(false);
               // Payment entry remains with 'pending' status
             }
@@ -905,12 +844,12 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       };
       
       script.onerror = () => {
-        console.error('Failed to load Razorpay script');
+
         setProcessing(false);
         alert('Failed to load payment gateway. Please try again.');
       };
     } catch (err) {
-      console.error('Payment error:', err);
+
       setProcessing(false);
       alert('Payment failed: ' + (err.message || 'Please try again.'));
     }
@@ -1061,10 +1000,10 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
                   // Use ORIGINAL expiry date, not the updated one from context
                   if (isCurrentPlanActive && originalExpiryTimestamp) {
                     d = originalExpiryTimestamp.toDate ? originalExpiryTimestamp.toDate() : new Date(originalExpiryTimestamp);
-                    console.log('📅 PlanSelection Preview: Starting from ORIGINAL expiry timestamp:', d);
+
                   } else {
                     d = new Date();
-                    console.log('📅 PlanSelection Preview: Starting from today (new subscription)');
+
                   }
                   
                   // Duration coupon overrides the active period
@@ -1072,14 +1011,14 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
                     const { value, unit } = couponApplied.duration;
                     if (unit === 'months') d.setMonth(d.getMonth() + value);
                     else d.setDate(d.getDate() + value);
-                    console.log('📅 PlanSelection Preview: Applied duration coupon:', value, unit, '→', d);
+
                   } else if (activeBillingCycle === 'yearly') {
                     d.setFullYear(d.getFullYear() + 1);
-                    console.log('📅 PlanSelection Preview: Added 1 year →', d);
+
                   } else {
                     // Always add base 1 month subscription
                     d.setMonth(d.getMonth() + 1);
-                    console.log('📅 PlanSelection Preview: Added 1 month →', d);
+
                   }
                   
                   // Add extra months (only if not using duration coupon)
@@ -1091,12 +1030,12 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
                     const additionalMonths = isCurrentPlanActive ? Math.max(0, extraMonths - 1) : 0;
                     if (additionalMonths > 0) {
                       d.setMonth(d.getMonth() + additionalMonths);
-                      console.log('📅 PlanSelection Preview: Added extra months:', additionalMonths, '→', d);
+
                     }
                   }
                   
                   const finalDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  console.log('📅 PlanSelection: Final Active till date:', finalDate);
+
                   return finalDate;
                 })()}
               </div>
@@ -1301,7 +1240,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
 
   const handleCheckoutConfirm = (plan, billingCycle, couponInfo) => {
     // Call onSelectPlan to trigger confetti and update the UI
-    console.log('📋 Checkout confirmed, triggering confetti...', { plan, billingCycle, couponInfo });
+
     if (onSelectPlan) {
       onSelectPlan(plan, billingCycle, couponInfo);
     }
@@ -1445,7 +1384,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                 <div style={{ position: 'absolute', top: -10, right: 16, background: '#EF4444', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 10, boxShadow: '0 4px 12px rgba(239,68,68,0.3)', letterSpacing: '0.5px' }}>LIMIT</div>
               )}
               {plan.popular && !isDisabled && (
-                <div style={{ position: 'absolute', top: -9, right: 16, background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 10, boxShadow: '0 4px 12px rgba(59,91,252,0.3)' }}>POPULAR</div>
+                <div style={{ position: 'absolute', top: -9, right: 16, background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 10, boxShadow: '0 4px 12px rgba(59,91,252,0.3)' }}>SELECTED</div>
               )}
               <div style={{ marginBottom: 10 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1D2E', marginBottom: 3 }}>{plan.name}</h3>
@@ -1558,8 +1497,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                     const { db } = await import('../lib/firebase');
                     
                     const requestId = `${wsId}_${Date.now()}`;
-                    console.log('💾 Creating new custom plan request:', requestId);
-                    
+
                     await addDoc(collection(db, 'customPlanRequests'), {
                       workspaceId: wsId,
                       email: email,
@@ -1568,9 +1506,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                       status: 'pending',
                       requestId: requestId,
                     });
-                    
-                    console.log('✅ Custom plan request created:', requestId);
-                    
+
                     // Close custom modal first
                     setShowCustomize(false);
                     
@@ -1586,7 +1522,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                       toast.success('Submitted');
                     }, 400);
                   } catch (err) {
-                    console.error('❌ Failed to save custom plan request:', err);
+
                     toast.error('Failed to submit request. Please try again.');
                   }
                 }} 

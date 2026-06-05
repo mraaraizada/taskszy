@@ -7,13 +7,6 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
   
   // If workspace exists, skip to password step
   const hasExistingData = !!existingWorkspace;
-  
-  console.log('🏢 WorkspaceSetup initialized:', { 
-    existingWorkspace, 
-    hasExistingData, 
-    isManagement,
-    willStartAtStep: 1 // Always start at Step 1
-  });
 
   // Step 1 — workspace branding (always start here, but read-only if data exists)
   const [step, setStep] = useState(1);
@@ -79,23 +72,19 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
         
         if (uid) {
           // Save password to user's own profile
-          console.log('💾 Saving to user profile:', { uid, hasCompletedSetup: true });
+
           updateProfile(uid, { 
             userPassword: adminPwd,
             hasCompletedSetup: true 
           }).then(async () => {
-            console.log('✅ Password and setup status saved to user profile');
-            
+
             // Verify it was saved by reading it back
             try {
               const { getProfile } = await import('../lib/userProfileService');
               const verifyProfile = await getProfile(uid);
-              console.log('🔍 Verification - Profile after save:', { 
-                hasCompletedSetup: verifyProfile?.hasCompletedSetup,
-                userPassword: verifyProfile?.userPassword ? '***' : null
-              });
+
             } catch (err) {
-              console.error('❌ Failed to verify save:', err);
+
             }
             
             // Also update workspace settings (branding only, not setup status)
@@ -112,8 +101,7 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
               const { db } = await import('../lib/firebase');
               const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
               const workspaceId = `ws_${uid}`;
-              
-              console.log('💾 Updating workspace document with setup completion...');
+
               await updateDoc(doc(db, 'workspaces', workspaceId), {
                 'settings.workspaceName': name.trim(),
                 'settings.workspaceSub': subtitle.trim() || 'Workspace',
@@ -122,26 +110,24 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
                 'settings.adminPassword': adminPwd,
                 updatedAt: serverTimestamp(),
               });
-              
-              console.log('✅ Workspace document updated with complete data');
-              
+
               // Wait a bit longer to ensure Firebase propagates the write
               setTimeout(() => {
-                console.log('🚀 WorkspaceSetup - Calling onComplete after Firebase save');
+
                 onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
               }, 1000);
             } catch (error) {
-              console.error('❌ Failed to update workspace document:', error);
+
               setPwdError('Failed to save workspace settings. Please try again.');
               setLoading(false);
             }
           }).catch((error) => {
-            console.error('❌ Failed to save password:', error);
+
             setPwdError('Failed to save password. Please try again.');
             setLoading(false);
           });
         } else {
-          console.error('❌ No UID found, cannot save setup');
+
           setPwdError('Authentication error. Please try again.');
           setLoading(false);
         }

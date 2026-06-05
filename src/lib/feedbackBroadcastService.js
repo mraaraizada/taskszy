@@ -24,7 +24,7 @@ export async function sendFeedbackRequest(organizationId, message = 'We would lo
     const docRef = await addDoc(broadcastRef, broadcastDoc);
     return docRef.id;
   } catch (error) {
-    console.error('Error sending feedback request:', error);
+
     throw error;
   }
 }
@@ -47,12 +47,6 @@ export function listenForFeedbackRequests(organizationId, callback, userCreatedA
     );
 
     return onSnapshot(q, (snapshot) => {
-      console.log('📡 Feedback broadcast listener fired:', {
-        organizationId,
-        totalDocs: snapshot.docs.length,
-        userCreatedAt: userCreatedAt?.toISOString(),
-        docs: snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      });
 
       // Filter for broadcasts that match this organization or are for ALL
       const relevantBroadcasts = snapshot.docs.filter(doc => {
@@ -64,27 +58,11 @@ export function listenForFeedbackRequests(organizationId, callback, userCreatedA
         if (userCreatedAt && data.createdAt) {
           const broadcastCreatedAt = data.createdAt.toDate();
           isAfterUserJoined = broadcastCreatedAt >= userCreatedAt;
-          console.log('📅 Checking broadcast date:', {
-            broadcastId: doc.id,
-            broadcastCreatedAt: broadcastCreatedAt.toISOString(),
-            userCreatedAt: userCreatedAt.toISOString(),
-            isAfterUserJoined
-          });
+
         }
-        
-        console.log('🔍 Checking broadcast:', {
-          broadcastId: doc.id,
-          broadcastOrgId: data.organizationId,
-          userOrgId: organizationId,
-          isRelevant,
-          isAfterUserJoined,
-          finalResult: isRelevant && isAfterUserJoined
-        });
-        
+
         return isRelevant && isAfterUserJoined;
       });
-
-      console.log('✅ Relevant broadcasts found:', relevantBroadcasts.length);
 
       if (relevantBroadcasts.length > 0) {
         // Sort by createdAt in memory and get most recent
@@ -100,12 +78,12 @@ export function listenForFeedbackRequests(organizationId, callback, userCreatedA
         // Check if expired
         const expiresAt = data.expiresAt?.toDate() || new Date();
         if (expiresAt < new Date()) {
-          console.log('⏰ Broadcast expired, marking as expired');
+
           // Mark as expired
           updateDoc(doc.ref, { status: 'expired' });
           callback(null);
         } else {
-          console.log('✅ Active broadcast found, calling callback');
+
           callback({
             id: doc.id,
             ...data,
@@ -114,15 +92,15 @@ export function listenForFeedbackRequests(organizationId, callback, userCreatedA
           });
         }
       } else {
-        console.log('❌ No relevant broadcasts found');
+
         callback(null);
       }
     }, (error) => {
-      console.error('❌ Feedback broadcast listener error:', error);
+
       callback(null);
     });
   } catch (error) {
-    console.error('Error setting up feedback listener:', error);
+
     return () => {};
   }
 }
@@ -141,7 +119,7 @@ export async function dismissFeedbackRequest(broadcastId, userId) {
       dismissedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error dismissing feedback request:', error);
+
   }
 }
 
@@ -164,7 +142,7 @@ export async function hasDismissedFeedback(broadcastId, userId) {
     const snapshot = await getDocs(q);
     return !snapshot.empty;
   } catch (error) {
-    console.error('Error checking dismissal:', error);
+
     return false;
   }
 }

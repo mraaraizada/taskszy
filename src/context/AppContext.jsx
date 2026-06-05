@@ -16,7 +16,6 @@ import { updateNoteWithConflictResolution } from '../lib/conflictResolution';
 import { subscribeToDashboardAggregation, rebuildDashboardAggregation } from '../lib/aggregationService';
 
 // Module load timestamp for debugging cache issues
-console.log('🔄 AppContext.jsx loaded at:', new Date().toISOString(), '- Cache invalidation is ACTIVE');
 
 // ── Shared Constants ──────────────────────────────────────────────────────────
 export const STAGES = ['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update', 'Complete'];
@@ -92,7 +91,7 @@ export function AppProvider({ children }) {
     if (typeof window !== 'undefined') {
       const cachedUid = localStorage.getItem('currentUid');
       if (cachedUid) {
-        console.log('🔑 AppContext: Initializing currentUid from localStorage:', cachedUid);
+
         return cachedUid;
       }
     }
@@ -101,27 +100,25 @@ export function AppProvider({ children }) {
   
   // Wrap setCurrentUid to add logging and localStorage persistence
   const setCurrentUidWithLog = useCallback((uid) => {
-    console.log('🔑 AppContext: setCurrentUid called with:', uid);
-    console.log('🔑 AppContext: Previous currentUid was:', currentUid);
-    
+
     // Persist to localStorage
     if (typeof window !== 'undefined') {
       if (uid) {
         localStorage.setItem('currentUid', uid);
-        console.log('🔑 AppContext: Saved currentUid to localStorage');
+
       } else {
         localStorage.removeItem('currentUid');
-        console.log('🔑 AppContext: Removed currentUid from localStorage');
+
       }
     }
     
     setCurrentUid(uid);
-    console.log('🔑 AppContext: setCurrentUid state update queued');
+
   }, [currentUid]);
   
   // Log when currentUid actually changes
   useEffect(() => {
-    console.log('🔑 AppContext: currentUid changed to:', currentUid);
+
   }, [currentUid]);
 
   // workspaceId — set after login from Firebase Auth profile, no localStorage
@@ -157,7 +154,7 @@ export function AppProvider({ children }) {
   // Listen to user's own profile document for real-time updates
   useEffect(() => {
     if (!currentUid) {
-      console.log('⏳ User profile listener: Waiting for currentUid...');
+
       return;
     }
     
@@ -165,33 +162,27 @@ export function AppProvider({ children }) {
     
     // Check if listener already exists
     if (listenerRegistry.has(listenerKey)) {
-      console.log('⚠️ User profile listener already exists, skipping');
+
       return;
     }
-    
-    console.log('👤 Setting up user profile listener for uid:', currentUid);
+
+    let isActive = true; // Flag to prevent actions after unmount
     
     const userRef = doc(db, 'users', currentUid);
     const unsubscribe = onSnapshot(userRef, async (snap) => {
-      if (!snap.exists()) return;
+      if (!snap.exists() || !isActive) return;
       
       const profileData = snap.data();
-      console.log('📥 User profile updated from Firestore:', {
-        uid: currentUid,
-        name: profileData.name,
-        email: profileData.email,
-        role: profileData.role,
-        memberId: profileData.memberId,
-        workspaceId: profileData.workspaceId,
-        forceLogout: profileData.forceLogout,
-        sessionToken: profileData.sessionToken ? 'present' : 'missing'
-      });
-      
+
       // Check session token - logout if it doesn't match (another device logged in)
       if (typeof window !== 'undefined' && profileData.sessionToken) {
         const localToken = localStorage.getItem('sessionToken');
         if (localToken && localToken !== profileData.sessionToken) {
-          console.log('🚪 Session token mismatch - another device logged in');
+
+          isActive = false; // Prevent further actions
+          
+          // Clear session token to prevent reload loop
+          localStorage.removeItem('sessionToken');
           
           // Sign out and reload
           const { signOutUser } = await import('../lib/authService');
@@ -203,13 +194,12 @@ export function AppProvider({ children }) {
       
       // Check if user has been deactivated and needs to be logged out
       if (profileData.forceLogout === true) {
-        console.log('🚪 Force logout detected - user has been deactivated');
+
+        isActive = false; // Prevent further actions
         
         // Clear the forceLogout flag
-        await updateDoc(userRef, { forceLogout: false }).catch(err => 
-          console.error('Failed to clear forceLogout flag:', err)
-        );
-        
+        await updateDoc(userRef, { forceLogout: false }).catch(err => {});
+
         // Sign out and reload
         const { signOutUser } = await import('../lib/authService');
         await signOutUser();
@@ -223,14 +213,7 @@ export function AppProvider({ children }) {
           const memberDoc = await getDoc(doc(db, `workspaces/${profileData.workspaceId}/team/${profileData.memberId}`));
           if (memberDoc.exists()) {
             const memberData = memberDoc.data();
-            
-            console.log('📥 Fetched team member data:', {
-              memberId: profileData.memberId,
-              role: memberData.role,
-              name: memberData.name,
-              '⚠️ SETTING DISPLAY ROLE TO': memberData.role
-            });
-            
+
             // Use the actual role from team data - ALWAYS, no fallback
             // Include ALL profile fields so dashboards don't need to load them separately
             setCurrentUser(prev => ({
@@ -254,18 +237,11 @@ export function AppProvider({ children }) {
               hasSeenWelcomeAnimation: profileData.hasSeenWelcomeAnimation === true,
               memberId: profileData.memberId,
             }));
-            
-            console.log('✅ User state updated with complete profile data:', {
-              role: memberData.role,
-              status: memberData.status || 'Active',
-              hasLocation: !!(profileData.location || memberData.location),
-              hasAbout: !!(profileData.about || memberData.about),
-              hasAvatarImg: !!(profileData.avatarImg || memberData.avatarImg)
-            });
+
             return;
           }
         } catch (err) {
-          console.warn('Could not fetch team member data:', err);
+
         }
       }
       
@@ -291,17 +267,18 @@ export function AppProvider({ children }) {
       
       // If memberId is missing but we can find the user in the team, update it
       if (!profileData.memberId && profileData.workspaceId) {
-        console.log('⚠️ memberId missing in user profile, attempting to find and set it...');
+
         // This will be handled by a separate effect that watches the team collection
       }
     }, (error) => {
-      console.error('❌ User profile listener error:', error);
+
     });
     
     // Register listener to prevent duplicates
     listenerRegistry.register(listenerKey, unsubscribe);
     
     return () => {
+      isActive = false; // Prevent any pending async operations
       listenerRegistry.unregister(listenerKey);
     };
   }, [currentUid]);
@@ -315,18 +292,16 @@ export function AppProvider({ children }) {
     // Only run if we have all required data and memberId is missing
     if (!currentUid || !workspaceId || !currentUser || currentUser.memberId || team.length === 0 || isWorkspaceOwner) {
       if (currentUser?.memberId) {
-        console.log('✅ memberId already set:', currentUser.memberId);
+
       } else if (isWorkspaceOwner) {
-        console.log('👑 Workspace owner - memberId not required');
+
       }
       return;
     }
     
     const checkAndSetMemberId = async () => {
       try {
-        console.log('🔍 Auto-setting memberId for user:', currentUser.email || currentUser.name);
-        console.log('👥 Searching in team:', team.map(m => ({ id: m.id, name: m.name, email: m.email })));
-        
+
         // Find member in team data by email (most reliable) or name
         const matchingMember = team.find(m => 
           (currentUser.email && m.email === currentUser.email) ||
@@ -335,23 +310,21 @@ export function AppProvider({ children }) {
         
         if (matchingMember) {
           const memberId = matchingMember.id; // Keep as string to match task member IDs
-          console.log('✅ Found matching team member - setting memberId:', memberId);
-          
+
           // Update user profile in Firestore
           await updateDoc(doc(db, 'users', currentUid), { memberId });
-          console.log('✅ memberId saved to Firestore user profile');
-          
+
           // Also update local state immediately to trigger listener re-initialization
           setCurrentUser(prev => ({
             ...prev,
             memberId: memberId
           }));
-          console.log('✅ memberId updated in local state - listeners should re-initialize');
+
         } else {
-          console.log('⚠️ No matching team member found for:', currentUser.email || currentUser.name, '- This is normal for workspace owners');
+
         }
       } catch (error) {
-        console.error('❌ Error auto-setting memberId:', error);
+
       }
     };
     
@@ -367,15 +340,7 @@ export function AppProvider({ children }) {
     const currentMember = team.find(m => parseInt(m.id) === parseInt(currentUser.memberId));
     
     if (currentMember) {
-      console.log('👤 Updating user profile from team data:', {
-        memberId: currentMember.id,
-        name: currentMember.name,
-        role: currentMember.role,
-        status: currentMember.status || 'Active',
-        '📝 DESC FIELD': currentMember.desc,
-        '📝 HAS DESC': !!currentMember.desc
-      });
-      
+
       // Update current user with ALL team member data
       setCurrentUser(prev => ({
         ...prev,
@@ -396,7 +361,7 @@ export function AppProvider({ children }) {
         userRole: prev.userRole,
       }));
     } else {
-      console.log('⚠️ No team member found with memberId:', currentUser.memberId);
+
     }
   }, [currentUser?.memberId, team, currentUid]);
 
@@ -416,9 +381,7 @@ export function AppProvider({ children }) {
     if (!needsEnrichment) {
       return; // Skip if nothing changed
     }
-    
-    console.log('🔄 Enriching task member data with latest team info');
-    
+
     // Use setTasks with callback to get current tasks state
     setTasks(currentTasks => {
       const enrichedTasks = currentTasks.map(task => {
@@ -468,49 +431,25 @@ export function AppProvider({ children }) {
   // ── Check for unread work descriptions based on role updates ──────────────
   useEffect(() => {
     if (team.length === 0 || roles.length === 0) return;
-    
-    console.log('🔍 Checking for unread descriptions:', {
-      teamCount: team.length,
-      rolesCount: roles.length
-    });
-    
+
     const unreadSet = new Set();
     
     team.forEach(member => {
       const memberRole = roles.find(r => r.name === member.role);
-      console.log(`👤 Checking ${member.name} (${member.role}):`, {
-        hasRole: !!memberRole,
-        hasWorkDesc: !!memberRole?.workDescription,
-        roleUpdatedAt: memberRole?.workDescriptionUpdatedAt || 0,
-        userReadAt: member.descReadAt || 0,
-        workDesc: memberRole?.workDescription?.substring(0, 30) || 'none'
-      });
-      
+
       if (memberRole?.workDescription && memberRole.workDescriptionUpdatedAt) {
         const roleUpdatedAt = memberRole.workDescriptionUpdatedAt;
         const userReadAt = member.descReadAt || 0;
-        
-        console.log(`  📊 Timestamps for ${member.name}:`, {
-          roleUpdatedAt,
-          userReadAt,
-          isNewer: roleUpdatedAt > userReadAt,
-          shouldShowDot: roleUpdatedAt > userReadAt
-        });
-        
+
         // Show dot if role was updated after user last read it
         // If user never read it (userReadAt = 0), and role has an update timestamp, show dot
         if (roleUpdatedAt > userReadAt) {
           unreadSet.add(member.id);
-          console.log(`🔔 Unread description for ${member.name}:`, {
-            roleUpdatedAt: new Date(roleUpdatedAt).toLocaleString(),
-            userReadAt: userReadAt > 0 ? new Date(userReadAt).toLocaleString() : 'Never read'
-          });
+
         }
       }
     });
-    
-    console.log('📊 Final unread members:', Array.from(unreadSet));
-    
+
     // Only update if the Set has actually changed
     setUnreadDescMembers(prev => {
       const prevArray = Array.from(prev).sort();
@@ -518,11 +457,10 @@ export function AppProvider({ children }) {
       const hasChanged = JSON.stringify(prevArray) !== JSON.stringify(newArray);
       
       if (hasChanged) {
-        console.log('🔄 Unread members changed:', { prev: prevArray, new: newArray });
+
         return unreadSet;
       }
-      
-      console.log('✅ Unread members unchanged, keeping previous Set');
+
       return prev;
     });
   }, [team, roles]);
@@ -539,43 +477,18 @@ export function AppProvider({ children }) {
     // This prevents filtering with the wrong userId (Firebase UID instead of memberId)
     const initialUserAccessLevel = getUserAccessLevel(currentUser);
     const isWorkspaceOwner = workspaceId && currentUid && workspaceId === `ws_${currentUid}`;
-    
-    console.log('🔍 Listener initialization check:', {
-      isWorkspaceOwner,
-      initialUserAccessLevel,
-      hasMemberId: !!currentUser?.memberId,
-      memberId: currentUser?.memberId,
-      currentUid,
-      userRole: currentUser?.userRole,
-      role: currentUser?.role
-    });
-    
+
     // Admin users should get immediate access like workspace owners
     const isAdminUser = initialUserAccessLevel === 'admin';
     
     if (!isWorkspaceOwner && !isAdminUser && !currentUser?.memberId) {
-      console.log('⏳ Waiting for memberId before initializing listeners...', {
-        userAccessLevel: initialUserAccessLevel,
-        hasMemberId: !!currentUser?.memberId,
-        currentUid
-      });
+
       return; // Don't initialize listeners yet
     }
-    
-    console.log('✅ Ready to initialize listeners:', {
-      workspaceId,
-      userAccessLevel: initialUserAccessLevel,
-      isWorkspaceOwner,
-      isAdminUser,
-      memberId: currentUser?.memberId,
-      currentUid
-    });
 
     const wsPath = `workspaces/${workspaceId}`;
     const unsubs = [];
     let isSubscribed = true;
-
-    console.log('🔥 Setting up Firestore listeners for workspace:', workspaceId);
 
     // Workspace settings listener - Load workspace name, subtitle, logo
     const wsListenerKey = `workspace_settings_${workspaceId}`;
@@ -588,14 +501,7 @@ export function AppProvider({ children }) {
           if (snap.exists()) {
             const wsData = snap.data();
             const settings = wsData.settings || {};
-            
-            console.log('🏢 Workspace settings loaded:', {
-              name: settings.workspaceName,
-              sub: settings.workspaceSub,
-              hasLogo: !!settings.workspaceLogo,
-              hasCompletedSetup: settings.hasCompletedSetup
-            });
-            
+
             // Update workspace settings in state
             if (settings.workspaceName) setWorkspaceName(settings.workspaceName);
             if (settings.workspaceSub) setWorkspaceSub(settings.workspaceSub);
@@ -605,7 +511,7 @@ export function AppProvider({ children }) {
         }, 1000), // Throttle to 1 second
         (error) => {
           monitor.trackError(error, 'workspace_settings_listener');
-          console.error('❌ Workspace settings listener error:', error);
+
         }
       );
       listenerRegistry.register(wsListenerKey, wsUnsub);
@@ -616,45 +522,18 @@ export function AppProvider({ children }) {
     // ⭐ CRITICAL FIX: Check if user is workspace owner (admin) by comparing workspaceId with uid
     // Reuse the initialUserAccessLevel from above
     let userAccessLevel = initialUserAccessLevel;
-    
-    console.log('🔐 Workspace owner check:', {
-      workspaceId,
-      currentUid,
-      expectedWorkspaceId: `ws_${currentUid}`,
-      isMatch: workspaceId === `ws_${currentUid}`,
-      initialUserAccessLevel
-    });
-    
+
     // Override access level if user is workspace owner
     if (workspaceId && currentUid && workspaceId === `ws_${currentUid}`) {
-      console.log('👑 User is workspace owner - overriding access level to ADMIN');
+
       userAccessLevel = 'admin';
     }
     
     const userId = currentUser.memberId || currentUid;
-    console.log('🔐 User access level:', userAccessLevel, 'for user:', userId);
-    console.log('🔐 User ID determination:', {
-      'currentUser.memberId': currentUser?.memberId,
-      'currentUid': currentUid,
-      'userId (final)': userId,
-      'Will use': currentUser?.memberId ? 'memberId' : 'Firebase UID'
-    });
-    console.log('🔐 Current user details:', { 
-      uid: currentUid, 
-      memberId: currentUser?.memberId, 
-      userRole: currentUser?.userRole,
-      role: currentUser?.role,
-      name: currentUser?.name,
-      workspaceId: workspaceId,
-      isOwner: workspaceId === `ws_${currentUid}`,
-      '⚠️ COMPUTED ACCESS LEVEL': userAccessLevel,
-      '⚠️ WILL FILTER?': userAccessLevel === 'member' ? 'YES - MEMBER FILTERING' : userAccessLevel === 'manager' ? 'YES - MANAGER FILTERING' : 'NO - ADMIN (ALL TASKS)'
-    });
-    
+
     // Check feature flags
     const useServerFiltering = getFeatureFlag('serverSideTaskFiltering');
-    console.log('🚩 Server-side filtering:', useServerFiltering ? 'ENABLED' : 'DISABLED');
-    
+
     // Log data access for monitoring
     logDataAccess(currentUid, userAccessLevel, 'setup_listeners', { workspaceId, useServerFiltering });
 
@@ -685,13 +564,7 @@ export function AppProvider({ children }) {
               const validMemberStage = STAGES.includes(memberStage) ? memberStage : 'New';
               
               if (memberStage !== validMemberStage) {
-                console.warn('⚠️ Invalid member stage detected:', {
-                  taskId: d.id,
-                  memberId: m.id,
-                  memberName: m.name,
-                  invalidStage: m.stage,
-                  cleanedStage: validMemberStage
-                });
+
               }
               
               return {
@@ -701,11 +574,7 @@ export function AppProvider({ children }) {
             });
             
             if (data.stage !== validStage) {
-              console.warn('⚠️ Invalid task stage detected:', {
-                taskId: d.id,
-                invalidStage: data.stage,
-                cleanedStage: validStage
-              });
+
             }
             
             return {
@@ -726,20 +595,10 @@ export function AppProvider({ children }) {
           // Client-side filtering for members (only if server-side filtering is disabled)
           // ⚠️ IMPORTANT: Admin users should NEVER be filtered - they see ALL tasks
           if (userAccessLevel === 'admin') {
-            console.log(`👑 ADMIN user - no filtering applied, showing all ${loadedTasks.length} tasks`);
+
           } else if (userAccessLevel === 'member' && userId && !useServerFiltering) {
             const beforeFilter = loadedTasks.length;
-            console.log(`🔍 Starting client-side filtering for userId: ${userId}`);
-            console.log(`🔍 Current user info:`, {
-              uid: currentUid,
-              memberId: currentUser?.memberId,
-              userRole: currentUser?.userRole,
-              name: currentUser?.name,
-              userId: userId
-            });
-            console.log(`🔍 Sample task members:`, loadedTasks[0]?.members?.map(m => ({ id: m.id, name: m.name })));
-            console.log(`🔍 Sample task memberIds:`, loadedTasks[0]?.memberIds);
-            
+
             loadedTasks = loadedTasks.filter(task => {
               // Check if user is in the members array by memberId
               // userId here should be currentUser.memberId (not Firebase UID)
@@ -750,35 +609,22 @@ export function AppProvider({ children }) {
               
               const shouldShow = isMember || isInMemberIds;
               if (!shouldShow && task.id) {
-                console.log(`🔍 Task ${task.id} filtered out - not a member`, {
-                  userId,
-                  'userId type': typeof userId,
-                  taskMembers: task.members?.map(m => ({ id: m.id, idType: typeof m.id, name: m.name })),
-                  taskMemberIds: task.memberIds,
-                  isMember,
-                  isInMemberIds,
-                  '⚠️ userId matches any member?': task.members?.some(m => m.id == userId || String(m.id) === String(userId))
-                });
+
               } else if (shouldShow) {
-                console.log(`✅ Task ${task.id} VISIBLE - user is assigned`, {
-                  userId,
-                  isMember,
-                  isInMemberIds
-                });
+
               }
               
               return shouldShow;
             });
-            console.log(`🔍 CLIENT-SIDE filtered tasks: ${beforeFilter} → ${loadedTasks.length} tasks`);
+
           } else if (userAccessLevel === 'member' && useServerFiltering) {
-            console.log(`⚡ SERVER-SIDE filtering active - no client filtering needed`);
+
           }
           
           // ⭐ PHASE 6: Client-side filtering for management users
           if (userAccessLevel === 'manager' && userId) {
             const beforeFilter = loadedTasks.length;
-            console.log(`🔍 Starting management filtering for userId: ${userId}, currentUid: ${currentUid}`);
-            
+
             loadedTasks = loadedTasks.filter(task => {
               // Show tasks created by THIS specific management user
               const createdByThisUser = task.createdBy?.uid === currentUid || task.createdBy?.memberId === userId;
@@ -791,32 +637,16 @@ export function AppProvider({ children }) {
               const shouldShow = createdByThisUser || isAssigned || isInMemberIds;
               
               if (!shouldShow && task.id) {
-                console.log(`🔍 Task ${task.id} filtered out:`, {
-                  taskTitle: task.title,
-                  createdByUid: task.createdBy?.uid,
-                  createdByMemberId: task.createdBy?.memberId,
-                  currentUid: currentUid,
-                  userId: userId,
-                  createdByThisUser,
-                  isAssigned,
-                  isInMemberIds
-                });
+
               } else if (shouldShow) {
-                console.log(`✅ Task ${task.id} VISIBLE:`, {
-                  taskTitle: task.title,
-                  createdByThisUser,
-                  isAssigned,
-                  isInMemberIds
-                });
+
               }
               
               return shouldShow;
             });
-            console.log(`🔍 MANAGEMENT filtered tasks: ${beforeFilter} → ${loadedTasks.length} tasks`);
+
           }
-          
-          console.log(`📊 Loaded ${loadedTasks.length} tasks for ${userAccessLevel} user`);
-          
+
           // Cache the tasks data
           cacheFirestoreData('tasks', workspaceId, loadedTasks);
           
@@ -824,14 +654,13 @@ export function AppProvider({ children }) {
         }, 500), // Throttle to 500ms
         (error) => {
           monitor.trackError(error, 'tasks_listener');
-          console.error('❌ Tasks listener error:', error);
-          
+
           // Set error state instead of silently retrying
           if (retryCount < MAX_AUTO_RETRIES) {
-            console.warn(`⚠️ Firestore error - auto-retry ${retryCount + 1}/${MAX_AUTO_RETRIES}`);
+
             setRetryCount(prev => prev + 1);
           } else {
-            console.error('❌ Max auto-retries reached - manual retry required');
+
             setDataLoadError({
               message: 'Failed to load tasks data',
               code: error.code,
@@ -859,8 +688,7 @@ export function AppProvider({ children }) {
           monitor.trackRead('team', snap.docs.length);
           
           const teamData = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-          console.log(`👥 Loaded ${teamData.length} team members (OPTIMIZED)`);
-          
+
           // ⭐ OPTIMIZATION: Skip enrichment for large teams (>50 members)
           // Enrichment is expensive - only do it for small teams
           const shouldEnrich = teamData.length <= 50;
@@ -928,16 +756,11 @@ export function AppProvider({ children }) {
                   if (hasUpdates) {
                     const teamDocRef = doc(db, `workspaces/${workspaceId}/team`, String(member.id));
                     teamUpdates.updatedAt = serverTimestamp();
-                    await updateDoc(teamDocRef, teamUpdates).catch(err => console.warn('⚠️ Failed to sync profile to team:', err));
-                    console.log('✅ Synced profile data from users to team:', { 
-                      memberId: member.id, 
-                      name: member.name,
-                      syncedFields: Object.keys(teamUpdates).filter(k => k !== 'updatedAt')
-                    });
+                    await updateDoc(teamDocRef, teamUpdates).catch(err => {});
                   }
                 }
               } catch (error) {
-                console.warn('⚠️ Failed to fetch profile from users collection:', error);
+                // Silently handle error
               }
             }
             
@@ -949,22 +772,18 @@ export function AppProvider({ children }) {
             };
           }));
           }
-          
-          console.log(`✅ Team data ready: ${enrichedTeamData.length} members`);
-          console.log('🖼️ Team avatars:', enrichedTeamData.map(m => ({ name: m.name, hasAvatar: !!m.avatarImg, uid: m.uid })));
-          
+
           setTeam(enrichedTeamData);
         }, 1000), // Throttle to 1 second to reduce listener frequency
         (error) => {
           monitor.trackError(error, 'team_listener');
-          console.error('❌ Team listener error:', error);
-          
+
           // Set error state instead of silently retrying
           if (retryCount < MAX_AUTO_RETRIES) {
-            console.warn(`⚠️ Firestore error - auto-retry ${retryCount + 1}/${MAX_AUTO_RETRIES}`);
+
             setRetryCount(prev => prev + 1);
           } else {
-            console.error('❌ Max auto-retries reached - manual retry required');
+
             setDataLoadError({
               message: 'Failed to load team data',
               code: error.code,
@@ -1001,8 +820,7 @@ export function AppProvider({ children }) {
               time: data.time?.toDate ? data.time.toDate() : new Date(data.time)
             };
           });
-          console.log(`📊 Loaded ${activities.length} activities (OPTIMIZED: limit 15)`);
-          
+
           // Cache the activity data
           cacheFirestoreData('activity', workspaceId, activities);
           
@@ -1011,7 +829,7 @@ export function AppProvider({ children }) {
         (error) => {
           monitor.trackError(error, 'activity_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Activity listener error:', error);
+
           }
         }
       );
@@ -1026,14 +844,14 @@ export function AppProvider({ children }) {
     if (currentUid) {
       const notesListenerKey = `notes_${workspaceId}_${currentUid}`;
       if (!listenerRegistry.has(notesListenerKey)) {
-        console.log('📝 Setting up notes listener for user:', currentUid);
-        
+
         // Query notes where user is creator OR user is in members array
         const notesRef = collection(db, `${wsPath}/notes`);
         const q = query(
           notesRef,
           where('accessList', 'array-contains', currentUid),
-          orderBy('updatedAt', 'desc'),
+          // TEMPORARY: Removed orderBy to test without index
+          // orderBy('updatedAt', 'desc'),
           limit(50) // ⭐ OPTIMIZATION: Limit to 50 most recent notes
         );
         
@@ -1046,8 +864,7 @@ export function AppProvider({ children }) {
             monitor.trackRead('notes', snap.docs.length);
             
             const userNotes = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-            console.log(`📝 Loaded ${userNotes.length} notes (OPTIMIZED: limit 50)`);
-            
+
             // Cache the notes data
             cacheFirestoreData('notes', workspaceId, userNotes);
             
@@ -1055,7 +872,7 @@ export function AppProvider({ children }) {
           }, 1000), // Throttle to 1 second
           (error) => {
             monitor.trackError(error, 'notes_listener');
-            console.error('❌ Notes listener error:', error);
+
             setNotes([]);
           }
         );
@@ -1063,49 +880,48 @@ export function AppProvider({ children }) {
         unsubs.push(() => listenerRegistry.unregister(notesListenerKey));
       }
     } else {
-      console.log('⚠️ No currentUid - skipping notes listener');
+
       setNotes([]);
     }
 
-    // ⭐ OPTIMIZATION: Roles - One-time read instead of real-time listener
-    // Load once on workspace initialization, use manual refresh button to update
+    // ⭐ Roles - Real-time listener for work description updates
     const rolesListenerKey = `roles_${workspaceId}`;
     if (!listenerRegistry.has(rolesListenerKey)) {
-      console.log('🎭 Loading roles (one-time read)...');
-      
-      // One-time read
-      getDocs(collection(db, `${wsPath}/roles`))
-        .then((snap) => {
+
+      // Real-time listener
+      const rolesUnsub = onSnapshot(
+        collection(db, `${wsPath}/roles`),
+        (snap) => {
           if (!isSubscribed) return;
           
           // Track reads
           monitor.trackRead('roles', snap.docs.length);
           
           const firestoreRoles = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-          console.log('🎭 Roles loaded from Firestore (one-time):', firestoreRoles.length, 'roles');
-          
+
           // Cache the roles data
           cacheFirestoreData('roles', workspaceId, firestoreRoles.length > 0 ? firestoreRoles : INITIAL_ROLES);
           
           setRoles(firestoreRoles.length > 0 ? firestoreRoles : INITIAL_ROLES);
-        })
-        .catch((error) => {
-          monitor.trackError(error, 'roles_load');
+        },
+        (error) => {
+          monitor.trackError(error, 'roles_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Roles load error:', error);
+
           }
-        });
+        }
+      );
       
-      // Register a dummy unsubscribe to prevent re-loading
-      listenerRegistry.register(rolesListenerKey, () => {});
+      // Register the unsubscribe function
+      listenerRegistry.register(rolesListenerKey, rolesUnsub);
+      unsubs.push(() => listenerRegistry.unregister(rolesListenerKey));
       unsubs.push(() => listenerRegistry.unregister(rolesListenerKey));
     }
 
     // ⭐ OPTIMIZATION: Tags - One-time read instead of real-time listener
     const tagsListenerKey = `tags_${workspaceId}`;
     if (!listenerRegistry.has(tagsListenerKey)) {
-      console.log('🏷️ Loading tags (one-time read)...');
-      
+
       // One-time read
       getDocs(collection(db, `${wsPath}/tags`))
         .then((snap) => {
@@ -1115,8 +931,7 @@ export function AppProvider({ children }) {
           monitor.trackRead('tags', snap.docs.length);
           
           const loadedTags = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-          console.log('🏷️ Tags loaded from Firestore (one-time):', loadedTags.length, 'tags');
-          
+
           // Cache the tags data
           cacheFirestoreData('tags', workspaceId, loadedTags);
           
@@ -1125,7 +940,7 @@ export function AppProvider({ children }) {
         .catch((error) => {
           monitor.trackError(error, 'tags_load');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Tags load error:', error);
+
           }
         });
       
@@ -1137,8 +952,7 @@ export function AppProvider({ children }) {
     // ⭐ OPTIMIZATION: Categories - One-time read instead of real-time listener
     const categoriesListenerKey = `categories_${workspaceId}`;
     if (!listenerRegistry.has(categoriesListenerKey)) {
-      console.log('📁 Loading categories (one-time read)...');
-      
+
       // One-time read
       getDocs(collection(db, `${wsPath}/categories`))
         .then((snap) => {
@@ -1148,8 +962,7 @@ export function AppProvider({ children }) {
           monitor.trackRead('categories', snap.docs.length);
           
           const loadedCategories = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-          console.log('📁 Categories loaded from Firestore (one-time):', loadedCategories.length, 'categories');
-          
+
           // Cache the categories data
           cacheFirestoreData('categories', workspaceId, loadedCategories);
           
@@ -1158,7 +971,7 @@ export function AppProvider({ children }) {
         .catch((error) => {
           monitor.trackError(error, 'categories_load');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Categories load error:', error);
+
           }
         });
       
@@ -1170,7 +983,7 @@ export function AppProvider({ children }) {
     // Broadcasts - Only load when needed (lazy load) with LIMIT
     const broadcastsListenerKey = `broadcasts_${workspaceId}`;
     if (!listenerRegistry.has(broadcastsListenerKey)) {
-      console.log('📢 Setting up broadcasts listener for workspace:', workspaceId);
+
       const broadcastsUnsub = onSnapshot(
         query(
           collection(db, `${wsPath}/broadcasts`), 
@@ -1193,9 +1006,7 @@ export function AppProvider({ children }) {
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
             };
           });
-          
-          console.log(`📢 Loaded ${broadcasts.length} broadcasts (limited to 50 most recent)`, broadcasts.map(b => ({ id: b.id, title: b.title, time: b.time })));
-          
+
           // Cache the broadcasts data
           cacheFirestoreData('broadcasts', workspaceId, broadcasts);
           
@@ -1204,7 +1015,7 @@ export function AppProvider({ children }) {
         (error) => {
           monitor.trackError(error, 'broadcasts_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Broadcasts listener error:', error);
+
           }
         }
       );
@@ -1215,7 +1026,7 @@ export function AppProvider({ children }) {
     // ⭐ PHASE 2: Payments listener with LIMIT for optimization
     const paymentsListenerKey = `payments_${workspaceId}`;
     if (!listenerRegistry.has(paymentsListenerKey)) {
-      console.log('💰 Setting up payments listener for workspace:', workspaceId);
+
       const paymentsUnsub = onSnapshot(
         query(
           collection(db, `${wsPath}/payments`), 
@@ -1238,9 +1049,7 @@ export function AppProvider({ children }) {
               paidAt: data.paidAt?.toDate ? data.paidAt.toDate() : null
             };
           });
-          
-          console.log(`💰 Loaded ${paymentsData.length} payments (limited to 200 most recent)`);
-          
+
           // Cache the payments data
           cacheFirestoreData('payments', workspaceId, paymentsData);
           
@@ -1274,7 +1083,7 @@ export function AppProvider({ children }) {
         (error) => {
           monitor.trackError(error, 'payments_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Payments listener error:', error);
+
           }
         }
       );
@@ -1300,14 +1109,13 @@ export function AppProvider({ children }) {
           
           // Track reads
           monitor.trackRead('taskRequests', snap.docs.length);
-          
-          console.log(`📝 Loaded ${snap.docs.length} task requests (limited to 50 most recent)`);
+
           setTaskRequests(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         }, 1000), // Throttle to 1 second
         (error) => {
           monitor.trackError(error, 'taskRequests_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Task requests listener error:', error);
+
           }
         }
       );
@@ -1328,14 +1136,13 @@ export function AppProvider({ children }) {
           
           // Track reads
           monitor.trackRead('scheduledTasks', snap.docs.length);
-          
-          console.log(`📅 Loaded ${snap.docs.length} scheduled tasks`);
+
           setScheduledTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         }, 1000), // Throttle to 1 second
         (error) => {
           monitor.trackError(error, 'scheduledTasks_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Scheduled tasks listener error:', error);
+
           }
         }
       );
@@ -1359,7 +1166,7 @@ export function AppProvider({ children }) {
         (error) => {
           monitor.trackError(error, 'trash_listener');
           if (error.code !== 'internal' && !error.message?.includes('INTERNAL ASSERTION')) {
-            console.error('❌ Trash listener error:', error);
+
           }
         }
       );
@@ -1371,8 +1178,7 @@ export function AppProvider({ children }) {
     const loadTimer = setTimeout(() => {
       if (isSubscribed) {
         setDataLoaded(true);
-        console.log('✅ All data loaded');
-        console.log('📊 Read optimization stats:', readStats.getSavings());
+
       }
     }, 1200);
 
@@ -1384,7 +1190,7 @@ export function AppProvider({ children }) {
         } catch (err) {
           // Silently handle cleanup errors
           if (!err.message?.includes('INTERNAL ASSERTION')) {
-            console.error('Cleanup error:', err);
+
           }
         }
       });
@@ -1416,17 +1222,17 @@ export function AppProvider({ children }) {
       )
         .then((result) => {
           if (result.merged) {
-            console.log('✅ Note updated with conflict resolution:', noteId);
+
             // Update local state with merged data
             setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...result.data } : n));
           } else {
-            console.log('✅ Note updated (no conflict):', noteId);
+
           }
           return result;
         })
         .catch((error) => {
           monitor.trackError(error, 'update_note');
-          console.error('❌ Failed to update note:', error);
+
           throw error;
         });
     }
@@ -1434,20 +1240,14 @@ export function AppProvider({ children }) {
   }, [workspaceId, currentUid]);
 
   const addNote = useCallback((note) => {
-    console.log('📝 addNote called:', {
-      noteId: note.id,
-      title: note.title,
-      type: note.type,
-      hasAccessList: !!note.accessList,
-      accessListLength: note.accessList?.length || 0,
-      accessListReceived: note.accessList,
-      currentUid
-    });
-    
+
     if (!currentUid) {
-      console.error('❌ No currentUid - cannot save note');
+
       return;
     }
+    
+    // Add timestamps for Firestore query compatibility
+    const now = Date.now();
     
     // Preserve existing accessList if provided, otherwise create new one with current user
     const noteWithAccess = {
@@ -1455,52 +1255,42 @@ export function AppProvider({ children }) {
       accessList: note.accessList && note.accessList.length > 0 
         ? note.accessList 
         : [currentUid], // Creator has access by default only if no accessList provided
+      createdAt: note.createdAt || now,
+      updatedAt: note.updatedAt || now, // Required for Firestore query ordering
     };
-    
-    console.log('💾 Note accessList being saved:', noteWithAccess.accessList);
-    console.log('💾 Full note document being saved:', {
-      id: noteWithAccess.id,
-      title: noteWithAccess.title,
-      accessList: noteWithAccess.accessList,
-      members: noteWithAccess.members,
-      taskId: noteWithAccess.taskId
-    });
-    
+
     setNotes(prev => [noteWithAccess, ...prev]);
     
     if (workspaceId) {
       const notePath = `workspaces/${workspaceId}/notes/${note.id}`;
-      console.log('💾 Saving note to Firestore:', notePath);
-      
+
       monitor.trackWrite('notes', 1);
       setDoc(doc(db, notePath), noteWithAccess)
         .then(() => {
-          console.log('✅ Note saved successfully to Firestore');
-          console.log('✅ AccessList saved:', noteWithAccess.accessList);
-          console.log('✅ Members saved:', noteWithAccess.members);
+
         })
         .catch((error) => {
           monitor.trackError(error, 'add_note');
-          console.error('❌ Failed to save note:', error);
+
         });
     }
   }, [workspaceId, currentUid]);
 
   const deleteNote = useCallback((noteId) => {
-    console.log('🗑️ deleteNote called:', noteId);
+
     setNotes(prev => prev.filter(n => n.id !== noteId));
     
     if (workspaceId) {
       const notePath = `workspaces/${workspaceId}/notes/${noteId}`;
-      console.log('💾 Deleting note from Firestore:', notePath);
+
       monitor.trackDelete('notes', 1);
       deleteDoc(doc(db, notePath))
         .then(() => {
-          console.log('✅ Note deleted from Firestore');
+
         })
         .catch((error) => {
           monitor.trackError(error, 'delete_note');
-          console.error('❌ Failed to delete note:', error);
+
         });
     }
   }, [workspaceId]);
@@ -1538,12 +1328,12 @@ export function AppProvider({ children }) {
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           const hasSeenDonut = snap.data().hasSeenDonutWelcome === true;
-          console.log('🍩 hasSeenDonutWelcome loaded from Firestore:', hasSeenDonut, 'uid:', currentUid);
+
           setHasSeenDonutWelcome(hasSeenDonut);
         }
       } catch (error) {
         // Silently handle errors
-        console.error('Error loading hasSeenDonutWelcome:', error);
+
       }
     };
     
@@ -1567,19 +1357,19 @@ export function AppProvider({ children }) {
 
   // When donut welcome is dismissed, mark as seen per-user in Firestore
   const setShowDonutWelcome = useCallback((val) => {
-    console.log('🍩 setShowDonutWelcome called:', val, 'currentUid:', currentUid);
+
     setShowDonutWelcomeRaw(val);
     if (!val && currentUid) {
-      console.log('🍩 Saving hasSeenDonutWelcome: true to Firestore for uid:', currentUid);
+
       monitor.trackWrite('users', 1);
       updateDoc(doc(db, 'users', currentUid), { hasSeenDonutWelcome: true })
         .then(() => {
-          console.log('✅ hasSeenDonutWelcome saved successfully');
+
           setHasSeenDonutWelcome(true);
         })
         .catch((err) => {
           monitor.trackError(err, 'set_donut_welcome');
-          console.error('❌ Failed to save hasSeenDonutWelcome:', err);
+
         });
     }
   }, [currentUid]);
@@ -1614,7 +1404,7 @@ export function AppProvider({ children }) {
       if (p.expiryDate      !== undefined) setPlanExpiryDate(p.expiryDate);
       if (p.expiryTimestamp !== undefined) setPlanExpiryTimestamp(p.expiryTimestamp);
       if (p.isActive        !== undefined) {
-        console.log('📊 Plan isActive field read from Firestore:', p.isActive);
+
         setPlanIsActive(p.isActive === true);
       }
       
@@ -1626,14 +1416,14 @@ export function AppProvider({ children }) {
           : p.expiryTimestamp;
         
         if (expiryTime < Date.now()) {
-          console.log('⏰ Plan expired - setting isActive to false');
+
           try {
             await updateDoc(workspaceRef, { 
               'plan.isActive': false,
               'plan.updatedAt': serverTimestamp()
             });
           } catch (err) {
-            console.error('Failed to deactivate expired plan:', err);
+
           }
         }
       }
@@ -1700,7 +1490,7 @@ export function AppProvider({ children }) {
 
   // Refresh data function - forces re-fetch from Firestore
   const refreshData = useCallback(() => {
-    console.log('🔄 Refreshing data for workspace:', workspaceId);
+
     setDataLoadError(null); // Clear any previous errors
     setRetryCount(0); // Reset retry count on manual refresh
     setRefreshTrigger(prev => prev + 1);
@@ -1710,64 +1500,61 @@ export function AppProvider({ children }) {
     if (workspaceId) {
       // The Firestore listeners will automatically pick up any changes
       // This trigger helps components that depend on refreshTrigger to re-render
-      console.log('✅ Data refresh triggered - listeners will update automatically');
+
     }
   }, [workspaceId]);
 
   // ⭐ OPTIMIZATION: Individual refresh functions for static data (one-time reads)
   const refreshRoles = useCallback(async () => {
     if (!wsPath) return;
-    console.log('🎭 Manually refreshing roles...');
+
     try {
       const snapshot = await getDocs(collection(db, `${wsPath}/roles`));
       const firestoreRoles = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-      console.log('🎭 Roles refreshed:', firestoreRoles.length, 'roles');
-      
+
       // Cache the roles data
       cacheFirestoreData('roles', workspaceId, firestoreRoles.length > 0 ? firestoreRoles : INITIAL_ROLES);
       
       setRoles(firestoreRoles.length > 0 ? firestoreRoles : INITIAL_ROLES);
       monitor.trackRead('roles', snapshot.docs.length);
     } catch (error) {
-      console.error('❌ Error refreshing roles:', error);
+
       monitor.trackError(error, 'refresh_roles');
     }
   }, [wsPath, workspaceId]);
 
   const refreshTags = useCallback(async () => {
     if (!wsPath) return;
-    console.log('🏷️ Manually refreshing tags...');
+
     try {
       const snapshot = await getDocs(collection(db, `${wsPath}/tags`));
       const loadedTags = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-      console.log('🏷️ Tags refreshed:', loadedTags.length, 'tags');
-      
+
       // Cache the tags data
       cacheFirestoreData('tags', workspaceId, loadedTags);
       
       setTags(loadedTags);
       monitor.trackRead('tags', snapshot.docs.length);
     } catch (error) {
-      console.error('❌ Error refreshing tags:', error);
+
       monitor.trackError(error, 'refresh_tags');
     }
   }, [wsPath, workspaceId]);
 
   const refreshCategories = useCallback(async () => {
     if (!wsPath) return;
-    console.log('📁 Manually refreshing categories...');
+
     try {
       const snapshot = await getDocs(collection(db, `${wsPath}/categories`));
       const loadedCategories = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-      console.log('📁 Categories refreshed:', loadedCategories.length, 'categories');
-      
+
       // Cache the categories data
       cacheFirestoreData('categories', workspaceId, loadedCategories);
       
       setCategories(loadedCategories);
       monitor.trackRead('categories', snapshot.docs.length);
     } catch (error) {
-      console.error('❌ Error refreshing categories:', error);
+
       monitor.trackError(error, 'refresh_categories');
     }
   }, [wsPath, workspaceId]);
@@ -1782,17 +1569,17 @@ export function AppProvider({ children }) {
       if (document.hidden) {
         // Tab became hidden - record the time
         lastHiddenTime = Date.now();
-        console.log('👁️ Tab hidden at:', new Date(lastHiddenTime).toLocaleTimeString());
+
       } else if (workspaceId && lastHiddenTime > 0) {
         // Tab became visible - check if it was hidden long enough
         const hiddenDuration = Date.now() - lastHiddenTime;
         const hiddenMinutes = Math.floor(hiddenDuration / 60000);
         
         if (hiddenDuration >= MIN_HIDDEN_TIME) {
-          console.log(`👁️ Tab visible after ${hiddenMinutes} minutes - refreshing data`);
+
           refreshData();
         } else {
-          console.log(`👁️ Tab visible after ${hiddenMinutes} minutes - skipping refresh (too soon)`);
+
         }
         
         lastHiddenTime = 0; // Reset
@@ -1916,37 +1703,12 @@ export function AppProvider({ children }) {
     let creatorColor = currentUser?.color || '#3B5BFC';
     let creatorAvatar = currentUser?.avatar || currentUser?.name?.charAt(0)?.toUpperCase() || 'A';
     let creatorAvatarImg = currentUser?.avatarImg || null;
-    
-    console.log('👤 Building creator info from currentUser:', {
-      currentUser: {
-        name: currentUser?.name,
-        role: currentUser?.role,
-        color: currentUser?.color,
-        avatar: currentUser?.avatar,
-        avatarImg: currentUser?.avatarImg,
-        memberId: currentUser?.memberId,
-        userRole: currentUser?.userRole
-      },
-      extracted: {
-        creatorName,
-        creatorRole,
-        creatorColor,
-        creatorAvatar,
-        creatorAvatarImg
-      }
-    });
-    
+
     // If currentUser has a memberId, get the actual team member info
     if (currentUser?.memberId && team && team.length > 0) {
       const teamMember = team.find(m => m.id === currentUser.memberId);
       if (teamMember) {
-        console.log('👥 Found team member, using their data:', {
-          name: teamMember.name,
-          role: teamMember.role,
-          color: teamMember.color,
-          avatar: teamMember.avatar,
-          avatarImg: teamMember.avatarImg
-        });
+
         creatorName = teamMember.name || creatorName;
         creatorRole = teamMember.role || creatorRole;
         // Use team member's visual info if available
@@ -1970,13 +1732,7 @@ export function AppProvider({ children }) {
       avatarImg: creatorAvatarImg, // ⭐ Avatar image URL
       createdAt: now
     };
-    
-    console.log('👤 Task creator info:', {
-      ...creatorInfo,
-      currentUser: currentUser,
-      foundInTeam: !!team?.find(m => m.id === currentUser?.memberId)
-    });
-    
+
     const taskWithHistory = {
       ...task,
       paid: false,
@@ -2011,26 +1767,14 @@ export function AppProvider({ children }) {
 
     // Firestore write - let the listener update the state
     if (wsPath) {
-      console.log('💾 Saving task to Firestore:', `${wsPath}/tasks/${task.id}`);
-      console.log('👥 Task members data being saved:', JSON.stringify(task.members?.map(m => ({ 
-        id: m.id, 
-        name: m.name, 
-        avatar: m.avatar, 
-        color: m.color,
-        role: m.role,
-        email: m.email,
-        status: m.status
-      })), null, 2));
-      
+
       // ⭐ PHASE 2: Create task and payment together
       setDoc(doc(db, `${wsPath}/tasks`, String(task.id)), {
         ...cleanTaskData,
         createdDate: serverTimestamp(),
         'createdBy.createdAt': serverTimestamp(), // Use server timestamp for creator date
       }).then(async () => {
-        console.log('✅ Task created in Firestore:', task.id);
-        console.log('✅ Creator info saved:', creatorInfo);
-        
+
         // ⭐ PHASE 2: Auto-create payment records for EACH member AND additional payments
         try {
           const allPaymentPromises = [];
@@ -2038,15 +1782,7 @@ export function AppProvider({ children }) {
           // 1️⃣ Create individual payment records for each team member
           const memberPaymentPromises = (task.members || []).map(async (member) => {
             const memberBudget = member.budget || 0;
-            
-            console.log('💰 Creating payment for member:', {
-              memberId: member.id,
-              memberName: member.name,
-              memberBudget: memberBudget,
-              rawBudget: member.budget,
-              memberData: member
-            });
-            
+
             const paymentData = {
               taskId: task.id, // ⭐ Link to task
               taskTitle: task.title,
@@ -2070,7 +1806,7 @@ export function AppProvider({ children }) {
             };
             
             await addDoc(collection(db, `${wsPath}/payments`), paymentData);
-            console.log('✅ Payment record created for member:', member.name, 'with amount:', memberBudget);
+
           });
           
           allPaymentPromises.push(...memberPaymentPromises);
@@ -2098,14 +1834,13 @@ export function AppProvider({ children }) {
               };
               
               await addDoc(collection(db, `${wsPath}/payments`), paymentData);
-              console.log('✅ Additional payment record created:', payment.title, 'with amount:', payment.amount);
+
             });
             
             allPaymentPromises.push(...additionalPaymentPromises);
           }
           await Promise.all(allPaymentPromises);
-          console.log('✅ All payment records created for task:', task.id, '- Members:', task.members?.length || 0, 'Additional:', task.payments?.length || 0);
-          
+
           // 3️⃣ Create task budget payment if task budget is specified
           if (task.taskBudgetAmount && task.taskBudgetAmount > 0) {
             const taskBudgetPaymentData = {
@@ -2130,10 +1865,10 @@ export function AppProvider({ children }) {
             };
             
             await addDoc(collection(db, `${wsPath}/payments`), taskBudgetPaymentData);
-            console.log('✅ Task budget payment record created:', task.taskBudgetAmount, 'Status:', task.taskBudgetStatus);
+
           }
         } catch (paymentError) {
-          console.error('❌ Failed to create payments:', paymentError);
+
           // Don't fail task creation if payment fails
         }
         
@@ -2160,22 +1895,20 @@ export function AppProvider({ children }) {
               members: (task.members || []).map(m => m.name).join(", ")
             }
           };
-          
-          console.log('📜 Creating timeline entry with user data:', timelineData.user);
-          
+
           await addDoc(collection(db, `${wsPath}/tasks/${task.id}/timeline`), timelineData);
-          console.log('✅ Timeline entry created for task:', task.id);
+
         } catch (timelineError) {
-          console.error('❌ Failed to create timeline:', timelineError);
+
           // Don't fail task creation if timeline fails
         }
       }).catch((err) => {
-        console.error('❌ Failed to create task:', err);
+
         // Fallback to local state on error
         setTasks(prev => [taskWithHistory, ...prev]);
       });
     } else {
-      console.warn('⚠️ No wsPath, using local state only');
+
       // Fallback to local state if no workspace
       setTasks(prev => [taskWithHistory, ...prev]);
     }
@@ -2233,9 +1966,9 @@ export function AppProvider({ children }) {
           note: note || '',
           updatedAt: serverTimestamp()
         });
-        console.log('✅ Task note saved to Firebase:', taskId);
+
       } catch (error) {
-        console.error('❌ Failed to save task note:', error);
+
         notify.error('Failed to save note');
       }
     }
@@ -2244,7 +1977,7 @@ export function AppProvider({ children }) {
   // ⭐ PHASE 3: Timeline helper function (defined before updateTask to avoid initialization error)
   const addTimelineEvent = useCallback(async (taskId, eventData) => {
     if (!wsPath) {
-      console.error('❌ Cannot add timeline event: No workspace path');
+
       return null;
     }
 
@@ -2297,10 +2030,10 @@ export function AppProvider({ children }) {
       const cleanTimelineEntry = cleanObject(timelineEntry);
 
       const docRef = await addDoc(collection(db, `${wsPath}/tasks/${taskId}/timeline`), cleanTimelineEntry);
-      console.log('✅ Timeline event added:', docRef.id);
+
       return docRef.id;
     } catch (error) {
-      console.error('❌ Failed to add timeline event:', error);
+
       return null;
     }
   }, [wsPath, currentUser]);
@@ -2314,13 +2047,7 @@ export function AppProvider({ children }) {
     
     // Log member data if present
     if (updatedTask.members) {
-      console.log(`📝 Updating task ${taskId} with members:`, updatedTask.members.map(m => ({
-        id: m.id,
-        name: m.name,
-        avatar: m.avatar,
-        color: m.color,
-        role: m.role
-      })));
+
     }
     
     // Sync memberIds when members are updated
@@ -2356,8 +2083,7 @@ export function AppProvider({ children }) {
         ...cleanTaskUpdate,
         updatedAt: serverTimestamp(),
       }).then(async () => {
-        console.log(`✅ Task ${taskId} updated in Firestore with synced memberIds`);
-        
+
         // ⭐ PHASE 3: Track changes in timeline - CREATE SEPARATE EVENT FOR EACH CHANGE
         if (oldTask) {
           const changes = [];
@@ -2543,11 +2269,7 @@ export function AppProvider({ children }) {
             } else if (change.field === "memberHold") {
               // Just show the member name, label already indicates action
               description = change.memberName;
-              console.log('🔍 Creating memberHold timeline event:', {
-                memberName: change.memberName,
-                description: description,
-                newValue: change.newValue
-              });
+
             } else {
               description = `Updated ${change.field}`;
             }
@@ -2564,7 +2286,7 @@ export function AppProvider({ children }) {
           }
         }
       }).catch((err) => {
-        console.error(`❌ Failed to update task ${taskId}:`, err);
+
       });
     }
     addActivity('edit', 'Task Updated', `${taskId} — ${taskUpdate.title}`);
@@ -2578,23 +2300,15 @@ export function AppProvider({ children }) {
     
     // Validate that the stage is one of the allowed stages
     if (!STAGES.includes(cleanStage)) {
-      console.error('❌ Invalid stage value:', newStage, '- defaulting to New');
+
       newStage = 'New';
     } else {
       newStage = cleanStage;
     }
-    
-    console.log('🔄 updateTaskStage called:', {
-      taskId,
-      newStage,
-      memberId,
-      actorName,
-      cleanedStage: newStage
-    });
-    
+
     const task = tasks.find(t => t.id === taskId);
     if (!task) {
-      console.error('❌ Task not found:', taskId);
+
       return;
     }
     
@@ -2610,15 +2324,7 @@ export function AppProvider({ children }) {
         // ⭐ Compare as strings to handle both string and number IDs
         if (String(m.id) === String(memberId)) {
           const cleanMemberStage = (newStage || 'New').trim();
-          console.log('🔄 Updating member stage:', {
-            memberId: m.id,
-            memberName: m.name,
-            oldStage: m.stage,
-            newStage: cleanMemberStage,
-            hasIssueNote: !!issueNote,
-            hasUpdateNote: !!updateNote,
-            '⚠️ MEMBER WILL BE UPDATED': true
-          });
+
           // ⭐ Store issue note and update note at member level, not task level
           return { 
             ...m, 
@@ -2627,32 +2333,17 @@ export function AppProvider({ children }) {
             updateNote: updateNote || m.updateNote || null // Keep member's update note
           };
         }
-        console.log('➡️ Keeping member stage unchanged:', {
-          memberId: m.id,
-          memberName: m.name,
-          stage: m.stage
-        });
+
         return m;
       });
-      
-      console.log('📊 All members after update:', {
-        members: updatedMembers.map(m => ({ id: m.id, name: m.name, stage: m.stage, hasUpdateNote: !!m.updateNote }))
-      });
-      
+
       // Task's overall stage = the highest (most advanced) stage among members
       const stageOrder = ['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update', 'Complete'];
       const stages = updatedMembers.map(m => m.stage);
       const stageIndexes = stages.map(s => stageOrder.indexOf(s));
       const maxIdx = Math.max(...stageIndexes);
       updatedTaskStage = stageOrder[maxIdx] || task.stage;
-      
-      console.log('📊 Task stage calculation:', {
-        memberStages: stages,
-        stageIndexes: stageIndexes,
-        maxIndex: maxIdx,
-        calculatedTaskStage: updatedTaskStage,
-        '⚠️ THIS IS THE NEW TASK STAGE': updatedTaskStage
-      });
+
     } else {
       // Bulk update all members (skip members on hold)
       // ⭐ If updating to "Update" stage with a note, apply to all members
@@ -2698,19 +2389,7 @@ export function AppProvider({ children }) {
 
     // ⭐ CRITICAL: Save to Firestore FIRST before updating local state
     if (wsPath) {
-      console.log('💾 Saving task to Firestore FIRST (before local state):', {
-        taskId,
-        overallTaskStage: updatedTaskStage,
-        memberCount: updatedMembers?.length || 0,
-        memberStages: updatedMembers?.map(m => ({ 
-          id: m.id, 
-          name: m.name, 
-          stage: m.stage,
-          budget: m.budget 
-        })),
-        updatingSpecificMember: memberId ? `Member ${memberId} to ${newStage}` : 'All members'
-      });
-      
+
       try {
         // Sanitize members array to remove any undefined values
         const sanitizedMembers = sanitizeForFirestore(updatedMembers);
@@ -2730,24 +2409,12 @@ export function AppProvider({ children }) {
         }
         
         await updateDoc(doc(db, `${wsPath}/tasks`, String(taskId)), updateData);
-        console.log('✅ Task saved to Firestore successfully', {
-          taskId,
-          updatedStage: updatedTaskStage,
-          memberCount: sanitizedMembers?.length,
-          memberStages: sanitizedMembers?.map(m => ({ id: m.id, name: m.name, stage: m.stage }))
-        });
-        
+
         // ⭐ CRITICAL: Update local state immediately for instant UI feedback
         // The Firestore listener will sync this across all users
         setTasks(prev => prev.map(t => {
           if (t.id !== taskId) return t;
-          console.log('🔄 LOCAL STATE UPDATE:', {
-            taskId: t.id,
-            oldStage: t.stage,
-            newStage: updatedTaskStage,
-            oldMembers: t.members?.map(m => ({ id: m.id, stage: m.stage })),
-            newMembers: sanitizedMembers?.map(m => ({ id: m.id, stage: m.stage }))
-          });
+
           return { 
             ...t, 
             stage: updatedTaskStage, 
@@ -2761,7 +2428,7 @@ export function AppProvider({ children }) {
         }));
         
       } catch (err) {
-        console.error('❌ Failed to save task to Firestore:', err);
+
         // If Firestore save fails, update local state as fallback
         setTasks(prev => prev.map(t => {
           if (t.id !== taskId) return t;
@@ -2876,7 +2543,7 @@ export function AppProvider({ children }) {
         },
         issueNote: noteForTimeline
       }).catch(err => {
-        console.error('❌ Failed to add timeline event:', err);
+
       });
     }
   }, [tasks, addActivity, wsPath, currentUser, addTimelineEvent, team]);
@@ -2891,15 +2558,13 @@ export function AppProvider({ children }) {
       
       // ⭐ Delete all related payment entries for this task
       const relatedPayments = payments.filter(p => p.taskId === taskId);
-      console.log(`🗑️ Deleting ${relatedPayments.length} payment entries for task ${taskId}`);
-      
+
       // Remove payments from local state
       setPayments(prev => prev.filter(p => p.taskId !== taskId));
       
       // ⭐ Delete all related scribes for this task
       const relatedScribes = notes.filter(n => n.taskId === taskId);
-      console.log(`🗑️ Deleting ${relatedScribes.length} scribes for task ${taskId}`);
-      
+
       // Remove scribes from local state
       setNotes(prev => prev.filter(n => n.taskId !== taskId));
       
@@ -2915,21 +2580,21 @@ export function AppProvider({ children }) {
           // Delete all related payment documents
           const paymentDeletePromises = relatedPayments.map((payment) => 
             deleteDoc(doc(db, `${wsPath}/payments`, payment.id)).catch((err) => {
-              console.error(`❌ Failed to delete payment ${payment.id}:`, err);
+
             })
           );
           
           // Delete all related scribe documents
           const scribeDeletePromises = relatedScribes.map((scribe) => 
             deleteDoc(doc(db, `${wsPath}/notes`, scribe.id)).catch((err) => {
-              console.error(`❌ Failed to delete scribe ${scribe.id}:`, err);
+
             })
           );
           
           await Promise.all([...paymentDeletePromises, ...scribeDeletePromises]);
-          console.log(`✅ Deleted ${relatedPayments.length} payment entries and ${relatedScribes.length} scribes for task ${taskId}`);
+
         } catch (err) {
-          console.error('❌ Error during task deletion:', err);
+
         }
       }
       
@@ -2941,15 +2606,14 @@ export function AppProvider({ children }) {
   const pauseTask = useCallback(async (taskId) => {
     const task = tasks.find(t => t.id === taskId);
     const now = new Date();
-    console.log('⏸️ Pausing task:', taskId, 'Setting paused: true');
+
     setTasks(prev => prev.map(t => t.id === taskId ? {
       ...t, paused: true, pausedOn: now,
       history: [...(t.history || []), { stage: t.stage, date: now, user: 'Admin', action: 'paused' }],
     } : t));
     if (wsPath) {
       updateDoc(doc(db, `${wsPath}/tasks`, String(taskId)), { paused: true, pausedOn: now })
-        .then(() => console.log('✅ Task paused in Firestore:', taskId))
-        .catch((err) => console.error('❌ Failed to pause task in Firestore:', err));
+        .catch((err) => {});
       
       // ⭐ Add timeline event for task hold
       addTimelineEvent(taskId, {
@@ -2960,7 +2624,7 @@ export function AppProvider({ children }) {
           oldValue: "Active",
           newValue: "On Hold"
         }
-      }).catch(err => console.error('❌ Failed to add timeline event:', err));
+      }).catch(err => {});
     }
     if (task) { addActivity('pause', 'Task On Hold', `${taskId} — ${task.title}`); notify.taskPaused(`${taskId} — ${task.title}`); }
   }, [tasks, addActivity, wsPath, addTimelineEvent]);
@@ -2984,7 +2648,7 @@ export function AppProvider({ children }) {
           oldValue: "On Hold",
           newValue: "Active"
         }
-      }).catch(err => console.error('❌ Failed to add timeline event:', err));
+      }).catch(err => {});
     }
     if (task) { addActivity('resume', 'Task Activated', `${taskId} — ${task.title}`); notify.taskResumed(`${taskId} — ${task.title}`); }
   }, [tasks, addActivity, wsPath, addTimelineEvent]);
@@ -3033,7 +2697,7 @@ export function AppProvider({ children }) {
             newValue: "Paid",
             amount: task.totalBudget
           }
-        }).catch(err => console.error('❌ Failed to add timeline event:', err));
+        }).catch(err => {});
       }
     }
   }, [tasks, addActivity, wsPath, addTimelineEvent]);
@@ -3041,7 +2705,7 @@ export function AppProvider({ children }) {
   // ⭐ PHASE 2: Payment helper functions
   const addPaymentToTask = useCallback(async (taskId, paymentData) => {
     if (!wsPath) {
-      console.error('❌ Cannot add payment: No workspace path');
+
       return null;
     }
 
@@ -3053,18 +2717,7 @@ export function AppProvider({ children }) {
       
       // ⭐ For manual payments, use the provided paymentData directly
       if (isManualPayment) {
-        console.log('🔵 Creating manual payment (no task link)');
-        console.log('🔵 Manual payment data:', {
-          taskId: paymentData.taskId,
-          hasTaskId: !!paymentData.taskId,
-          memberId: paymentData.memberId,
-          memberName: paymentData.memberName,
-          memberUid: paymentData.memberUid,
-          amount: paymentData.amount,
-          assignedTo: paymentData.assignedTo,
-          paymentType: paymentData.paymentType
-        });
-        
+
         // ⭐ Helper function to remove undefined values recursively
         const removeUndefined = (obj) => {
           if (obj === null || obj === undefined) return null;
@@ -3093,14 +2746,13 @@ export function AppProvider({ children }) {
         const payment = removeUndefined(basePayment);
 
         const docRef = await addDoc(collection(db, `${wsPath}/payments`), payment);
-        console.log('✅ Manual payment created with ID:', docRef.id);
-        console.log('✅ Payment will appear for member:', paymentData.memberName, 'ID:', paymentData.memberId);
+
         return docRef.id;
       }
       
       // ⭐ For task-linked payments, require task to exist
       if (!task) {
-        console.error('❌ Task not found:', taskId);
+
         return null;
       }
 
@@ -3167,7 +2819,6 @@ export function AppProvider({ children }) {
       const payment = removeUndefined(basePayment);
 
       const docRef = await addDoc(collection(db, `${wsPath}/payments`), payment);
-      console.log('✅ Additional payment created:', docRef.id);
 
       // Add timeline event
       await addTimelineEvent(taskId, {
@@ -3178,14 +2829,14 @@ export function AppProvider({ children }) {
 
       return docRef.id;
     } catch (error) {
-      console.error('❌ Failed to add payment:', error);
+
       return null;
     }
   }, [wsPath, tasks, currentUser]);
 
   const markPaymentAsPaid = useCallback(async (paymentId, taskId, amount) => {
     if (!wsPath) {
-      console.error('❌ Cannot mark payment as paid: No workspace path');
+
       return false;
     }
 
@@ -3207,8 +2858,6 @@ export function AppProvider({ children }) {
           userRole: currentUser?.userRole || 'admin'
         }
       });
-
-      console.log('✅ Payment marked as paid:', paymentId);
 
       // Add timeline event with payment context
       let paymentDescription = `Paid ₹${amount.toLocaleString()}`;
@@ -3248,14 +2897,14 @@ export function AppProvider({ children }) {
 
       return true;
     } catch (error) {
-      console.error('❌ Failed to mark payment as paid:', error);
+
       return false;
     }
   }, [wsPath, currentUser, tasks, addActivity]);
 
   const updatePaymentNotes = useCallback(async (paymentId, notes) => {
     if (!wsPath) {
-      console.error('❌ Cannot update payment notes: No workspace path');
+
       return false;
     }
 
@@ -3271,14 +2920,12 @@ export function AppProvider({ children }) {
         }
       });
 
-      console.log('✅ Payment notes updated:', paymentId);
-      
       // ⭐ Don't update local state - let the onSnapshot listener handle it
       // This prevents double updates and unnecessary re-renders
 
       return true;
     } catch (error) {
-      console.error('❌ Failed to update payment notes:', error);
+
       return false;
     }
   }, [wsPath, currentUser]);
@@ -3291,15 +2938,14 @@ export function AppProvider({ children }) {
   // ⭐ If paymentId is null, create a new payment entry
   const updatePaymentDetails = useCallback(async (paymentId, updates) => {
     if (!wsPath) {
-      console.error('❌ Cannot update payment: No workspace path');
+
       return false;
     }
 
     try {
       // ⭐ CREATE new payment if paymentId is null
       if (!paymentId) {
-        console.log('🔵 Creating new payment entry:', updates);
-        
+
         const paymentData = {
           ...updates,
           createdAt: serverTimestamp(),
@@ -3315,13 +2961,12 @@ export function AppProvider({ children }) {
         };
         
         const docRef = await addDoc(collection(db, `${wsPath}/payments`), paymentData);
-        console.log('✅ New payment created with ID:', docRef.id);
+
         return true;
       }
       
       // ⭐ UPDATE existing payment
-      console.log('🔵 Updating payment details:', { paymentId, updates });
-      
+
       const paymentRef = doc(db, `${wsPath}/payments`, paymentId);
       await updateDoc(paymentRef, {
         ...updates,
@@ -3332,11 +2977,10 @@ export function AppProvider({ children }) {
           role: currentUser?.role || 'admin',
         }
       });
-      
-      console.log('✅ Payment details updated successfully');
+
       return true;
     } catch (error) {
-      console.error('❌ Failed to update payment details:', error);
+
       return false;
     }
   }, [wsPath, currentUser]);
@@ -3354,24 +2998,15 @@ export function AppProvider({ children }) {
   }, [tasks]);
 
   const saveMember = useCallback((member, addedBy = null) => {
-    console.log('💾 saveMember called with:', { 
-      memberId: member.id,
-      memberName: member.name,
-      memberRole: member.role,
-      '⚠️ ROLE BEING SAVED': member.role,
-      addedBy, 
-      hasEmail: !!member.email 
-    });
-    console.log('🔍 Current workspace for cache invalidation:', workspaceId);
-    
+
     // CRITICAL: Invalidate the enriched team cache immediately
     // This ensures the Firestore listener will re-fetch and re-enrich the data
     if (workspaceId) {
-      console.log('🗑️ Invalidating team cache due to saveMember');
+
       invalidateFirestoreCache('team_enriched', workspaceId);
-      console.log('✅ Cache invalidation completed');
+
     } else {
-      console.warn('⚠️ Cannot invalidate cache - no workspaceId found');
+
     }
     
     setTeam(prev => {
@@ -3407,13 +3042,6 @@ export function AppProvider({ children }) {
           uid:       member.uid || null, // Store Firebase Auth UID
           updatedAt: serverTimestamp(),
         };
-        
-        console.log('💾 Firestore data being saved:', {
-          id: firestoreData.id,
-          name: firestoreData.name,
-          role: firestoreData.role,
-          '⚠️ ROLE IN FIRESTORE DATA': firestoreData.role
-        });
 
         if (!exists) {
           // Only admin/management can create new team members
@@ -3423,18 +3051,18 @@ export function AppProvider({ children }) {
             firestoreData.joinedDate = serverTimestamp();
             firestoreData.createdAt  = serverTimestamp();
             // Use String(member.id) as document ID to ensure consistency
-            console.log('💾 Creating new team member document:', String(member.id), firestoreData);
+
             setDoc(doc(db, `${wsPath}/team`, String(member.id)), firestoreData).catch((err) => {
-              console.error('❌ Error creating team member:', err);
+
             });
           } else {
-            console.log('⚠️ Skipping team member creation - insufficient permissions');
+
           }
         } else {
           // Update — preserve joinedDate/createdAt, update everything else
-          console.log('💾 Updating team member document:', String(member.id), firestoreData);
+
           updateDoc(doc(db, `${wsPath}/team`, String(member.id)), firestoreData).catch((err) => {
-            console.error('❌ Error updating team member:', err);
+
           });
         }
       }
@@ -3454,59 +3082,54 @@ export function AppProvider({ children }) {
   }, [addActivity, wsPath, getMemberStats, currentUser]);
 
   const markDescRead = useCallback((memberId) => {
-    console.log('✅ markDescRead called for member:', memberId);
+
     setUnreadDescMembers(s => { 
       const n = new Set(s); 
       n.delete(memberId); 
-      console.log('📊 Unread members after delete:', Array.from(n));
+
       return n; 
     });
     
     // Save the read timestamp to Firestore
     if (wsPath && memberId) {
       const readAt = Date.now();
-      console.log('💾 Saving descReadAt to Firestore:', { memberId, readAt });
+
       updateDoc(doc(db, `${wsPath}/team`, String(memberId)), {
         descReadAt: readAt
       }).then(() => {
-        console.log('✅ descReadAt saved successfully');
+
       }).catch((err) => {
-        console.error('❌ Error updating descReadAt:', err);
+
       });
     }
   }, [wsPath]);
 
   const toggleMemberStatus = useCallback((memberId) => {
-    console.log('🔄 toggleMemberStatus called for member:', memberId);
-    console.log('🔍 Current user workspace:', currentUser?.workspaceId);
-    
+
     // CRITICAL: Invalidate the enriched team cache immediately
     // This ensures the Firestore listener will re-fetch and re-enrich the data
     if (currentUser?.workspaceId) {
       const cacheKey = `firestore_team_enriched_${currentUser.workspaceId}`;
-      console.log('🗑️ Invalidating team cache:', cacheKey);
+
       invalidateFirestoreCache('team_enriched', currentUser.workspaceId);
       
       // Also clear from window.cache if available
       if (typeof window !== 'undefined' && window.cache) {
         window.cache.delete(cacheKey);
-        console.log('🗑️ Also cleared from window.cache');
+
       }
-      
-      console.log('✅ Cache invalidation completed');
+
     } else {
-      console.warn('⚠️ Cannot invalidate cache - no workspaceId found');
+
     }
     
     // Update local state immediately for instant UI feedback
     setTeam(prev => {
-      console.log('🔄 Previous team state:', prev.map(m => ({ id: m.id, name: m.name, status: m.status })));
-      
+
       const updatedTeam = prev.map(m => {
         if (m.id !== memberId) return m;
         const newStatus = m.status === 'Active' ? 'Inactive' : 'Active';
-        console.log('🔄 Changing status:', { memberId, oldStatus: m.status, newStatus });
-        
+
         // Update Firestore asynchronously
         if (wsPath) {
           const updateData = {
@@ -3524,17 +3147,16 @@ export function AppProvider({ children }) {
           }
           
           updateDoc(doc(db, `${wsPath}/team`, String(memberId)), updateData).then(() => {
-            console.log('✅ Status updated in Firestore:', { memberId, newStatus });
-            
+
             // If deactivating, force logout the user by updating their profile
             if (newStatus === 'Inactive' && m.uid) {
               updateDoc(doc(db, 'users', m.uid), {
                 forceLogout: true,
                 updatedAt: serverTimestamp()
-              }).catch(err => console.error('Failed to set forceLogout:', err));
+              }).catch(err => {});
             }
           }).catch((err) => {
-            console.error('❌ Failed to update status in Firestore:', err);
+
           });
         }
         
@@ -3563,8 +3185,7 @@ export function AppProvider({ children }) {
         
         return updatedMember;
       });
-      
-      console.log('🔄 Updated team state:', updatedTeam.map(m => ({ id: m.id, name: m.name, status: m.status })));
+
       return updatedTeam;
     });
   }, [addActivity, wsPath, currentUser?.workspaceId]);
@@ -3609,7 +3230,7 @@ export function AppProvider({ children }) {
   // ── Task Request actions ─────────────────────────────────────────────────
   const addTaskRequest = useCallback(async (request) => {
     if (!workspaceId) {
-      console.error('❌ Cannot add task request: missing workspaceId');
+
       return;
     }
 
@@ -3623,8 +3244,7 @@ export function AppProvider({ children }) {
       };
 
       const docRef = await addDoc(taskRequestsRef, requestData);
-      console.log('✅ Task request submitted:', docRef.id);
-      
+
       // Optimistically update local state
       setTaskRequests(prev => [{
         ...request,
@@ -3635,14 +3255,14 @@ export function AppProvider({ children }) {
       
       return docRef.id;
     } catch (error) {
-      console.error('❌ Error submitting task request:', error);
+
       throw error;
     }
   }, [workspaceId]);
 
   const approveTaskRequest = useCallback(async (requestId, approvedBy = null) => {
     if (!workspaceId) {
-      console.error('❌ Cannot approve task request: missing workspaceId');
+
       return;
     }
 
@@ -3661,9 +3281,7 @@ export function AppProvider({ children }) {
         } : null,
         approvedAt: serverTimestamp()
       });
-      
-      console.log('✅ Task request approved:', requestId);
-      
+
       // Optimistically update local state
       setTaskRequests(prev => prev.map(r => 
         r.id === requestId 
@@ -3671,14 +3289,14 @@ export function AppProvider({ children }) {
           : r
       ));
     } catch (error) {
-      console.error('❌ Error approving task request:', error);
+
       throw error;
     }
   }, [workspaceId]);
 
   const completeTaskRequest = useCallback(async (requestId, completedBy = null) => {
     if (!workspaceId) {
-      console.error('❌ Cannot complete task request: missing workspaceId');
+
       return;
     }
 
@@ -3697,9 +3315,7 @@ export function AppProvider({ children }) {
         } : null,
         completedAt: serverTimestamp()
       });
-      
-      console.log('✅ Task request marked as complete:', requestId);
-      
+
       // Optimistically update local state
       setTaskRequests(prev => prev.map(r => 
         r.id === requestId 
@@ -3707,7 +3323,7 @@ export function AppProvider({ children }) {
           : r
       ));
     } catch (error) {
-      console.error('❌ Error completing task request:', error);
+
       throw error;
     }
   }, [workspaceId]);
@@ -3720,12 +3336,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const addScheduledTask = useCallback((task) => {
-    console.log('📅 Adding scheduled task with createdBy:', {
-      taskId: task.id,
-      hasCreatedBy: !!task.createdBy,
-      createdBy: task.createdBy
-    });
-    
+
     setScheduledTasks(prev => [{ ...task, isScheduled: true, createdAt: new Date() }, ...prev]);
     
     // Save scheduled task to Firestore
@@ -3735,20 +3346,13 @@ export function AppProvider({ children }) {
         isScheduled: true,
         createdAt: serverTimestamp(),
       };
-      
-      console.log('💾 Saving scheduled task to Firestore:', {
-        taskId: scheduledTaskData.id,
-        hasCreatedBy: !!scheduledTaskData.createdBy,
-        createdByUid: scheduledTaskData.createdBy?.uid,
-        createdByMemberId: scheduledTaskData.createdBy?.memberId
-      });
-      
+
       setDoc(doc(db, `${wsPath}/scheduledTasks`, String(task.id)), scheduledTaskData)
         .then(() => {
-          console.log('✅ Scheduled task saved to Firestore:', task.id);
+
         })
         .catch((err) => {
-          console.error('❌ Failed to save scheduled task:', err);
+
         });
     }
     
@@ -3762,10 +3366,10 @@ export function AppProvider({ children }) {
     if (wsPath) {
       deleteDoc(doc(db, `${wsPath}/scheduledTasks`, String(taskId)))
         .then(() => {
-          console.log('✅ Scheduled task removed from Firestore:', taskId);
+
         })
         .catch((err) => {
-          console.error('❌ Failed to remove scheduled task:', err);
+
         });
     }
     
@@ -3799,21 +3403,19 @@ export function AppProvider({ children }) {
 
   const deleteTaskRequest = useCallback(async (requestId) => {
     if (!workspaceId) {
-      console.error('❌ Cannot delete task request: missing workspaceId');
+
       return;
     }
 
     try {
       const requestRef = doc(db, `workspaces/${workspaceId}/taskRequests`, requestId);
       await deleteDoc(requestRef);
-      
-      console.log('✅ Task request deleted:', requestId);
-      
+
       // Optimistically update local state
       setTaskRequests(prev => prev.filter(r => r.id !== requestId));
       notify.requestDismissed();
     } catch (error) {
-      console.error('❌ Error deleting task request:', error);
+
       throw error;
     }
   }, [workspaceId]);
@@ -3902,26 +3504,20 @@ export function AppProvider({ children }) {
       createTask, updateTask, updateTaskNote, updateTaskStage, deleteTask, markTaskPaid, pauseTask, resumeTask, addTaskHistoryEntry,
       saveMember, toggleMemberStatus,
       saveRoles: (newRolesOrCallback) => {
-        console.log('🔥 saveRoles called in AppContext');
+
         // Handle both direct array and callback function
         const newRoles = typeof newRolesOrCallback === 'function' 
           ? newRolesOrCallback(roles) 
           : newRolesOrCallback;
-        
-        console.log('📝 Updating roles state and saving to Firebase:', newRoles.length, 'roles');
+
         setRoles(newRoles);
         
         // Write all roles to Firestore
         if (wsPath && Array.isArray(newRoles)) {
-          console.log('🔥 Writing roles to Firebase at path:', wsPath);
           newRoles.forEach(role => {
-            console.log(`  💾 Saving role ${role.id} (${role.name}) to Firebase`);
             setDoc(doc(db, `${wsPath}/roles`, String(role.id)), role)
-              .then(() => console.log(`  ✅ Role ${role.id} saved successfully`))
-              .catch((err) => console.error(`  ❌ Error saving role ${role.id}:`, err));
+              .catch((err) => {});
           });
-        } else {
-          console.warn('⚠️ Cannot save roles to Firebase:', { wsPath, isArray: Array.isArray(newRoles) });
         }
       },
       saveTags: (newTagsOrCallback) => {

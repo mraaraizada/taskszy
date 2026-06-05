@@ -22,9 +22,9 @@ export function saveProfileToCache(userId, profileData) {
     };
     
     localStorage.setItem(`${CACHE_KEY_PREFIX}${userId}`, JSON.stringify(cacheData));
-    console.log('✅ Profile cached for user:', userId);
+
   } catch (error) {
-    console.error('❌ Error saving profile to cache:', error);
+
   }
 }
 
@@ -39,7 +39,7 @@ export function getProfileFromCache(userId) {
   try {
     const cached = localStorage.getItem(`${CACHE_KEY_PREFIX}${userId}`);
     if (!cached) {
-      console.log('❌ No cached profile found for user:', userId);
+
       return null;
     }
     
@@ -48,15 +48,14 @@ export function getProfileFromCache(userId) {
     
     // Check if cache is expired
     if (age > CACHE_EXPIRY) {
-      console.log('⏰ Cached profile expired for user:', userId);
+
       clearProfileCache(userId);
       return null;
     }
-    
-    console.log('✅ Using cached profile for user:', userId, `(age: ${Math.round(age / 1000 / 60)} minutes)`);
+
     return cacheData.data;
   } catch (error) {
-    console.error('❌ Error reading profile from cache:', error);
+
     return null;
   }
 }
@@ -70,9 +69,9 @@ export function clearProfileCache(userId) {
   
   try {
     localStorage.removeItem(`${CACHE_KEY_PREFIX}${userId}`);
-    console.log('🗑️ Profile cache cleared for user:', userId);
+
   } catch (error) {
-    console.error('❌ Error clearing profile cache:', error);
+
   }
 }
 
@@ -87,9 +86,9 @@ export function clearAllProfileCaches() {
         localStorage.removeItem(key);
       }
     });
-    console.log('🗑️ All profile caches cleared');
+
   } catch (error) {
-    console.error('❌ Error clearing all profile caches:', error);
+
   }
 }
 
@@ -107,8 +106,8 @@ export function updateProfileCache(userId, updates) {
     
     const updatedProfile = { ...cached, ...updates };
     saveProfileToCache(userId, updatedProfile);
-    console.log('✅ Profile cache updated for user:', userId);
+
   } catch (error) {
-    console.error('❌ Error updating profile cache:', error);
+
   }
 }

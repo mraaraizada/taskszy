@@ -14,8 +14,7 @@ import { db } from './firebase';
  * @returns {Promise<Object>} Migration results
  */
 export async function migrateTasksAddMemberIds(workspaceId) {
-  console.log('🔄 Starting task migration for workspace:', workspaceId);
-  
+
   const results = {
     total: 0,
     migrated: 0,
@@ -29,8 +28,7 @@ export async function migrateTasksAddMemberIds(workspaceId) {
     const snapshot = await getDocs(tasksRef);
     
     results.total = snapshot.docs.length;
-    console.log(`📊 Found ${results.total} tasks to check`);
-    
+
     for (const taskDoc of snapshot.docs) {
       const task = taskDoc.data();
       
@@ -47,11 +45,10 @@ export async function migrateTasksAddMemberIds(workspaceId) {
         await updateDoc(doc(db, `workspaces/${workspaceId}/tasks`, taskDoc.id), {
           memberIds: memberIds
         });
-        
-        console.log(`✅ Migrated task ${taskDoc.id}: ${memberIds.length} members`);
+
         results.migrated++;
       } catch (error) {
-        console.error(`❌ Failed to migrate task ${taskDoc.id}:`, error);
+
         results.errors++;
         results.errorDetails.push({
           taskId: taskDoc.id,
@@ -59,12 +56,11 @@ export async function migrateTasksAddMemberIds(workspaceId) {
         });
       }
     }
-    
-    console.log('✅ Migration complete:', results);
+
     return results;
     
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+
     throw error;
   }
 }
@@ -84,9 +80,9 @@ export async function syncTaskMemberIds(workspaceId, taskId, members) {
     await updateDoc(doc(db, `workspaces/${workspaceId}/tasks`, taskId), {
       memberIds: memberIds
     });
-    console.log(`✅ Synced memberIds for task ${taskId}:`, memberIds);
+
   } catch (error) {
-    console.error(`❌ Failed to sync memberIds for task ${taskId}:`, error);
+
     throw error;
   }
 }
@@ -121,7 +117,7 @@ export async function checkMigrationStatus(workspaceId) {
       migrationNeeded: needsMigration > 0
     };
   } catch (error) {
-    console.error('❌ Failed to check migration status:', error);
+
     throw error;
   }
 }

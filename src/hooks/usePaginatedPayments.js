@@ -31,7 +31,7 @@ export function usePaginatedPayments(pageSize = 15) {
       paginationQueryRef.current = createPaymentsPaginatedQuery(workspaceId, pageSize);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Initialized paginated payments query');
+
       }
     }
   }, [workspaceId, pageSize]);
@@ -65,14 +65,10 @@ export function usePaginatedPayments(pageSize = 15) {
       }
       
       if (process.env.NODE_ENV === 'development') {
-        console.log(`📄 Loaded page ${pageNumber}:`, {
-          payments: processedDocs.length,
-          hasMore: result.hasMore,
-          totalPages: result.totalPages,
-        });
+
       }
     } catch (error) {
-      console.error('Failed to load payments page:', error);
+
     } finally {
       setLoading(false);
     }
@@ -111,7 +107,7 @@ export function usePaginatedPayments(pageSize = 15) {
   const refresh = useCallback(() => {
     if (paginationQueryRef.current) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Clearing payment cache and refreshing...');
+
       }
       paginationQueryRef.current.clearCache();
       loadPage(1); // Always go to page 1 after refresh to see newest payments

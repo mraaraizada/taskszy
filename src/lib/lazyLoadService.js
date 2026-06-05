@@ -69,7 +69,7 @@ export function useDeferredLoad(loadFn, delay = 1000) {
       setData(result);
       setLoaded(true);
     } catch (error) {
-      console.error('Deferred load error:', error);
+
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export class PriorityLoader {
    */
   add(priority, loadFn, callback) {
     if (!this.queue[priority]) {
-      console.warn('Invalid priority:', priority);
+
       priority = 'normal';
     }
     
@@ -148,11 +148,11 @@ export class PriorityLoader {
         const task = this.queue[priority].shift();
         
         try {
-          console.log(`📦 Loading ${priority} priority data...`);
+
           const result = await task.loadFn();
           task.callback(result);
         } catch (error) {
-          console.error(`❌ Failed to load ${priority} priority data:`, error);
+
           task.callback(null, error);
         }
         
@@ -162,7 +162,7 @@ export class PriorityLoader {
     }
     
     this.loading = false;
-    console.log('✅ All priority data loaded');
+
   }
   
   /**
@@ -249,9 +249,7 @@ export class BatchLoader {
    */
   async process() {
     if (this.queue.length === 0) return;
-    
-    console.log(`📦 Processing batch: ${this.queue.length} loads`);
-    
+
     const batch = [...this.queue];
     this.queue = [];
     

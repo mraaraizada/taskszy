@@ -24,7 +24,7 @@ class PerformanceMonitor {
    */
   trackRead(collection, count = 1) {
     this.metrics.reads += count;
-    console.log(`📖 Read: ${collection} (+${count}) | Total: ${this.metrics.reads}`);
+
   }
 
   /**
@@ -32,7 +32,7 @@ class PerformanceMonitor {
    */
   trackWrite(collection, count = 1) {
     this.metrics.writes += count;
-    console.log(`✍️ Write: ${collection} (+${count}) | Total: ${this.metrics.writes}`);
+
   }
 
   /**
@@ -40,7 +40,7 @@ class PerformanceMonitor {
    */
   trackDelete(collection, count = 1) {
     this.metrics.deletes += count;
-    console.log(`🗑️ Delete: ${collection} (+${count}) | Total: ${this.metrics.deletes}`);
+
   }
 
   /**
@@ -48,7 +48,7 @@ class PerformanceMonitor {
    */
   trackCacheHit(key) {
     this.metrics.cacheHits++;
-    console.log(`💾 Cache HIT: ${key} | Total: ${this.metrics.cacheHits}`);
+
   }
 
   /**
@@ -56,7 +56,7 @@ class PerformanceMonitor {
    */
   trackCacheMiss(key) {
     this.metrics.cacheMisses++;
-    console.log(`❌ Cache MISS: ${key} | Total: ${this.metrics.cacheMisses}`);
+
   }
 
   /**
@@ -64,7 +64,7 @@ class PerformanceMonitor {
    */
   trackPageLoad(page) {
     this.metrics.pageLoads++;
-    console.log(`📄 Page Load: ${page} | Total: ${this.metrics.pageLoads}`);
+
   }
 
   /**
@@ -72,7 +72,7 @@ class PerformanceMonitor {
    */
   trackError(error, context) {
     this.metrics.errors++;
-    console.error(`❌ Error in ${context}:`, error);
+
   }
 
   /**
@@ -136,7 +136,7 @@ class PerformanceMonitor {
       errors: 0,
     };
     this.startTime = Date.now();
-    console.log('🔄 Performance metrics reset');
+
   }
 
   /**
@@ -150,7 +150,7 @@ class PerformanceMonitor {
     const projectedDailyReads = metrics.readsPerMinute * 60 * 24;
     
     if (projectedDailyReads > DAILY_READ_LIMIT * WARNING_THRESHOLD) {
-      console.warn(`⚠️ WARNING: Projected daily reads (${projectedDailyReads.toFixed(0)}) approaching limit (${DAILY_READ_LIMIT})`);
+      // Silently track warning without console output
       return {
         warning: true,
         projected: projectedDailyReads,
@@ -171,13 +171,10 @@ class PerformanceMonitor {
 // Global monitor instance
 export const monitor = new PerformanceMonitor();
 
-// Auto-check limits every 5 minutes
+// Auto-check limits every 5 minutes (silently)
 if (typeof window !== 'undefined') {
   setInterval(() => {
-    const status = monitor.checkLimits();
-    if (status.warning) {
-      console.warn('⚠️ Firebase usage warning:', status);
-    }
+    monitor.checkLimits(); // Check but don't log
   }, 5 * 60 * 1000);
 }
 
@@ -185,16 +182,10 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   window.performanceMonitor = {
     getMetrics: () => monitor.getMetrics(),
-    getReport: () => console.log(monitor.getReport()),
+    getReport: () => monitor.getReport(),
     reset: () => monitor.reset(),
     checkLimits: () => monitor.checkLimits(),
   };
-  
-  console.log('✅ Performance monitor loaded. Available commands:');
-  console.log('  - window.performanceMonitor.getMetrics()');
-  console.log('  - window.performanceMonitor.getReport()');
-  console.log('  - window.performanceMonitor.reset()');
-  console.log('  - window.performanceMonitor.checkLimits()');
 }
 
 export default monitor;

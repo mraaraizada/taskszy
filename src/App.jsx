@@ -48,6 +48,7 @@ function useProfileUserCardAnimation() {
 
 // ── Lazy-loaded pages (each becomes its own chunk) ────────────────────────────
 const LoginPage      = lazy(() => import('./pages/LoginPage'));
+const AuthActionPage = lazy(() => import('./pages/AuthActionPage'));
 const TasksPage      = lazy(() => import('./pages/TasksPage'));
 const TeamPage       = lazy(() => import('./pages/TeamPage'));
 const FinancialPage  = lazy(() => import('./pages/FinancialPage'));
@@ -296,7 +297,7 @@ function AppShell() {
 
   // Debug: Log when showWorkspaceSetup changes
   useEffect(() => {
-    console.log('🎨 showWorkspaceSetup changed:', showWorkspaceSetup);
+
   }, [showWorkspaceSetup]);
 
   const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -319,29 +320,17 @@ function AppShell() {
     
     // Get user's join date to filter out old broadcasts
     const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
-    
-    console.log('🎯 Feedback listener setup check:', {
-      hasWorkspaceId: !!workspaceId,
-      workspaceId: workspaceId,
-      hasCurrentUid: !!currentUid,
-      currentUid: currentUid,
-      listenerId: listenerId,
-      currentUser: currentUser,
-      userCreatedAt: userCreatedAt?.toISOString()
-    });
-    
+
     // Don't require currentUid - listener can work without it
     // currentUid is only needed for dismissing feedback, not for receiving it
-    
-    console.log('👂 Setting up feedback request listener with ID:', listenerId);
-    
+
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('📢 Feedback request received in App.jsx:', request);
+
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('🔇 Cleaning up feedback request listener');
+
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser]);
@@ -358,38 +347,27 @@ function AppShell() {
     const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     const unsubscribe = onAuthChanged(async (user) => {
-      console.log('🔐 onAuthChanged fired:', { 
-        hasUser: !!user, 
-        uid: user?.uid, 
-        email: user?.email,
-        logoutInProgress: logoutInProgressRef.current,
-        loginInProgress: loginInProgressRef.current
-      });
-      
+
       // Skip if logout is in progress — prevents false expiry detection
       if (logoutInProgressRef.current) {
-        console.log('⚠️ Logout in progress - skipping auth state change');
+
         setAuthLoading(false);
         return;
       }
       
       // Skip if login is in progress — let LoginPage handle it
       if (loginInProgressRef.current) {
-        console.log('⚠️ Login in progress - skipping onAuthChanged to prevent duplicate handleLogin');
+
         setAuthLoading(false);
         return;
       }
       
       if (!user) {
         // No user - logged out state
-        console.log('🔐 onAuthChanged: No user (logged out)', {
-          logoutInProgress: logoutInProgressRef.current,
-          loginInProgress: loginInProgressRef.current
-        });
-        
+
         // If logout is in progress, this is expected - don't do anything
         if (logoutInProgressRef.current) {
-          console.log('⚠️ Logout in progress - user=null is expected');
+
           setAuthLoading(false);
           return;
         }
@@ -397,7 +375,7 @@ function AppShell() {
         // If login is in progress and user becomes null, this might be a race condition
         // Wait for login to complete instead of showing login page
         if (loginInProgressRef.current) {
-          console.log('⚠️ Login in progress but user=null - waiting for login to complete');
+
           setAuthLoading(false);
           return;
         }
@@ -407,16 +385,20 @@ function AppShell() {
       }
       
       // User is authenticated - proceed with profile loading
-      console.log('✅ User authenticated, loading profile...');
-      
+
       if (user) {
         const profile = await getProfile(user.uid);
         if (profile) {
           const now = Date.now();
-          const sinceLogin    = profile.loginTime        ? now - profile.loginTime.toMillis()        : 0;
           const sinceActivity = profile.lastActivityTime ? now - profile.lastActivityTime.toMillis() : 0;
 
-          if (sinceLogin >= SESSION_TIMEOUT_MS || sinceActivity >= SESSION_TIMEOUT_MS) {
+          // Session expires ONLY if inactive for 7 days (no loginTime check)
+          // BUT: Skip expiry check if user just logged in (loginTime is recent)
+          // This prevents "Session Expired" error on fresh login after many days
+          const sinceLogin = profile.loginTime ? now - profile.loginTime.toMillis() : Infinity;
+          const isRecentLogin = sinceLogin < 60000; // Logged in within last 60 seconds
+          
+          if (sinceActivity >= SESSION_TIMEOUT_MS && !isRecentLogin) {
             expiredLogoutRef.current = true;
             logoutInProgressRef.current = true;
             await signOutUser();
@@ -439,7 +421,7 @@ function AppShell() {
           if (profile.workspaceId && profile.workspaceId === `ws_${user.uid}`) {
             // User's workspace ID matches their UID - they are the owner/admin
             userRole = 'admin';
-            console.log('👑 User is workspace owner - setting role to admin');
+
           } else if (profile.role) {
             // Map profile.role to userRole
             const roleLower = profile.role.toLowerCase();
@@ -450,22 +432,9 @@ function AppShell() {
             } else {
               userRole = 'member';
             }
-            console.log('🔐 Role mapping:', { 
-              firestoreRole: profile.role, 
-              mappedUserRole: userRole 
-            });
+
           }
-          
-          console.log('🔍 User profile check:', { 
-            uid: user.uid, 
-            role: profile.role,
-            determinedRole: userRole,
-            workspaceId: profile.workspaceId,
-            isOwner: profile.workspaceId === `ws_${user.uid}`,
-            hasCompletedSetup: profile.hasCompletedSetup, 
-            completedSetup,
-            willShowSetup: !completedSetup
-          });
+
           let hasPlan = false;
           
           if (profile.workspaceId) {
@@ -478,25 +447,17 @@ function AppShell() {
                 
                 // Check workspace's hasCompletedSetup flag (most reliable source)
                 const workspaceSetupComplete = wsData?.settings?.hasCompletedSetup === true;
-                
-                console.log('🔍 Workspace setup status:', {
-                  workspaceId: profile.workspaceId,
-                  workspaceSetupComplete,
-                  userSetupComplete: profile.hasCompletedSetup,
-                  hasPlan,
-                  wsDataSettings: wsData?.settings
-                });
-                
+
                 // For workspace owners (admins), use workspace's setup flag
                 // For other users, use their own profile flag
                 if (profile.workspaceId === `ws_${user.uid}`) {
                   // User is workspace owner - use workspace setup flag
                   completedSetup = workspaceSetupComplete;
-                  console.log('👑 Workspace owner - using workspace setup flag:', completedSetup);
+
                 } else {
                   // User is not owner - use their own profile flag
                   completedSetup = profile.hasCompletedSetup === true;
-                  console.log('👥 Non-owner user - using profile setup flag:', completedSetup);
+
                 }
                 
                 // Store workspace settings for pre-filling setup form
@@ -507,19 +468,19 @@ function AppShell() {
                     workspaceSub: wsData.settings.workspaceSub || '',
                     workspaceLogo: wsData.settings.workspaceLogo || null,
                   };
-                  console.log('📦 Loading workspace data for setup (pre-configured):', workspaceData);
+
                   setWorkspace(workspaceData);
                 } else {
-                  console.log('📦 No workspace data - first time setup (editable)');
+
                   setWorkspace(null);
                 }
               } else {
                 // Workspace document doesn't exist - first time setup needed
-                console.log('⚠️ Workspace document does not exist - first time setup needed');
+
                 completedSetup = false;
               }
             } catch (err) {
-              console.error('❌ Error loading workspace data:', err);
+
               // On error, assume setup not complete to be safe
               completedSetup = false;
             }
@@ -529,7 +490,7 @@ function AppShell() {
           // EXCEPTION: If this is a session re-login (user was already logged in before), always let them through
           const isRelogin = expiredLogoutRef.current || sessionExpired;
           if (userRole === 'admin' && !completedSetup && !isRelogin) {
-            console.log('⚠️ Admin without completed setup - blocking auto-login to force workspace setup');
+
             setAuthLoading(false);
             return;
           }
@@ -538,20 +499,17 @@ function AppShell() {
           // to prevent showing workspace setup again
           if (isRelogin && completedSetup === false) {
             completedSetup = true;
-            console.log('✅ Re-login detected - marking setup as complete to skip workspace setup');
+
           }
 
-          console.log('✅ Calling handleLogin with role:', userRole, 'completedSetup:', completedSetup);
-          
           // CRITICAL: Set currentUid IMMEDIATELY before any async operations
           // This ensures Firestore listeners have the uid when they initialize
-          console.log('🔑 Setting currentUid to:', user.uid);
+
           setCurrentUid(user.uid);
-          console.log('🔑 setCurrentUid called - AppContext should receive it now');
-          
+
           // Also set workspaceId immediately
           if (profile.workspaceId) {
-            console.log('🏢 Setting workspaceId to:', profile.workspaceId);
+
             setWorkspaceId(profile.workspaceId);
           }
           
@@ -560,13 +518,13 @@ function AppShell() {
           // On reload, loginHandledRef is false, so handleLogin will be called
           // CRITICAL: Also check loginInProgressRef to prevent race condition during login
           if (!loginHandledRef.current && !loginInProgressRef.current) {
-            console.log('📞 Calling handleLogin from onAuthChanged...');
+
             handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false);
           } else {
             // LoginPage already handled login OR login is in progress
-            console.log('✅ Login already handled or in progress - skipping handleLogin');
+
             if (loginInProgressRef.current) {
-              console.log('⏳ Login in progress - onAuthChanged will not interfere');
+
             }
             // Ensure workspace is set even if we skip handleLogin
             if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
@@ -575,7 +533,7 @@ function AppShell() {
         }
       } else {
         // No user - logged out state
-        console.log('🔐 onAuthChanged: No user (logged out)');
+
       }
       setAuthLoading(false);
     });
@@ -608,22 +566,10 @@ function AppShell() {
 
   const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false) => {
     const callStack = new Error().stack;
-    console.log('🚀 handleLogin called:', { 
-      role, 
-      memberId, 
-      email, 
-      workspaceIdParam, 
-      completedSetup, 
-      isNewSignup, 
-      currentAuth: auth, 
-      loginHandledRef: loginHandledRef.current,
-      loginInProgressRef: loginInProgressRef.current,
-      callStack: callStack?.split('\n').slice(1, 4).join('\n') // Show where it was called from
-    });
-    
+
     // Prevent duplicate calls - if login is already in progress, ignore
     if (loginInProgressRef.current) {
-      console.log('⚠️ Duplicate handleLogin call detected - login already in progress');
+
       return;
     }
     
@@ -633,7 +579,7 @@ function AppShell() {
     
     // Load workspace data if needed (for management/admin users who need WorkspaceSetup)
     if ((role === 'admin' || role === 'management') && workspaceIdParam && !workspace) {
-      console.log('📦 Loading workspace data for WorkspaceSetup...');
+
       try {
         const workspaceSnap = await getDoc(doc(db, 'workspaces', workspaceIdParam));
         if (workspaceSnap.exists()) {
@@ -644,15 +590,15 @@ function AppShell() {
               workspaceSub: wsData.settings.workspaceSub || '',
               workspaceLogo: wsData.settings.workspaceLogo || null,
             };
-            console.log('📦 Loaded workspace data in handleLogin:', workspaceData);
+
             setWorkspace(workspaceData);
           } else {
-            console.log('📦 No workspace name - first time setup');
+
             setWorkspace(null);
           }
         }
       } catch (err) {
-        console.warn('⚠️ Could not load workspace data (permissions may not be ready yet):', err.message);
+
         // Don't block login - workspace data can be loaded later if needed
       }
     }
@@ -663,7 +609,7 @@ function AppShell() {
     import('firebase/auth').then(({ getAuth }) => {
       const uid = getAuth().currentUser?.uid;
       if (uid) {
-        console.log('🔑 handleLogin: Setting currentUid to:', uid);
+
         setCurrentUid(uid);
       }
     }).catch(() => {});
@@ -691,7 +637,7 @@ function AppShell() {
                       actualRoleName = memberDoc.data().role || actualRoleName;
                     }
                   } catch (err) {
-                    console.warn('Could not fetch team role:', err);
+
                   }
                 }
                 
@@ -708,12 +654,7 @@ function AppShell() {
                   memberId: profileData.memberId || null, // Add memberId to identify team members
                   hasSeenWelcomeAnimation: profileData.hasSeenWelcomeAnimation === true ? true : false,
                 };
-                console.log('👤 Setting user profile:', { 
-                  role, 
-                  profileDataRole: profileData.role, 
-                  finalUserRole: profile.userRole,
-                  memberId: profile.memberId 
-                });
+
                 setCurrentUser(profile);
               }
             }).catch(() => {
@@ -737,7 +678,7 @@ function AppShell() {
     }
     setInitialLoading(true);
     setVisitedPages(new Set());
-    console.log('🔐 Setting auth state:', { role, memberId });
+
     setAuth({ role, memberId });
     setTimeout(() => {
       setDashVisible(true);
@@ -747,73 +688,59 @@ function AppShell() {
         // 2. completedSetup === false (workspace not set up yet)
         // Otherwise, go directly to dashboard (returning admin)
         const shouldShowSetup = isNewSignup || completedSetup === false;
-        console.log('🔍 Admin setup check:', { 
-          isNewSignup, 
-          completedSetup, 
-          shouldShowSetup,
-          completedSetupType: typeof completedSetup,
-          completedSetupValue: completedSetup,
-          willSkipSetup: !shouldShowSetup
-        });
+
         if (shouldShowSetup) {
-          console.log('✅ Showing WorkspaceSetup');
+
           setShowWorkspaceSetup(true);
         } else {
-          console.log('✅ Skipping WorkspaceSetup - going to dashboard');
+
           // Returning admin with completed setup - go straight to dashboard
           setShowWorkspaceSetup(false); // Explicitly set to false
           setInitialLoading(false);
           setVisitedPages(new Set(['dashboard']));
           
           // Trigger donut welcome if not seen yet (for returning users who skip animations)
-          console.log('🍩 Checking if should trigger donut welcome:', { hasSeenDonutWelcome });
+
           if (!hasSeenDonutWelcome) {
-            console.log('🍩 Triggering donut welcome for returning user (after dashboard loads)');
+
             // Wait for dashboard to fully render before showing donut
             setTimeout(() => {
-              console.log('🍩 Setting showDonutWelcome to true');
+
               setShowDonutWelcome(true);
             }, 1500);
           } else {
-            console.log('🍩 Skipping donut welcome - already seen');
+
           }
         }
       } else if (role === 'management') {
         // Management users also go through workspace setup (pre-filled + password)
         // Only show setup for first-time management users
         const shouldShowSetup = isNewSignup || completedSetup === false;
-        console.log('🔧 Management setup check:', { 
-          isNewSignup, 
-          completedSetup, 
-          shouldShowSetup,
-          completedSetupType: typeof completedSetup,
-          completedSetupValue: completedSetup,
-          willSkipSetup: !shouldShowSetup
-        });
+
         if (shouldShowSetup) {
-          console.log('✅ Showing WorkspaceSetup for management');
+
           setShowWorkspaceSetup(true);
         } else {
-          console.log('✅ Skipping WorkspaceSetup for management - going to dashboard');
+
           // Returning management user - go straight to dashboard
           setShowWorkspaceSetup(false);
           setInitialLoading(false);
           setVisitedPages(new Set(['dashboard']));
           
           // Trigger donut welcome if not seen yet
-          console.log('🍩 Checking if should trigger donut welcome (management):', { hasSeenDonutWelcome });
+
           if (!hasSeenDonutWelcome) {
-            console.log('🍩 Triggering donut welcome for returning management user');
+
             setTimeout(() => {
-              console.log('🍩 Setting showDonutWelcome to true');
+
               setShowDonutWelcome(true);
             }, 1500);
           } else {
-            console.log('🍩 Skipping donut welcome - already seen');
+
           }
         }
       } else {
-        console.log('👥 Member role - showing dashboard directly');
+
         setInitialLoading(false);
         setVisitedPages(new Set(['dashboard']));
       }
@@ -824,7 +751,7 @@ function AppShell() {
   };
 
   const handleLogout = async (expired = false) => {
-    console.log('🚪 handleLogout called:', { expired, currentUid });
+
     expiredLogoutRef.current = false; // manual logout — never expired
     setSessionExpired(false);
     logoutInProgressRef.current = true;
@@ -832,7 +759,7 @@ function AppShell() {
     loginHandledRef.current = false; // Reset login handled flag
     
     // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
-    console.log('🧹 Clearing currentUid to trigger listener cleanup');
+
     const uidToClean = currentUid;
     setCurrentUid(null);
     setWorkspaceId(null);
@@ -843,19 +770,19 @@ function AppShell() {
     // Clear session fields in Firestore before signing out
     if (uidToClean) {
       try { 
-        console.log('🧹 Clearing session for uid:', uidToClean);
+
         await clearSession(uidToClean); 
       } catch (err) {
-        console.error('❌ Failed to clear session:', err);
+
       }
     }
     
     // Sign out from Firebase
     try { 
-      console.log('🚪 Signing out from Firebase');
+
       await signOutUser(); 
     } catch (err) { 
-      console.error('❌ signOut error', err); 
+
     }
     
     // Wait a bit for Firebase to propagate the logout
@@ -870,8 +797,7 @@ function AppShell() {
     setShowWorkspaceSetup(false);
     setWorkspace(null);
     setShowMgmtPwdPrompt(false);
-    
-    console.log('✅ Logout complete - all refs reset');
+
   };
 
   const handleNav = (item, extraProps = {}) => {
@@ -896,8 +822,7 @@ function AppShell() {
   };
 
   const handleSearchResultClick = ({ type, data }) => {
-    console.log('🔍 Search result clicked:', { type, data, currentPage: activeItem });
-    
+
     switch (type) {
       case 'task':
         if (activeItem === 'dashboard') {
@@ -971,6 +896,19 @@ function AppShell() {
     );
   }
 
+  // ── Check for auth action URL (password reset, email verification, etc.) ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = urlParams.get('mode');
+  const oobCode = urlParams.get('oobCode');
+  
+  if (mode && oobCode) {
+    return (
+      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
+        <AuthActionPage />
+      </Suspense>
+    );
+  }
+
   // ── Data load error - show manual retry button ──
   if (dataLoadError) {
     return <DataLoadError error={dataLoadError} onRetry={refreshData} />;
@@ -1023,7 +961,7 @@ function AppShell() {
             existingWorkspace={workspace}
             isManagement={true}
             onComplete={(ws) => {
-              console.log('✅ Management WorkspaceSetup completed, triggering animation flow');
+
               setWorkspace(ws);
               setShowWorkspaceSetup(false);
               isFirstSetupRef.current = true; // Mark first setup for welcome animation
@@ -1040,16 +978,10 @@ function AppShell() {
           loop={false}
           onComplete={() => {
             setShowLoader(false);
-            console.log('🎬 Management loader complete, checking animation:', { 
-              isFirstSetupRef: isFirstSetupRef.current, 
-              hasSeenWelcome: currentUser?.hasSeenWelcomeAnimation,
-              hasSeenDonutWelcome,
-              alreadyTriggered: mgmtAnimationTriggeredRef.current
-            });
-            
+
             // Prevent duplicate triggers
             if (mgmtAnimationTriggeredRef.current) {
-              console.log('⚠️ Management animation already triggered, skipping');
+
               setDashVisible(true);
               return;
             }
@@ -1060,14 +992,13 @@ function AppShell() {
               mgmtAnimationTriggeredRef.current = true; // Mark as triggered
               
               // Check if user has seen donut welcome animation
-              console.log('🎬 Checking donut welcome animation status (Management):', hasSeenDonutWelcome);
-              
+
               if (!hasSeenDonutWelcome) {
-                console.log('🎬 Triggering profile card + donut welcome for first time (Management)');
+
                 // Trigger profile card animation in ManagementApp
                 setTriggerMgmtAnimation(true);
               } else {
-                console.log('🎬 Skipping animations - already seen (Management)');
+
               }
             }
             
@@ -1078,15 +1009,15 @@ function AppShell() {
         {/* Welcome animation overlay - ProfileUserCardOverlay for management */}
         {showWelcome && (
           <ProfileUserCardOverlay onDone={() => {
-            console.log('🎬 ProfileUserCard animation completed (Management)');
+
             setShowWelcome(false);
             // Trigger donut welcome after dashboard has had time to render
-            console.log('🍩 Checking donut welcome status (Management):', { hasSeenDonutWelcome });
+
             if (!hasSeenDonutWelcome) {
-              console.log('🍩 Triggering donut welcome in 600ms (Management)');
+
               setTimeout(() => setShowDonutWelcome(true), 600);
             } else {
-              console.log('🍩 Donut welcome already seen - skipping (Management)');
+
             }
           }} />
         )}
@@ -1155,11 +1086,11 @@ function AppShell() {
                     ...pageExtraProps,
                     selectedScribeId,
                     onScribeOpened: () => {
-                      console.log('🧹 Clearing selectedScribeId (App.jsx)');
+
                       setSelectedScribeId(null);
                     }
                   }, (noteId) => {
-                    console.log('📥 App.jsx received note ID:', noteId);
+
                     setSelectedScribeId(noteId);
                     handleNav('notes');
                   }, setPageFilteredData)}
@@ -1176,7 +1107,7 @@ function AppShell() {
           existingWorkspace={workspace}
           isManagement={auth?.role === 'management'}
           onComplete={(ws) => {
-            console.log('✅ WorkspaceSetup completed, triggering animation flow');
+
             setWorkspace(ws);
             setShowWorkspaceSetup(false);
             isFirstSetupRef.current = true; // mark first setup for welcome animation
@@ -1201,10 +1132,7 @@ function AppShell() {
         loop={false}
         onComplete={() => {
           setShowLoader(false);
-          console.log('🎬 Loader complete, checking animation:', { 
-            isFirstSetupRef: isFirstSetupRef.current, 
-            hasSeenWelcome: currentUser?.hasSeenWelcomeAnimation 
-          });
+
           // Show welcome animation only on very first setup (ref set by WorkspaceSetup)
           // OR if user hasn't seen the welcome animation before
           if (isFirstSetupRef.current) {
@@ -1212,10 +1140,9 @@ function AppShell() {
             
             // Check if user has seen welcome animation
             const hasSeenWelcome = currentUser?.hasSeenWelcomeAnimation;
-            console.log('🎬 Checking welcome animation status:', hasSeenWelcome);
-            
+
             if (!hasSeenWelcome) {
-              console.log('🎬 Playing welcome animation for first time');
+
               setShowWelcome(true);
               
               // Mark as seen in Firestore
@@ -1228,8 +1155,7 @@ function AppShell() {
                   
                   if (uid) {
                     await updateProfile(uid, { hasSeenWelcomeAnimation: true });
-                    console.log('✅ Welcome animation marked as seen (Admin)');
-                    
+
                     // Update currentUser state immediately so it doesn't show again
                     setCurrentUser(prev => ({
                       ...prev,
@@ -1237,7 +1163,7 @@ function AppShell() {
                     }));
                   }
                 } catch (error) {
-                  console.error('❌ Failed to mark welcome animation as seen:', error);
+
                 }
               };
               
@@ -1249,15 +1175,15 @@ function AppShell() {
 
       {showWelcome && (
         <WelcomeOverlay onDone={() => {
-          console.log('🎬 Welcome animation completed');
+
           setShowWelcome(false);
           // Trigger donut welcome after dashboard has had time to render
-          console.log('🍩 Checking donut welcome status:', { hasSeenDonutWelcome });
+
           if (!hasSeenDonutWelcome) {
-            console.log('🍩 Triggering donut welcome in 600ms');
+
             setTimeout(() => setShowDonutWelcome(true), 600);
           } else {
-            console.log('🍩 Donut welcome already seen - skipping');
+
           }
         }} />
       )}
@@ -1277,17 +1203,7 @@ function AppShell() {
       )}
       
       {/* Debug: Show feedback request state */}
-      {console.log('🔍 FeedbackModal render check:', {
-        hasFeedbackRequest: !!feedbackRequest,
-        hasCurrentUser: !!currentUser,
-        hasWorkspaceId: !!workspaceId,
-        feedbackRequest,
-        workspaceId,
-        currentUser: currentUser ? {
-          name: currentUser.name,
-          role: currentUser.role
-        } : null
-      })}
+      {}
     </div>
   );
 }

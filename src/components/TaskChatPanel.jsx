@@ -198,10 +198,9 @@ export default function TaskChatPanel({ task, onClose, currentUser, team = [] })
         const timestamp = Date.now();
         const extension = imagePreview.file.name.split('.').pop() || 'jpg';
         const imagePath = `workspaces/${workspaceId}/tasks/${task.id}/chat/${timestamp}.${extension}`;
-        
-        console.log('📤 Uploading chat image:', imagePath);
+
         imageUrl = await uploadImage(imagePreview.file, imagePath);
-        console.log('✅ Image uploaded:', imageUrl);
+
       }
       
       const msg = {
@@ -231,7 +230,7 @@ export default function TaskChatPanel({ task, onClose, currentUser, team = [] })
       setUploadingImage(false);
       setShouldScrollToBottom(true); // Scroll to bottom after sending
     } catch (error) {
-      console.error('Error sending message:', error);
+
       if (error.code === 'storage/unauthorized') {
         notify.error('Permission denied. Please check your access.');
       } else if (error.message.includes('permission')) {
@@ -278,7 +277,7 @@ export default function TaskChatPanel({ task, onClose, currentUser, team = [] })
       };
       reader.readAsDataURL(compressedFile);
     } catch (error) {
-      console.error('Error compressing image:', error);
+
       notify.error('Failed to process image');
     }
   };

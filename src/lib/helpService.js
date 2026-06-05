@@ -17,7 +17,7 @@ import { collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, query,
  */
 export function subscribeToHelpSubmissions(workspaceId, callback, limitCount = 10) {
   if (!workspaceId) {
-    console.error('❌ Help: Missing workspaceId');
+
     callback([]);
     return () => {};
   }
@@ -25,12 +25,9 @@ export function subscribeToHelpSubmissions(workspaceId, callback, limitCount = 1
   const helpRef = collection(db, `workspaces/${workspaceId}/helpSubmissions`);
   // Limit query to reduce reads - only load most recent submissions
   const q = query(helpRef, orderBy('timestamp', 'desc'), limit(limitCount));
-  
-  console.log('🆘 Help: Setting up subscription', { workspaceId, limit: limitCount });
-  
+
   return onSnapshot(q, (snapshot) => {
-    console.log('🆘 Help: Snapshot received', { count: snapshot.docs.length, reads: snapshot.size });
-    
+
     const submissions = snapshot.docs.map(doc => {
       const data = doc.data();
       
@@ -52,7 +49,7 @@ export function subscribeToHelpSubmissions(workspaceId, callback, limitCount = 1
     
     callback(submissions);
   }, (error) => {
-    console.error('❌ Error loading help submissions:', error);
+
     callback([]);
   });
 }
@@ -67,12 +64,6 @@ export async function submitHelpRequest(workspaceId, submission) {
   if (!workspaceId) {
     throw new Error('Missing workspaceId');
   }
-
-  console.log('🆘 Help: Submitting request', { 
-    workspaceId, 
-    member: submission.member,
-    messageLength: submission.message?.length 
-  });
 
   const helpRef = collection(db, `workspaces/${workspaceId}/helpSubmissions`);
   
@@ -93,14 +84,12 @@ export async function submitHelpRequest(workspaceId, submission) {
     updatedAt: serverTimestamp()
   };
 
-  console.log('🆘 Help: Submission data to save:', submissionData);
-
   try {
     const docRef = await addDoc(helpRef, submissionData);
-    console.log('✅ Help: Request submitted', { id: docRef.id });
+
     return docRef.id;
   } catch (error) {
-    console.error('❌ Error submitting help request:', error);
+
     throw error;
   }
 }
@@ -119,8 +108,6 @@ export async function resolveHelpSubmission(workspaceId, submissionId, response,
     throw new Error('Missing workspaceId or submissionId');
   }
 
-  console.log('🆘 Help: Resolving submission', { workspaceId, submissionId, resolvedByUid, resolverInfo });
-
   const submissionRef = doc(db, `workspaces/${workspaceId}/helpSubmissions`, submissionId);
   
   try {
@@ -138,9 +125,9 @@ export async function resolveHelpSubmission(workspaceId, submissionId, response,
       resolvedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    console.log('✅ Help: Submission resolved');
+
   } catch (error) {
-    console.error('❌ Error resolving help submission:', error);
+
     throw error;
   }
 }
@@ -157,8 +144,6 @@ export async function updateHelpResponse(workspaceId, submissionId, response) {
     throw new Error('Missing workspaceId or submissionId');
   }
 
-  console.log('🆘 Help: Updating response', { workspaceId, submissionId });
-
   const submissionRef = doc(db, `workspaces/${workspaceId}/helpSubmissions`, submissionId);
   
   try {
@@ -166,9 +151,9 @@ export async function updateHelpResponse(workspaceId, submissionId, response) {
       response: response,
       updatedAt: serverTimestamp()
     });
-    console.log('✅ Help: Response updated');
+
   } catch (error) {
-    console.error('❌ Error updating help response:', error);
+
     throw error;
   }
 }

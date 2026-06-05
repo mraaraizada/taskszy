@@ -52,19 +52,17 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate, orgId, userId
   // Subscribe to calendar events from Firebase
   useEffect(() => {
     if (!orgId || !userId) {
-      console.log('⚠️ Calendar: Missing orgId or userId', { orgId, userId });
+
       return;
     }
-    
-    console.log('📅 Calendar: Subscribing to events', { orgId, userId, isSharedCalendar });
-    
+
     const unsubscribe = subscribeToCalendarEvents(orgId, userId, isSharedCalendar, (loadedEvents) => {
-      console.log('📅 Calendar: Events loaded', { count: loadedEvents.length, events: loadedEvents });
+
       setEvents(loadedEvents);
     });
     
     return () => {
-      console.log('📅 Calendar: Unsubscribing');
+
       unsubscribe();
     };
   }, [orgId, userId, isSharedCalendar]);
@@ -138,7 +136,7 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate, orgId, userId
         setEventColor('#22C55E');
         setSelectedDate(null);
       } catch (error) {
-        console.error('Error saving event:', error);
+
         notify.error('Failed to save event');
       }
     }
@@ -151,7 +149,7 @@ function MiniCalendar({ tasks, onDateSelect, selectedCalendarDate, orgId, userId
       await removeCalendarEvent(orgId, userId, isSharedCalendar, event);
       notify.success('Event deleted');
     } catch (error) {
-      console.error('Error deleting event:', error);
+
       notify.error('Failed to delete event');
     }
   };
@@ -544,7 +542,7 @@ function TaskDonut({ tasks }) {
   // Auto-dismiss if already seen
   useEffect(() => {
     if (showDonutWelcome && hasSeenDonutWelcome) {
-      console.log('🍩 Auto-dismissing donut welcome - already seen');
+
       setShowDonutWelcome(false);
     }
   }, [showDonutWelcome, hasSeenDonutWelcome, setShowDonutWelcome]);
@@ -1058,10 +1056,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
     if (modalTask) {
       const updatedTask = tasks.find(t => t.id === modalTask.id);
       if (updatedTask) {
-        console.log('🔄 Dashboard: Updating modalTask with latest data', {
-          taskId: updatedTask.id,
-          members: updatedTask.members?.map(m => ({ id: m.id, name: m.name, stage: m.stage }))
-        });
+
         // Always update to ensure we have the latest data
         setModalTask(updatedTask);
       }
@@ -1073,7 +1068,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
     if (openTaskId) {
       const task = tasks.find(t => t.id === openTaskId);
       if (task) {
-        console.log('🔍 Opening task from search:', openTaskId);
+
         setModalTask(task);
       }
     }
@@ -1081,7 +1076,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
   
   // Debug: Log when viewBroadcast changes
   useEffect(() => {
-    console.log('🔄 viewBroadcast state changed:', viewBroadcast);
+
   }, [viewBroadcast]);
   const [chatTask, setChatTask] = useState(null);
   const [readUpdateIds, setReadUpdateIds] = useState(new Set());
@@ -1089,40 +1084,40 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
   // Load read update IDs from Firestore (consistent with team member dashboard)
   useEffect(() => {
     if (!workspaceId || !currentUser?.uid) return;
-    console.log('👂 Setting up Firestore listener for readUpdateIds:', `workspaces/${workspaceId}/userReadState/${currentUser.uid}`);
+
     const ref = doc(db, `workspaces/${workspaceId}/userReadState`, currentUser.uid);
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         const ids = snap.data().readUpdateIds || [];
-        console.log('📥 Loaded readUpdateIds from Firestore:', ids.length, 'items');
+
         setReadUpdateIds(new Set(ids));
       } else {
-        console.log('📭 No readUpdateIds document found, starting fresh');
+
         setReadUpdateIds(new Set());
       }
     }, (error) => {
-      console.error('❌ Error loading readUpdateIds:', error);
+
     });
     return unsub;
   }, [workspaceId, currentUser?.uid]);
 
   const markUpdateRead = (id) => {
-    console.log('📝 Marking update as read:', id);
+
     setReadUpdateIds(prev => {
       const next = new Set(prev);
       next.add(id);
-      console.log('📝 Updated readUpdateIds:', Array.from(next));
+
       // Save to Firestore instead of localStorage
       if (workspaceId && currentUser?.uid) {
-        console.log('💾 Saving to Firestore:', `workspaces/${workspaceId}/userReadState/${currentUser.uid}`);
+
         setDoc(
           doc(db, `workspaces/${workspaceId}/userReadState`, currentUser.uid),
           { readUpdateIds: [...next], updatedAt: serverTimestamp() },
           { merge: true }
         ).then(() => {
-          console.log('✅ Successfully saved to Firestore');
+
         }).catch((error) => {
-          console.error('❌ Error saving to Firestore:', error);
+
         });
       }
       return next;
@@ -1649,17 +1644,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                 // ⭐ Use visibleBroadcasts directly instead of filtering activity
                 // This ensures broadcasts persist and show read/unread status correctly
                 const allItems = visibleBroadcasts;
-                
-                console.log('📊 Updates Header - Visible broadcasts:', {
-                  totalBroadcasts: broadcasts.length,
-                  visibleBroadcasts: visibleBroadcasts.length,
-                  currentUser: {
-                    role: currentUser.role,
-                    userRole: currentUser.userRole,
-                    uid: currentUser.uid
-                  }
-                });
-                
+
                 const count = allItems.length;
                 const unread = allItems.filter(b => !readUpdateIds.has(b.id)).length;
                 return (
@@ -1700,14 +1685,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                 // ⭐ COLLAPSED VIEW: Show only UNREAD messages (max 10)
                 const unreadItems = allItems.filter(b => !readUpdateIds.has(b.id));
                 const items = unreadItems.slice(0, 10); // Limit to 10 unread messages
-                
-                console.log('📊 Updates preview (COLLAPSED):', {
-                  totalBroadcasts: allItems.length,
-                  unreadCount: unreadItems.length,
-                  displayedUnread: items.length,
-                  readCount: allItems.length - unreadItems.length
-                });
-                
+
                 if (items.length === 0) return (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No unread updates</div>
                 );
@@ -1802,14 +1780,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
                     const hasMore = allItems.length > updatesDisplayLimit;
                     
                     const anyUnread = items.some(b => !readUpdateIds.has(b.id));
-                    
-                    console.log('📊 Updates expanded - All broadcasts:', {
-                      total: allItems.length,
-                      displayed: items.length,
-                      unread: items.filter(b => !readUpdateIds.has(b.id)).length,
-                      hasMore
-                    });
-                    
+
                     if (allItems.length === 0) return (
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: 8, paddingTop: 20 }}>
                         <RefreshCw size={32} color="#C4C9D9" />
@@ -1911,7 +1882,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
 
       {/* ── Task Detail Modal ── */}
       {modalTask && <AdminTaskModal key={`${modalTask.id}-${modalTask.members?.map(m => `${m.id}:${m.stage}`).join('-')}`} task={modalTask} onClose={() => { setModalTask(null); setConfirmDelete(false); }} hideBudget={hideBudget} onCreateScheduled={(task) => { createTask(task); removeScheduledTask(task.id); }} onCancelScheduled={(id) => removeScheduledTask(id)} managementMode={member !== null} currentUser={member || currentUser} onNavigateToTask={(taskId, scribeId) => {
-        console.log('📞 Dashboard received navigation request:', { taskId, scribeId });
+
         if (onNavigateToNotes && scribeId) {
           onNavigateToNotes(scribeId);
         }
@@ -1943,21 +1914,10 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
               
               // Compare timestamps (same day if timestamps are equal)
               const isSameDay = broadcastDay.getTime() === todayDay.getTime();
-              
-              console.log('🔍 Edit button check:', {
-                broadcastId: viewBroadcast.id,
-                broadcastDate: broadcastDate.toISOString(),
-                today: today.toISOString(),
-                broadcastDay: broadcastDay.toISOString(),
-                todayDay: todayDay.toISOString(),
-                isSameDay,
-                canEdit: isSameDay,
-                userType: member === null ? 'admin' : 'management'
-              });
-              
+
               return isSameDay;
             } catch (error) {
-              console.error('❌ Error checking date:', error);
+
               return false; // If date check fails, don't allow edit
             }
           })()}
@@ -2003,18 +1963,16 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
             try {
               // Save to Firebase
               const broadcastId = await createBroadcast(workspaceId, broadcastData);
-              console.log('✅ Broadcast created with ID:', broadcastId);
-              
+
               // Wait a moment for the broadcast listener to receive the new broadcast
               await new Promise(resolve => setTimeout(resolve, 500));
               
               // Add to activity feed with the same ID as the broadcast
               addActivity('broadcast', updateTitle, `${message} · Sent to ${to}`, null, null, broadcastId);
-              console.log('✅ Activity added for broadcast:', broadcastId);
-              
+
               notify.success('Update');
             } catch (error) {
-              console.error('❌ Error creating broadcast:', error);
+
               notify.error('Failed to send update');
             }
           }}

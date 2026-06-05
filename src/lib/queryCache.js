@@ -46,7 +46,7 @@ class CacheEntry {
       // Rough estimate: 2 bytes per character in UTF-16
       return jsonString.length * 2;
     } catch (error) {
-      console.warn('Failed to estimate cache entry size:', error);
+
       return 1024; // Default 1KB estimate
     }
   }
@@ -109,7 +109,7 @@ export class QueryCache {
 
     // If entry is too large for cache, don't cache it
     if (entry.size > MAX_CACHE_SIZE_BYTES) {
-      console.warn(`Query result too large to cache (${entry.size} bytes)`);
+
       return;
     }
 
@@ -146,7 +146,7 @@ export class QueryCache {
     this.stats.invalidations += invalidatedCount;
     
     if (invalidatedCount > 0) {
-      console.log(`🗑️ Invalidated ${invalidatedCount} cache entries matching pattern: ${pattern}`);
+
     }
   }
 
@@ -177,7 +177,7 @@ export class QueryCache {
   clear() {
     this.cache.clear();
     this.totalSize = 0;
-    console.log('🗑️ Query cache cleared');
+
   }
 
   /**
@@ -264,14 +264,7 @@ if (typeof window !== 'undefined') {
     clear: () => queryCache.clear(),
     resetStats: () => queryCache.resetStats()
   };
-  
-  console.log('✅ Query cache service loaded. Available commands:');
-  console.log('  - window.queryCache.get("signature")');
-  console.log('  - window.queryCache.set("signature", result, ttl)');
-  console.log('  - window.queryCache.invalidate("pattern")');
-  console.log('  - window.queryCache.stats()');
-  console.log('  - window.queryCache.clear()');
-  console.log('  - window.queryCache.resetStats()');
+
 }
 
 export default {

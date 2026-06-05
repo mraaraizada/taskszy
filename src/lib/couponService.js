@@ -9,8 +9,7 @@ import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
  */
 export async function checkCouponEligibility(couponCode, workspaceId) {
   try {
-    console.log('🎟️ CouponService: Checking eligibility', { couponCode, workspaceId });
-    
+
     if (!couponCode || !workspaceId) {
       return { eligible: false, error: 'Invalid coupon code' };
     }
@@ -56,12 +55,10 @@ export async function checkCouponEligibility(couponCode, workspaceId) {
         };
       }
     }
-    
-    console.log('✅ CouponService: Coupon is eligible', { couponCode, workspaceId });
-    
+
     return { eligible: true, coupon };
   } catch (error) {
-    console.error('❌ CouponService: Error checking eligibility', error);
+
     return { eligible: false, error: 'Invalid coupon code' };
   }
 }
@@ -74,8 +71,7 @@ export async function checkCouponEligibility(couponCode, workspaceId) {
  */
 export async function incrementCouponUsage(couponId, workspaceId) {
   try {
-    console.log('📈 CouponService: Incrementing usage', { couponId, workspaceId });
-    
+
     if (!couponId || !workspaceId) {
       return { success: false, error: 'Missing coupon ID or workspace ID' };
     }
@@ -87,12 +83,10 @@ export async function incrementCouponUsage(couponId, workspaceId) {
       totalUsed: increment(1),
       [`usageByWorkspace.${workspaceId}`]: increment(1),
     });
-    
-    console.log('✅ CouponService: Usage incremented', { couponId, workspaceId });
-    
+
     return { success: true };
   } catch (error) {
-    console.error('❌ CouponService: Error incrementing usage', error);
+
     return { success: false, error: 'Failed to update coupon usage' };
   }
 }
@@ -118,7 +112,7 @@ export async function getCouponUsage(couponId) {
       limit: data.limit || 0,
     };
   } catch (error) {
-    console.error('❌ CouponService: Error getting usage', error);
+
     return { totalUsed: 0, usageByWorkspace: {}, limit: 0 };
   }
 }

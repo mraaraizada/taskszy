@@ -18,7 +18,7 @@ const activeCollections = new Set();
  */
 export function markCollectionActive(collectionName) {
   activeCollections.add(collectionName);
-  console.log('📊 Active collections:', Array.from(activeCollections));
+
 }
 
 /**
@@ -27,7 +27,7 @@ export function markCollectionActive(collectionName) {
  */
 export function markCollectionInactive(collectionName) {
   activeCollections.delete(collectionName);
-  console.log('📊 Active collections:', Array.from(activeCollections));
+
 }
 
 /**
@@ -139,7 +139,7 @@ export function saveToCache(key, data) {
     };
     localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(cacheData));
   } catch (error) {
-    console.warn('Failed to save to cache:', error);
+
   }
 }
 
@@ -163,7 +163,7 @@ export function getFromCache(key) {
 
     return data;
   } catch (error) {
-    console.warn('Failed to get from cache:', error);
+
     return null;
   }
 }
@@ -179,9 +179,9 @@ export function clearCache() {
         localStorage.removeItem(key);
       }
     });
-    console.log('✅ Cache cleared');
+
   } catch (error) {
-    console.warn('Failed to clear cache:', error);
+
   }
 }
 
@@ -202,8 +202,7 @@ export function unregisterVisibilityListener(callback) {
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     const isVisible = !document.hidden;
-    console.log(`👁️ Tab ${isVisible ? 'visible' : 'hidden'}`);
-    
+
     visibilityListeners.forEach(callback => {
       callback(isVisible);
     });
@@ -241,7 +240,7 @@ export function createSmartListener(subscribeFunc, collectionName) {
   return {
     start: () => {
       if (!isActive) {
-        console.log(`🎧 Starting listener for ${collectionName}`);
+
         unsubscribe = subscribeFunc();
         isActive = true;
         markCollectionActive(collectionName);
@@ -249,7 +248,7 @@ export function createSmartListener(subscribeFunc, collectionName) {
     },
     stop: () => {
       if (isActive && unsubscribe) {
-        console.log(`🔇 Stopping listener for ${collectionName}`);
+
         unsubscribe();
         unsubscribe = null;
         isActive = false;
@@ -299,8 +298,5 @@ export const OPTIMIZATION_TIPS = {
  * Log optimization metrics
  */
 export function logOptimizationMetrics() {
-  console.log('📊 Firestore Optimization Metrics:');
-  console.log('  Active collections:', Array.from(activeCollections));
-  console.log('  Cached keys:', Object.keys(localStorage).filter(k => k.startsWith(CACHE_PREFIX)).length);
-  console.log('  Visibility listeners:', visibilityListeners.length);
+
 }

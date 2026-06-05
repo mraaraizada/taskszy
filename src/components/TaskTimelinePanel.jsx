@@ -218,12 +218,7 @@ const EventCard = memo(({ event, config, eventColor, eventBg, isLast }) => {
         
         {/* Debug: Log if we should show issue note */}
         {event.eventType === 'stage_changed' && (event.changes?.newStage === 'Issue' || event.changes?.newStage === 'Update') && (() => {
-          console.log('🔍 Issue note check:', {
-            eventId: event.id,
-            newStage: event.changes?.newStage,
-            hasIssueNote: !!event.issueNote,
-            issueNote: event.issueNote
-          });
+
           return null;
         })()}
 
@@ -264,7 +259,6 @@ export default function TaskTimelinePanel({ task, onClose }) {
     if (!workspaceId || !task?.id) return;
 
     const timelinePath = `workspaces/${workspaceId}/tasks/${task.id}/timeline`;
-    console.log('📜 Setting up timeline listener for:', timelinePath);
 
     // ⭐ CRITICAL: Reset state when task changes
     eventIdsRef.current.clear();
@@ -274,8 +268,7 @@ export default function TaskTimelinePanel({ task, onClose }) {
     const unsubscribe = onSnapshot(
       query(collection(db, timelinePath), orderBy('timestampMs', 'asc')), // ⭐ Sort by timestampMs (creation order)
       (snap) => {
-        console.log('📜 Timeline snapshot received:', snap.docs.length, 'documents');
-        
+
         const allEventsFromFirebase = snap.docs.map(d => {
           const data = d.data();
           // Use timestampMs if available, otherwise convert Firestore timestamp
@@ -300,9 +293,7 @@ export default function TaskTimelinePanel({ task, onClose }) {
             })
           };
         });
-        
-        console.log('📜 All events from Firebase:', allEventsFromFirebase.map(e => ({ id: e.id, time: e.formattedTime })));
-        
+
         // ⭐ CRITICAL: Identify truly new events (not in our cache)
         const existingEventIds = eventIdsRef.current;
         const newEventIds = [];
@@ -313,16 +304,13 @@ export default function TaskTimelinePanel({ task, onClose }) {
             existingEventIds.add(event.id);
           }
         });
-        
-        console.log('📜 New event IDs detected:', newEventIds);
-        console.log('📜 Total cached event IDs:', existingEventIds.size);
-        
+
         // ⭐ CRITICAL: Build formatted events array
         const formattedTimesCache = formattedTimesRef.current;
         
         if (formattedTimesCache.size === 0) {
           // Initial load - format all events
-          console.log('📜 Initial load - formatting all', allEventsFromFirebase.length, 'events');
+
           const allFormattedEvents = allEventsFromFirebase.map(event => {
             const formattedEvent = {
               ...event,
@@ -335,8 +323,7 @@ export default function TaskTimelinePanel({ task, onClose }) {
           setFormattedEvents(allFormattedEvents);
         } else if (newEventIds.length > 0) {
           // New events detected - append them to existing array
-          console.log('📜 Appending', newEventIds.length, 'new events');
-          
+
           const newFormattedEvents = allEventsFromFirebase
             .filter(event => newEventIds.includes(event.id))
             .map(event => {
@@ -349,26 +336,24 @@ export default function TaskTimelinePanel({ task, onClose }) {
             });
           
           setFormattedEvents(prev => {
-            console.log('📜 Previous events:', prev.length);
-            console.log('📜 Adding new events:', newFormattedEvents.length);
-            console.log('📜 Total after append:', prev.length + newFormattedEvents.length);
+
             // ⭐ CRITICAL: Append new events at the end (don't sort, don't insert)
             return [...prev, ...newFormattedEvents];
           });
         } else {
-          console.log('📜 No new events, keeping existing', formattedTimesCache.size, 'events');
+
         }
         
         setLoading(false);
       },
       (error) => {
-        console.error('❌ Timeline listener error:', error);
+
         setLoading(false);
       }
     );
 
     return () => {
-      console.log('📜 Cleaning up timeline listener');
+
       unsubscribe();
     };
   }, [workspaceId, task?.id]); // ⭐ REMOVED formattedEvents.length dependency
@@ -376,7 +361,7 @@ export default function TaskTimelinePanel({ task, onClose }) {
   // Auto-scroll to latest event when new events are added
   useEffect(() => {
     if (formattedEvents.length > 0 && bottomRef.current) {
-      console.log('📜 Auto-scrolling to latest event');
+
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [formattedEvents.length]);

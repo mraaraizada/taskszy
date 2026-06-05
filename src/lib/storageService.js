@@ -36,10 +36,10 @@ export async function uploadImage(file, path) {
     
     const snapshot = await uploadBytes(storageRef, file, metadata);
     const downloadURL = await getDownloadURL(snapshot.ref);
-    console.log('✅ Image uploaded with cache headers:', path);
+
     return downloadURL;
   } catch (error) {
-    console.error('Error uploading image:', error);
+
     throw new Error('Failed to upload image: ' + error.message);
   }
 }
@@ -103,7 +103,7 @@ export async function deleteImage(url) {
     const storageRef = ref(storage, path);
     await deleteObject(storageRef);
   } catch (error) {
-    console.error('Error deleting image:', error);
+
     // Don't throw - deletion failures shouldn't block the app
   }
 }

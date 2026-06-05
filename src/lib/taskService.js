@@ -244,7 +244,7 @@ export async function createTask(workspaceId, taskData, options = {}) {
 
     return task;
   } catch (error) {
-    console.error('Error creating task:', error);
+
     throw error;
   }
 }
@@ -266,7 +266,7 @@ export async function getTask(workspaceId, taskId) {
 
     return prepareTaskFromFirestore({ id: taskSnap.id, ...taskSnap.data() });
   } catch (error) {
-    console.error('Error getting task:', error);
+
     throw error;
   }
 }
@@ -305,7 +305,7 @@ export async function getTasks(workspaceId, options = {}) {
 
     return tasks;
   } catch (error) {
-    console.error('Error getting tasks:', error);
+
     throw error;
   }
 }
@@ -351,7 +351,7 @@ export async function updateTask(workspaceId, taskId, updates, options = {}) {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, firestoreUpdates);
   } catch (error) {
-    console.error('Error updating task:', error);
+
     throw error;
   }
 }
@@ -428,7 +428,7 @@ export async function updateTaskStage(workspaceId, taskId, newStage, options = {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, updates);
   } catch (error) {
-    console.error('Error updating task stage:', error);
+
     throw error;
   }
 }
@@ -475,7 +475,7 @@ export async function markTaskPaid(workspaceId, taskId, options = {}) {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, updates);
   } catch (error) {
-    console.error('Error marking task as paid:', error);
+
     throw error;
   }
 }
@@ -515,7 +515,7 @@ export async function pauseTask(workspaceId, taskId) {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, updates);
   } catch (error) {
-    console.error('Error pausing task:', error);
+
     throw error;
   }
 }
@@ -555,7 +555,7 @@ export async function resumeTask(workspaceId, taskId) {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, updates);
   } catch (error) {
-    console.error('Error resuming task:', error);
+
     throw error;
   }
 }
@@ -590,7 +590,7 @@ export async function deleteTask(workspaceId, taskId, options = {}) {
 
     return trashedTask;
   } catch (error) {
-    console.error('Error deleting task:', error);
+
     throw error;
   }
 }
@@ -626,7 +626,7 @@ export async function addTaskHistoryEntry(workspaceId, taskId, entry) {
     const taskRef = doc(db, getTaskPath(workspaceId, taskId));
     await updateDoc(taskRef, updates);
   } catch (error) {
-    console.error('Error adding task history entry:', error);
+
     throw error;
   }
 }
@@ -646,7 +646,7 @@ export async function updateTaskNote(workspaceId, taskId, note) {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error updating task note:', error);
+
     throw error;
   }
 }

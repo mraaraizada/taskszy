@@ -250,7 +250,7 @@ export default function ManagementProfile({ member }) {
         if (uid) {
           const profileData = await getProfile(uid);
           if (profileData) {
-            console.log('📖 Loading profile from Firestore (Management):', profileData);
+
             setForm({
               name: profileData.name || member.name,
               phone: profileData.phone || member.phone || '',
@@ -263,7 +263,7 @@ export default function ManagementProfile({ member }) {
           }
         }
       } catch (err) {
-        console.error('❌ Error loading profile (Management):', err);
+
       }
     };
     
@@ -286,7 +286,7 @@ export default function ManagementProfile({ member }) {
       const uid = auth.currentUser?.uid || currentUid;
       
       if (!uid) {
-        console.error('No UID available for profile update');
+
         notify.error('Unable to save profile. Please try again.');
         return;
       }
@@ -311,7 +311,7 @@ export default function ManagementProfile({ member }) {
       setTimeout(() => setSaved(false), 3000);
       notify.profileUpdated();
     } catch (error) {
-      console.error('Failed to save profile:', error);
+
       notify.error('Failed to save profile. Please try again.');
     }
   }
@@ -361,7 +361,7 @@ export default function ManagementProfile({ member }) {
             notify.avatarUpdated();
           })
           .catch(err => {
-            console.error('Avatar upload failed:', err);
+
             notify.error('Failed to upload avatar');
             // Revert to previous avatar on error
             setAvatarImg(member.avatarImg || null);

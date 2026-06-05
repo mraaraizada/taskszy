@@ -63,7 +63,7 @@ class LocalStorageCache {
       };
       localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (error) {
-      console.warn('Failed to cache to localStorage:', error);
+
     }
   }
 
@@ -83,7 +83,7 @@ class LocalStorageCache {
 
       return data.value;
     } catch (error) {
-      console.warn('Failed to read from localStorage cache:', error);
+
       return null;
     }
   }
@@ -97,7 +97,7 @@ class LocalStorageCache {
       const cacheKey = this.prefix + key;
       localStorage.removeItem(cacheKey);
     } catch (error) {
-      console.warn('Failed to delete from localStorage cache:', error);
+
     }
   }
 
@@ -110,7 +110,7 @@ class LocalStorageCache {
         }
       });
     } catch (error) {
-      console.warn('Failed to clear localStorage cache:', error);
+
     }
   }
 }
@@ -129,20 +129,19 @@ class MultiLayerCache {
     // Try memory cache first (fastest)
     let value = this.memoryCache.get(key);
     if (value !== null) {
-      console.log('💾 Cache HIT (memory):', key);
+
       return value;
     }
 
     // Try localStorage (slower but persistent)
     value = this.localStorageCache.get(key);
     if (value !== null) {
-      console.log('💾 Cache HIT (localStorage):', key);
+
       // Promote to memory cache
       this.memoryCache.set(key, value);
       return value;
     }
 
-    console.log('❌ Cache MISS:', key);
     return null;
   }
 
@@ -152,7 +151,7 @@ class MultiLayerCache {
   set(key, value) {
     this.memoryCache.set(key, value);
     this.localStorageCache.set(key, value);
-    console.log('💾 Cached:', key);
+
   }
 
   /**
@@ -176,7 +175,7 @@ class MultiLayerCache {
   clear() {
     this.memoryCache.clear();
     this.localStorageCache.clear();
-    console.log('🗑️ All caches cleared');
+
   }
 
   /**
@@ -244,13 +243,7 @@ if (typeof window !== 'undefined') {
     clear: () => cache.clear(),
     stats: () => cache.getStats(),
   };
-  
-  console.log('✅ Cache service loaded. Available commands:');
-  console.log('  - window.cache.get("key")');
-  console.log('  - window.cache.set("key", value)');
-  console.log('  - window.cache.delete("key")');
-  console.log('  - window.cache.clear()');
-  console.log('  - window.cache.stats()');
+
 }
 
 export default {

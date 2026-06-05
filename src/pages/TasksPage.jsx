@@ -89,13 +89,6 @@ function StageFlow({ current, members = [], paid = false, history = [], taskId, 
   const taskPayments = getPaymentsForTask ? getPaymentsForTask(taskId) : [];
   
   // Debug: Log member avatar data
-  console.log('?? StageFlow members:', members.map((m) => ({
-    id: m.id,
-    name: m.name,
-    avatar: m.avatar,
-    avatarImg: m.avatarImg,
-    hasAvatarImg: !!m.avatarImg
-  })));
 
   return (
     <div style={{ position: 'relative', paddingBottom: 18 }}>
@@ -469,7 +462,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
       // Find the management user in teamMembers to get their full info
       const managementMember = teamMembers.find((m) => m.id === currentUser.memberId || String(m.id) === String(currentUser.memberId));
       if (managementMember) {
-        console.log('?? Auto-assigning management user to new task:', managementMember.name);
+
         return [{ memberId: String(managementMember.id), memberDesc: '', budget: '' }];
       }
     }
@@ -501,15 +494,13 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           setAssignments(data.assignments || [{ memberId: '', memberDesc: '', budget: '' }]);
           setPaymentEntries(data.paymentEntries || [{ title: '', amount: '' }]);
           setScribes(data.scribes || []);
-          
-          console.log('? Task draft restored from Firestore');
-          
+
           // Delete draft after restoring
           const { deleteDoc } = await import('firebase/firestore');
           await deleteDoc(draftRef);
         }
       } catch (err) {
-        console.error('Failed to restore task draft:', err);
+
       }
     };
     
@@ -523,7 +514,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
         setTaskId(id);
         setGeneratingId(false);
       }).catch(err => {
-        console.error('Failed to generate task ID:', err);
+
         // Fallback to client-side generation
         const fallbackId = generateIdFallback();
         setTaskId(fallbackId);
@@ -535,7 +526,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   // Load scheduled task data if requestData is provided
   useEffect(() => {
     if (requestData && requestData.scheduledTaskId) {
-      console.log('📋 Loading scheduled task data into Create Task Modal:', requestData);
+
       setTitle(requestData.title || '');
       setDescription(requestData.description || '');
       setDeadline(requestData.deadline || requestData.scheduledDate || '');
@@ -609,15 +600,13 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
       const { db } = await import('../lib/firebase');
       
       await setDoc(doc(db, `workspaces/${workspaceId}/taskDrafts/current`), formData);
-      
-      console.log('? Task draft saved to Firestore');
-      
+
       onClose();
       if (onNavigateToManage) {
         onNavigateToManage();
       }
     } catch (err) {
-      console.error('Failed to save task draft:', err);
+
     }
   };
 
@@ -713,7 +702,6 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
   };
   const updateAssignment = (i, key, val) => setAssignments((prev) => prev.map((a, idx) => idx === i ? { ...a, [key]: val } : a));
 
-
   // Find the most recent task this member was assigned to (for pre-fill)
   const getPreviousAssignment = (memberId) => {
     if (!memberId) return null;
@@ -721,25 +709,10 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
     const sorted = [...tasks]
       .filter((t) => t.members?.some((m) => String(m.id) === String(mid)))
       .sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
-    
-    console.log('?? Load previous assignment:', {
-      memberId,
-      mid,
-      totalTasks: tasks.length,
-      filteredTasks: sorted.length,
-      mostRecentTask: sorted[0]?.id
-    });
-    
+
     if (!sorted.length) return null;
     const member = sorted[0].members.find((m) => String(m.id) === String(mid));
-    
-    console.log('? Found previous assignment:', {
-      taskId: sorted[0].id,
-      taskTitle: sorted[0].title,
-      memberBudget: member?.budget,
-      memberDesc: member?.memberDesc
-    });
-    
+
     return { budget: member?.budget ?? '', memberDesc: member?.memberDesc ?? '' };
   };
   const handleSubmitClick = () => {
@@ -762,21 +735,13 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           );
           
           if (!m) {
-            console.error(`? CreateTaskModal: Could not find team member with ID: ${a.memberId}`);
+
             return null;
           }
           
           return { ...m, memberDesc: a.memberDesc, budget: parseFloat(a.budget) || 0, stage };
         })
         .filter(Boolean);
-
-      console.log('?? Members being assigned to task:', members.map((m) => ({ 
-        id: m.id, 
-        name: m.name, 
-        avatar: m.avatar, 
-        color: m.color,
-        role: m.role 
-      })));
 
       const payments = paymentEntries
         .filter((p) => p.title.trim() || p.amount)
@@ -797,12 +762,6 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
         bg: selectedCategory.bg
       } : null;
 
-      console.log('ðŸ“ Scribes before creating taskData:', {
-        scribes,
-        scribesLength: scribes.length,
-        scribesArray: scribes
-      });
-
       const taskData = {
         id: taskId, 
         title, 
@@ -819,16 +778,6 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
         taskBudgetAmount: taskBudgetAmount ? parseFloat(taskBudgetAmount) : null, // ? Save task budget
         taskBudgetStatus: taskBudgetAmount ? taskBudgetStatus : null // ? Save task budget status
       };
-
-      console.log('?? Task data being created:', {
-        id: taskData.id,
-        title: taskData.title,
-        tagsCount: taskData.tags?.length || 0,
-        hasCategory: !!taskData.category,
-        membersCount: taskData.members?.length || 0,
-        totalBudget: taskData.totalBudget,
-        stage: taskData.stage
-      });
 
       const createdBy = requestData?._approvedBy
         ? { ...requestData._approvedBy, source: 'Approval Panel' }
@@ -1012,7 +961,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {TAGS.map((tag) => {
+              {TAGS.filter(tag => tag.visible !== false).map((tag) => {
                 // Normalize tag format (support both old and new format)
                 const tagData = {
                   id: tag.id || tag.label,
@@ -1119,7 +1068,7 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
               Category <span style={{ fontSize: 11, textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>(pick one)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CATEGORIES.map((cat) => {
+              {CATEGORIES.filter(cat => cat.visible !== false).map((cat) => {
                 // Normalize category format (support both old and new format)
                 const catData = {
                   id: cat.id || cat.label,
@@ -1944,14 +1893,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           };
         }
       });
-      
-      console.log('?? EditTaskModal - Loading additional payments for task:', task.id, {
-        allPayments: taskPayments.length,
-        additionalPayments: additional.length,
-        payments: additional.map((p) => ({ id: p.id, title: p.title, amount: p.amount, type: p.paymentType })),
-        statusMap
-      });
-      
+
       setAdditionalPayments(additional.map((p) => ({
         id: p.id,
         title: p.title || '',
@@ -1982,7 +1924,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
       window.additionalPaymentUpdateTimeout = setTimeout(async () => {
         const updates = { [field]: field === 'amount' ? parseFloat(value) || 0 : value };
         await updatePaymentDetails(payment.id, updates);
-        console.log('? Additional payment updated in Firebase:', payment.id);
+
       }, 1000); // Wait 1 second after user stops typing
     }
   };
@@ -2084,39 +2026,17 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
     const sorted = [...tasks]
       .filter((t) => t.id !== task.id && t.members?.some((m) => String(m.id) === String(mid)))
       .sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
-    
-    console.log('?? Load previous assignment (Edit):', {
-      memberId,
-      mid,
-      currentTaskId: task.id,
-      totalTasks: tasks.length,
-      filteredTasks: sorted.length,
-      mostRecentTask: sorted[0]?.id
-    });
-    
+
     if (!sorted.length) return null;
     const member = sorted[0].members.find((m) => String(m.id) === String(mid));
-    
-    console.log('? Found previous assignment (Edit):', {
-      taskId: sorted[0].id,
-      taskTitle: sorted[0].title,
-      memberBudget: member?.budget,
-      memberDesc: member?.memberDesc
-    });
-    
+
     return { budget: member?.budget ?? '', memberDesc: member?.memberDesc ?? '' };
   };
 
   const handleSubmitClick = () => {
     if (!title.trim() || !deadline) return;
     requestAdminPassword('update this task', async () => {
-      console.log('?? EditTaskModal - teamMembers available:', teamMembers.length);
-      console.log('?? EditTaskModal - teamMembers IDs and types:', teamMembers.map((m) => ({ 
-        id: m.id, 
-        idType: typeof m.id,
-        name: m.name 
-      })));
-      
+
       const members = assignments
         .filter((a) => a.memberId)
         .map((a) => {
@@ -2129,12 +2049,10 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           );
           
           if (!m) {
-            console.error(`? Could not find team member with ID: ${a.memberId}`);
-            console.log('Available team member IDs:', teamMembers.map((t) => t.id));
+
             return null;
           }
-          
-          console.log(`? Found member: ${m.name} (ID: ${m.id})`);
+
           const existingMember = task.members.find((tm) => 
             tm.id === a.memberId || 
             tm.id === parseInt(a.memberId) ||
@@ -2149,28 +2067,17 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           };
         })
         .filter(Boolean);
-      
-      console.log('?? EditTaskModal - assignments:', assignments);
-      console.log('?? EditTaskModal - constructed members:', members.map((m) => ({
-        id: m.id,
-        name: m.name,
-        avatar: m.avatar,
-        color: m.color,
-        role: m.role
-      })));
-      
+
       // ? Sync payment entries with task changes
       try {
         const taskPayments = getPaymentsForTask(task.id);
-        console.log('?? EditTaskModal - Syncing payments for task:', task.id);
-        console.log('?? Current payments:', taskPayments.length);
-        
+
         // 0?? Update task title in ALL payment entries if title changed
         if (task.title !== title) {
-          console.log(`?? Task title changed: "${task.title}" ? "${title}"`);
+
           for (const payment of taskPayments) {
             if (payment.taskTitle !== title) {
-              console.log(`?? Updating taskTitle for payment ${payment.id}`);
+
               await updatePaymentDetails(payment.id, {
                 taskTitle: title,
                 ...(payment.paymentType === 'task-budget' ? { title: title } : {})
@@ -2193,8 +2100,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
               existingPayment.memberName !== member.name;
               
             if (needsUpdate) {
-              console.log(`?? Updating payment for member ${member.name}: ${existingPayment.amount} ? ${member.budget} (Paid: ${existingPayment.isPaid})`);
-              
+
               // ? When updating amount, preserve paidAmount and recalculate status
               const currentPaidAmount = existingPayment.paidAmount || 0;
               const newAmount = member.budget;
@@ -2215,20 +2121,16 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                 isPaid: isNowFullyPaid,
                 status: isNowFullyPaid ? 'Paid' : 'Pending'
               });
-              
-              console.log(`?? Payment updated - Amount: ₹${newAmount}, Paid: ₹${currentPaidAmount}, Pending: ₹${Math.max(0, newAmount - currentPaidAmount)}`);
+
             }
           } else {
             // Create new payment entry for new member
-            console.log(`?? Creating new payment for member ${member.name}: ${member.budget}`);
-            
+
             // Get proper user info for createdBy
             const creatorName = currentUser?.name || 'Admin';
             const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
             const creatorUid = currentUser?.uid || null;
-            
-            console.log('?? Payment creator info:', { creatorName, creatorRole, creatorUid });
-            
+
             await updatePaymentDetails(null, {
               taskId: task.id,
               taskTitle: title,
@@ -2265,15 +2167,14 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
             // Existing payment - ensure taskTitle is updated
             const existingPayment = taskPayments.find((p) => p.id === payment.id);
             if (existingPayment && existingPayment.taskTitle !== title) {
-              console.log(`?? Updating taskTitle for additional payment ${payment.id}`);
+
               await updatePaymentDetails(payment.id, {
                 taskTitle: title
               });
             }
           } else {
             // New payment - create it now
-            console.log(`?? Creating new additional payment: ${payment.title} - ${payment.amount}`);
-            
+
             // Get proper user info for createdBy
             const creatorName = currentUser?.name || 'Admin';
             const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
@@ -2314,8 +2215,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
               taskBudgetPayment.taskTitle !== title;
               
             if (needsUpdate) {
-              console.log(`?? Updating task budget payment: ${taskBudgetPayment.amount} ? ${newTaskBudget}`);
-              
+
               // ? Preserve paidAmount and recalculate status
               const currentPaidAmount = taskBudgetPayment.paidAmount || 0;
               const isNowFullyPaid = currentPaidAmount >= newTaskBudget;
@@ -2328,13 +2228,11 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
                 isPaid: isNowFullyPaid,
                 status: isNowFullyPaid ? 'Paid' : 'Pending'
               });
-              
-              console.log(`?? Task budget updated - Amount: ₹${newTaskBudget}, Paid: ₹${currentPaidAmount}, Pending: ₹${Math.max(0, newTaskBudget - currentPaidAmount)}`);
+
             }
           } else {
             // Create new task budget payment
-            console.log(`?? Creating new task budget payment: ${newTaskBudget}`);
-            
+
             // Get proper user info for createdBy
             const creatorName = currentUser?.name || 'Admin';
             const creatorRole = currentUser?.role || currentUser?.userRole || 'Admin';
@@ -2363,10 +2261,9 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
             });
           }
         }
-        
-        console.log('? Payment sync completed - all entries updated');
+
       } catch (error) {
-        console.error('? Failed to sync payments:', error);
+
         // Don't block task update if payment sync fails
       }
       
@@ -2476,7 +2373,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {TAGS.map((tag) => {
+              {TAGS.filter(tag => tag.visible !== false).map((tag) => {
                 // Normalize tag format (support both old and new format)
                 const tagData = {
                   id: tag.id || tag.label,
@@ -2532,7 +2429,7 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
               Category <span style={{ fontSize: 11, textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>(pick one)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CATEGORIES.map((cat) => {
+              {CATEGORIES.filter(cat => cat.visible !== false).map((cat) => {
                 // Normalize category format (support both old and new format)
                 const catData = {
                   id: cat.id || cat.label,
@@ -2845,7 +2742,6 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
             </div>
           </div>
           )}
-
 
           {/* Scribe - Hidden in Edit Task Modal */}
           <div style={{ display: 'none' }}>
@@ -3230,7 +3126,6 @@ function EditTaskModal({ task, onClose, onUpdate, teamMembers, hideBudget = fals
             </div>
           </div>
 
-
           {/* Task Budget */}
           {!hideBudget && (
           <div style={{ background: 'var(--input-bg)', borderRadius: 14, padding: '16px 20px', border: '1.5px solid var(--border)' }}>
@@ -3357,18 +3252,7 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
     // Deep comparison of member stages
     const initialStages = initialTask.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
     const foundStages = foundTask?.members?.map((m) => `${m.id}:${m.stage}`).sort().join(',') || '';
-    
-    console.log('?? AdminTaskModal - Task data comparison:', {
-      taskId: initialTask.id,
-      found: !!foundTask,
-      initialStages,
-      foundStages,
-      stagesMatch: initialStages === foundStages,
-      willUse: foundTask ? 'foundTask (from context)' : 'initialTask (fallback)',
-      initialTaskMembers: initialTask.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage })),
-      foundTaskMembers: foundTask?.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage }))
-    });
-    
+
     // Always prefer foundTask if it exists, as it has the latest data from Firestore
     return foundTask || initialTask;
   }, [tasks, initialTask]);
@@ -3377,17 +3261,7 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   // In management mode, currentUser is the displayMember (team member object), so use currentUser.id
   // Also detect management mode by checking user role if prop is not set correctly
   const isManagementUser = managementMode || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager') || currentUser?.userRole === 'management';
-  
-  console.log('?? AdminTaskModal - currentUser check:', {
-    managementMode,
-    isManagementUser,
-    currentUser,
-    currentUserId: currentUser?.id,
-    currentUserIdType: typeof currentUser?.id,
-    currentUserRole: currentUser?.role,
-    taskMembers: t.members?.map((m) => ({ id: m.id, idType: typeof m.id, name: m.name }))
-  });
-  
+
   // Try multiple comparison strategies to handle type mismatches
   const currentUserMember = isManagementUser && currentUser?.id 
     ? t.members?.find((m) => 
@@ -3398,29 +3272,10 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
       )
     : null;
   const isCurrentUserOnHold = currentUserMember?.isOnHold || false;
-  
-  console.log('?? AdminTaskModal - currentUserMember found:', {
-    found: !!currentUserMember,
-    currentUserMember: currentUserMember ? { id: currentUserMember.id, name: currentUserMember.name, stage: currentUserMember.stage } : null
-  });
-  
+
   // Log task member data for debugging
   useEffect(() => {
-    console.log('?? AdminTaskModal - Task member data updated:', {
-      taskId: t.id,
-      membersCount: t.members?.length || 0,
-      members: t.members?.map((m) => ({
-        id: m.id,
-        name: m.name,
-        avatar: m.avatar,
-        role: m.role,
-        color: m.color,
-        stage: m.stage,
-        budget: m.budget,
-        avatarImg: m.avatarImg
-      })),
-      usingEnrichedData: tasks.some((task) => task.id === initialTask.id)
-    });
+
   }, [t, tasks, initialTask.id]);
 
   const [stageSelect, setStageSelect]     = useState('');
@@ -3437,7 +3292,7 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   // ? CRITICAL: Reset memberStage state when task data changes
   // This ensures dropdowns show the correct current stage after updates
   useEffect(() => {
-    console.log('?? AdminTaskModal: Task data changed, resetting memberStage state');
+
     setMemberStage({});
     setMemberUpdateNote({});
   }, [t.id, t.members?.map((m) => `${m.id}:${m.stage}`).join('-')]);
@@ -3468,14 +3323,6 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   const days        = Math.ceil((new Date(displayDeadline) - today) / (1000 * 60 * 60 * 24));
   
   // Log management user hold check after isComplete is defined
-  console.log('?? Management user hold check:', {
-    managementMode,
-    isManagementUser,
-    currentUserId: currentUser?.id,
-    currentUserMember: currentUserMember ? { id: currentUserMember.id, name: currentUserMember.name, isOnHold: currentUserMember.isOnHold, stage: currentUserMember.stage } : null,
-    isCurrentUserOnHold,
-    willShowSelfCard: isManagementUser && currentUserMember && !isComplete
-  });
 
   function handleStageUpdate() {
     if (!stageSelect || t.paused || t.isPaused || isCurrentUserOnHold) return;
@@ -3523,9 +3370,9 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
   }
 
   function handleHoldTaskClick() {
-    console.log('?? Hold button clicked for task:', t.id);
+
     requestAdminPassword('hold this task', () => {
-      console.log('?? Admin password confirmed, calling pauseTask');
+
       pauseTask(t.id);
       setConfirmPause(false);
     });
@@ -4244,54 +4091,43 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
             {/* Scribes - Show after stage process, only if user has access */}
             {(() => {
               if (!t.scribes || t.scribes.length === 0) {
-                console.log('📝 AdminTaskModal - No scribes on task:', { taskId: t.id, hasScribes: !!t.scribes, scribesLength: t.scribes?.length });
+
                 return null;
               }
-              
-              console.log('📝 AdminTaskModal - Filtering scribes:', { 
-                taskId: t.id, 
-                totalScribes: t.scribes.length, 
-                managementMode, 
-                currentUser: currentUser ? { id: currentUser.id, memberId: currentUser.memberId, role: currentUser.role } : null,
-                globalNotesCount: globalNotes?.length || 0
-              });
-              
+
               // Filter scribes based on user access
               const accessibleScribes = t.scribes.filter((s) => {
                 const isAdmin = !managementMode;
                 
                 // Admin users see all scribes
                 if (isAdmin) {
-                  console.log('📝 AdminTaskModal - Admin user, showing scribe:', { title: s.title, type: s.type });
+
                   return true;
                 }
                 
                 // For management/team users, check if they're assigned
                 const currentMemberId = currentUser?.memberId || currentUser?.id;
                 if (!currentMemberId) {
-                  console.log('📝 AdminTaskModal - No currentMemberId, hiding scribe:', { title: s.title });
+
                   return false;
                 }
                 
                 // Check if user has access based on assignMode
                 if (s.assignMode === 'all') {
-                  console.log('📝 AdminTaskModal - Scribe assigned to all, showing:', { title: s.title });
+
                   return true;
                 }
                 if (s.assignees && s.assignees.some(id => String(id) === String(currentMemberId))) {
-                  console.log('📝 AdminTaskModal - User is assignee, showing scribe:', { title: s.title, currentMemberId });
+
                   return true;
                 }
-                
-                console.log('📝 AdminTaskModal - User not assigned, hiding scribe:', { title: s.title, currentMemberId, assignees: s.assignees });
+
                 return false;
               });
-              
-              console.log('📝 AdminTaskModal - Accessible scribes:', { count: accessibleScribes.length, scribes: accessibleScribes.map(s => ({ title: s.title, type: s.type })) });
-              
+
               // Don't show section if no accessible scribes
               if (accessibleScribes.length === 0) {
-                console.log('📝 AdminTaskModal - No accessible scribes, hiding section');
+
                 return null;
               }
               
@@ -4308,7 +4144,7 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                       return (
                         <button key={i} type="button"
                           onClick={() => { 
-                            console.log('🖱️ Scribe card clicked (AdminTaskModal):', { title: s.title, type: s.type, taskId: t.id });
+
                             // Find the actual note ID from globalNotes by matching title and taskId
                             const actualNote = (globalNotes || []).find(n => 
                               n.taskId === t.id && 
@@ -4316,10 +4152,10 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                               n.type === s.type
                             );
                             const noteId = actualNote?.id;
-                            console.log('📝 Found note ID:', noteId);
+
                             onClose();
                             if (onNavigateToTask && noteId) {
-                              console.log('📞 Calling onNavigateToTask with ID:', noteId);
+
                               onNavigateToTask(t.id, noteId);
                             }
                           }}
@@ -4393,7 +4229,6 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                 </div>
               );
             })()}
-
 
             {isComplete && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F0FDF4', borderRadius: 10, border: '1.5px solid #BBF7D0', marginBottom: 10 }}>
@@ -4512,43 +4347,19 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
 // -- Helper function to create scribes for a task ---------------------------
 function createScribesForTask(task, teamMembers, currentUser, addNote) {
   const currentUid = currentUser?.uid;
-  
-  console.log('ðŸ“ createScribesForTask called with:', {
-    hasTask: !!task,
-    taskId: task?.id,
-    hasScribes: !!task?.scribes,
-    scribesLength: task?.scribes?.length,
-    hasCurrentUser: !!currentUser,
-    currentUid,
-    currentUserName: currentUser?.name,
-    hasAddNote: !!addNote,
-    teamMembersCount: teamMembers?.length
-  });
-  
+
   if (!task.scribes || task.scribes.length === 0 || !currentUid) {
-    console.warn('âš ï¸ Cannot create scribes:', {
-      hasScribes: !!task.scribes,
-      scribesLength: task.scribes?.length,
-      hasCurrentUid: !!currentUid
-    });
+
     return;
   }
   
   if (!addNote) {
-    console.error('âŒ addNote function is not available!');
+
     return;
   }
-  
-  console.log('ðŸ“ Creating scribes for task:', {
-    taskId: task.id,
-    taskTitle: task.title,
-    scribesCount: task.scribes.length,
-    currentUid
-  });
-  
+
   task.scribes.forEach((scribe, index) => {
-    console.log(`ðŸ“ Processing scribe ${index + 1}/${task.scribes.length}:`, scribe);
-    
+
     // Generate unique scribe ID
     const scribeId = `scribe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -4558,26 +4369,12 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
     
     if (scribe.assignMode === 'all') {
       // All task members get access
-      console.log('ðŸ“ Processing "all" mode - task.members:', task.members.map(m => ({
-        id: m.id,
-        memberId: m.memberId,
-        name: m.name,
-        hasUid: !!m.uid,
-        uid: m.uid
-      })));
-      
-      console.log('ðŸ“ Available teamMembers for UID lookup:', teamMembers.map(t => ({
-        id: t.id,
-        name: t.name,
-        uid: t.uid,
-        hasUid: !!t.uid
-      })));
-      
+
       const memberUids = task.members
         .map((m) => {
           // Try to get UID from task member first
           if (m.uid) {
-            console.log(`  ✅ Member ${m.memberId || m.id} (${m.name}) has UID in task.members:`, m.uid);
+
             return m.uid;
           }
           
@@ -4592,15 +4389,10 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
           );
           
           if (teamMember?.uid) {
-            console.log(`  ✅ Found UID for member ${memberId} (${m.name}) in teamMembers:`, teamMember.uid);
+
             return teamMember.uid;
           } else {
-            console.error(`  âŒ Could not find UID for member ${memberId} (${m.name})`, {
-              searchingFor: memberId,
-              taskMemberId: m.id,
-              taskMemberMemberId: m.memberId,
-              teamMembersIds: teamMembers.map(t => ({ id: t.id, uid: t.uid }))
-            });
+
             return null;
           }
         })
@@ -4612,21 +4404,10 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
       memberIds = task.members
         .map((m) => m.memberId || m.id)
         .filter(Boolean);
-      
-      console.log('ðŸ“ Scribe "all" mode - adding all members:', {
-        scribeTitle: scribe.title,
-        membersCount: task.members.length,
-        uidsFound: memberUids.length,
-        memberIdsFound: memberIds.length,
-        finalAccessList: accessList,
-        memberIds
-      });
+
     } else if (scribe.assignMode === 'member' && scribe.assignees && scribe.assignees.length > 0) {
       // Only selected members get access
-      console.log('ðŸ“ Processing "member" mode - assignees:', scribe.assignees);
-      console.log('ðŸ“ task.members:', task.members.map(m => ({ id: m.id, memberId: m.memberId, name: m.name, uid: m.uid, hasUid: !!m.uid })));
-      console.log('ðŸ“ teamMembers:', teamMembers.map(t => ({ id: t.id, name: t.name, uid: t.uid, hasUid: !!t.uid })));
-      
+
       const selectedMemberData = scribe.assignees
         .map((assigneeId) => {
           // First try to find in task.members (which has UIDs)
@@ -4636,7 +4417,7 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
           );
           
           if (taskMember?.uid) {
-            console.log(`  ✅ Found member ${assigneeId} in task.members with uid:`, taskMember.uid);
+
             return { uid: taskMember.uid, memberId: taskMember.memberId || taskMember.id };
           }
           
@@ -4648,14 +4429,10 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
           );
           
           if (teamMember?.uid) {
-            console.log(`  ✅ Found UID for member ${assigneeId} in teamMembers:`, teamMember.uid);
+
             return { uid: teamMember.uid, memberId: teamMember.id };
           } else {
-            console.error(`  âŒ Could not find UID for member ${assigneeId}`, {
-              searchingFor: assigneeId,
-              taskMembersIds: task.members.map(m => ({ id: m.id, memberId: m.memberId })),
-              teamMembersIds: teamMembers.map(t => t.id)
-            });
+
             return null;
           }
         })
@@ -4663,35 +4440,22 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
       
       accessList = [...new Set([...accessList, ...selectedMemberData.map(m => m.uid)])];
       memberIds = selectedMemberData.map(m => m.memberId);
-      
-      console.log('ðŸ“ Scribe "member" mode - adding selected members:', {
-        scribeTitle: scribe.title,
-        selectedCount: scribe.assignees.length,
-        uidsFound: selectedMemberData.length,
-        finalAccessList: accessList,
-        memberIds
-      });
+
     } else if (scribe.assignMode === 'role' && scribe.assignees && scribe.assignees.length > 0) {
       // Members with selected roles get access
-      console.log('ðŸ“ Processing "role" mode:', {
-        selectedRoles: scribe.assignees,
-        taskMembers: task.members.map(m => ({ id: m.id, memberId: m.memberId, name: m.name, role: m.role, hasUid: !!m.uid, uid: m.uid }))
-      });
-      
+
       const roleBasedMembers = task.members
         .filter((m) => {
           const matches = scribe.assignees.includes(m.role);
-          console.log(`  Checking member ${m.name} (${m.role}): ${matches ? '✅ MATCH' : 'âŒ NO MATCH'}`);
+
           return matches;
         });
-      
-      console.log('ðŸ“ Role-based members found:', roleBasedMembers.length, roleBasedMembers.map(m => ({ name: m.name, role: m.role, id: m.id, memberId: m.memberId })));
-      
+
       const roleBasedUids = roleBasedMembers
         .map((m) => {
           // Try to get UID from task member first
           if (m.uid) {
-            console.log(`  ✅ Member ${m.memberId || m.id} (${m.name}) has UID in task.members:`, m.uid);
+
             return m.uid;
           }
           
@@ -4704,15 +4468,10 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
           );
           
           if (teamMember?.uid) {
-            console.log(`  ✅ Found UID for role member ${memberId} (${m.name}) in teamMembers:`, teamMember.uid);
+
             return teamMember.uid;
           } else {
-            console.error(`  âŒ Could not find UID for role member ${memberId} (${m.name})`, {
-              searchingFor: memberId,
-              taskMemberId: m.id,
-              taskMemberMemberId: m.memberId,
-              teamMembersIds: teamMembers.map(t => ({ id: t.id, uid: t.uid }))
-            });
+
             return null;
           }
         })
@@ -4723,16 +4482,7 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
         .filter(Boolean);
       
       accessList = [...new Set([...accessList, ...roleBasedUids])];
-      
-      console.log('ðŸ“ Scribe "role" mode - adding members by role:', {
-        scribeTitle: scribe.title,
-        selectedRoles: scribe.assignees,
-        roleBasedMembersCount: roleBasedMembers.length,
-        uidsFound: roleBasedUids.length,
-        memberIdsFound: memberIds.length,
-        finalAccessList: accessList,
-        memberIds
-      });
+
     }
     
     // Create scribe document
@@ -4763,30 +4513,17 @@ function createScribesForTask(task, teamMembers, currentUser, addNote) {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), // Initialize date
       joinCode: Math.random().toString(36).slice(2, 8).toUpperCase() // Generate join code
     };
-    
-    console.log('ðŸ“ Creating scribe document:', {
-      scribeId,
-      title: scribeDocument.title,
-      type: scribeDocument.type,
-      taskId: scribeDocument.taskId,
-      accessListCount: scribeDocument.accessList.length,
-      accessList: scribeDocument.accessList,
-      membersCount: scribeDocument.members.length,
-      members: scribeDocument.members,
-      fullDocument: scribeDocument
-    });
-    
+
     try {
       // Save scribe using addNote from AppContext
-      console.log('ðŸ“ Calling addNote with scribe document...');
+
       addNote(scribeDocument);
-      console.log('✅ Scribe created successfully:', scribeId);
+
     } catch (error) {
-      console.error('âŒ Error creating scribe:', error);
+
     }
   });
-  
-  console.log('✅ All scribes processed for task:', task.id);
+
 }
 
 // -- Main Tasks Page ---------------------------------------------------------
@@ -4794,9 +4531,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
   const { tasks, team, createTask, taskRequests, approveTaskRequest, completeTaskRequest, updateTask, updateTaskNote, scheduledTasks, addScheduledTask, removeScheduledTask, currentUser: contextCurrentUser, TAGS, CATEGORIES, payments, getPaymentsForTask, addNote, currentUid } = useApp();
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const currentUser = propCurrentUser || contextCurrentUser;
-  
-  console.log('?? TasksPage props:', { managementMode, propCurrentUser, currentUser });
-  
+
   const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Administrator';
   const isManagement = currentUser?.userRole === 'management' || currentUser?.role?.includes('Management') || currentUser?.role?.includes('Manager');
   const canViewScheduled = isAdmin || isManagement;
@@ -4846,16 +4581,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
                           viewTask.category?.label !== updatedTask.category?.label;
         
         if (hasChanges) {
-          console.log('?? TasksPage: Updating viewTask with latest data', {
-            taskId: updatedTask.id,
-            currentStages,
-            updatedStages,
-            currentBudgets,
-            updatedBudgets,
-            currentTotalBudget: viewTask.totalBudget,
-            updatedTotalBudget: updatedTask.totalBudget,
-            members: updatedTask.members?.map((m) => ({ id: m.id, name: m.name, stage: m.stage, budget: m.budget }))
-          });
+
           setViewTask(updatedTask);
         }
       }
@@ -4898,22 +4624,13 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
 
   // Wrapper for createTask that marks request as complete if it came from a request
   const handleCreateTask = (task) => {
-    console.log('ðŸ” handleCreateTask called with task:', {
-      taskId: task.id,
-      hasScribes: !!task.scribes,
-      scribesCount: task.scribes?.length || 0,
-      scribes: task.scribes,
-      currentUid,
-      hasAddNote: !!addNote,
-      teamCount: team.length
-    });
-    
+
     // Create scribes if any are defined
     if (task.scribes && task.scribes.length > 0) {
-      console.log('ðŸ” Calling createScribesForTask...');
+
       createScribesForTask(task, team, currentUser, addNote);
     } else {
-      console.log('âš ï¸ No scribes to create or scribes array is empty');
+
     }
     
     createTask(task);
@@ -4925,7 +4642,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     
     // If this task was created from a scheduled task, remove the scheduled task
     if (requestToApprove && requestToApprove.scheduledTaskId) {
-      console.log('✅ Task created from scheduled task, removing scheduled task:', requestToApprove.scheduledTaskId);
+
       removeScheduledTask(requestToApprove.scheduledTaskId);
     }
   };
@@ -4981,15 +4698,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     // 2. Management users can only see their own scheduled tasks
     const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
     const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
-    
-    console.log('🔍 Checking scheduled task in Scheduled filter:', {
-      taskId: t.id,
-      isAdmin,
-      isManagement,
-      currentUserRole: currentUser?.role,
-      currentUserUserRole: currentUser?.userRole
-    });
-    
+
     if (isAdmin) {
       // Admin can see all scheduled tasks
       return true;
@@ -4999,20 +4708,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
       const createdByMemberId = t.createdBy?.memberId;
       const currentUid = currentUser?.uid;
       const currentMemberId = currentUser?.memberId || currentUser?.id;
-      
-      console.log('🔍 Scheduled task visibility check:', {
-        taskId: t.id,
-        taskTitle: t.title,
-        createdByUid,
-        createdByMemberId,
-        currentUid,
-        currentMemberId,
-        currentUserKeys: Object.keys(currentUser || {}),
-        uidMatch: createdByUid === currentUid,
-        memberIdMatch: String(createdByMemberId) === String(currentMemberId),
-        willShow: createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId)
-      });
-      
+
       return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
     } else {
       // Regular members cannot see scheduled tasks
@@ -5022,14 +4718,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     // Include scheduled tasks in "All" filter with same visibility rules
     const isAdmin = currentUser?.userRole === 'admin' || currentUser?.role === 'Admin' || currentUser?.role === 'Administrator';
     const isManagement = currentUser?.userRole === 'management' || currentUser?.role === 'Management' || currentUser?.role?.toLowerCase().includes('management') || currentUser?.role?.toLowerCase().includes('manager');
-    
-    console.log('🔍 Checking scheduled task for All filter inclusion:', {
-      taskId: t.id,
-      isAdmin,
-      isManagement,
-      hasCreatedBy: !!t.createdBy
-    });
-    
+
     if (isAdmin) {
       return true;
     } else if (isManagement) {
@@ -5037,19 +4726,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
       const createdByMemberId = t.createdBy?.memberId;
       const currentUid = currentUser?.uid;
       const currentMemberId = currentUser?.memberId || currentUser?.id;
-      
-      console.log('🔍 Scheduled task visibility check (All filter):', {
-        taskId: t.id,
-        taskTitle: t.title,
-        createdByUid,
-        createdByMemberId,
-        currentUid,
-        currentMemberId,
-        uidMatch: createdByUid === currentUid,
-        memberIdMatch: String(createdByMemberId) === String(currentMemberId),
-        willShow: createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId)
-      });
-      
+
       return createdByUid === currentUid || String(createdByMemberId) === String(currentMemberId);
     } else {
       return false;
@@ -5059,13 +4736,7 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     const matchesStage = stageFilter === 'All' || (t.isScheduled ? false : t.stage === stageFilter);
     
     if (t.isScheduled) {
-      console.log('🔍 Stage filter check for scheduled task:', {
-        taskId: t.id,
-        stageFilter,
-        isScheduled: t.isScheduled,
-        matchesStage,
-        willPassFilter: matchesStage
-      });
+
     }
     
     // Category filter
@@ -5741,17 +5412,4 @@ export default function TasksPage({ hideBudget = false, hideTimeline = false, cu
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 

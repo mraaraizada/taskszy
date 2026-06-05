@@ -49,8 +49,7 @@ import { db } from './firebase';
  */
 export async function rebuildDashboardAggregation(workspaceId, tasks, team, payments, activity) {
   try {
-    console.log('📊 Rebuilding dashboard aggregation for workspace:', workspaceId);
-    
+
     // Calculate task stats
     const taskStats = {
       total: tasks.length,
@@ -120,17 +119,10 @@ export async function rebuildDashboardAggregation(workspaceId, tasks, team, paym
       activity: activityStats,
       lastUpdated: serverTimestamp()
     });
-    
-    console.log('✅ Dashboard aggregation rebuilt:', {
-      tasks: taskStats.total,
-      team: teamStats.total,
-      payments: financialStats.paymentsCount,
-      activity: activityStats.last7Days
-    });
-    
+
     return true;
   } catch (error) {
-    console.error('❌ Failed to rebuild dashboard aggregation:', error);
+
     return false;
   }
 }
@@ -168,9 +160,9 @@ export async function updateTaskAggregation(workspaceId, operation, taskData) {
     }
     
     await batch.commit();
-    console.log('✅ Task aggregation updated:', operation);
+
   } catch (error) {
-    console.error('❌ Failed to update task aggregation:', error);
+
   }
 }
 
@@ -204,9 +196,9 @@ export async function updateTeamAggregation(workspaceId, operation, memberData) 
     }
     
     await batch.commit();
-    console.log('✅ Team aggregation updated:', operation);
+
   } catch (error) {
-    console.error('❌ Failed to update team aggregation:', error);
+
   }
 }
 
@@ -221,14 +213,13 @@ export async function getDashboardAggregation(workspaceId) {
     const aggSnap = await getDoc(aggRef);
     
     if (aggSnap.exists()) {
-      console.log('📊 Dashboard aggregation loaded (1 read instead of 1000+)');
+
       return aggSnap.data();
     }
-    
-    console.log('⚠️ Dashboard aggregation not found - needs rebuild');
+
     return null;
   } catch (error) {
-    console.error('❌ Failed to load dashboard aggregation:', error);
+
     return null;
   }
 }
@@ -239,19 +230,17 @@ export async function getDashboardAggregation(workspaceId) {
  */
 export function subscribeToDashboardAggregation(workspaceId, callback) {
   const aggRef = doc(db, `workspaces/${workspaceId}/aggregations/dashboard`);
-  
-  console.log('📡 Subscribing to dashboard aggregation (1 listener instead of 4+)');
-  
+
   return onSnapshot(aggRef, (snap) => {
     if (snap.exists()) {
-      console.log('📊 Dashboard aggregation updated');
+
       callback(snap.data());
     } else {
-      console.log('⚠️ Dashboard aggregation not found');
+
       callback(null);
     }
   }, (error) => {
-    console.error('❌ Dashboard aggregation listener error:', error);
+
     callback(null);
   });
 }
@@ -263,8 +252,7 @@ export function subscribeToDashboardAggregation(workspaceId, callback) {
  */
 export async function rebuildMemberAggregation(workspaceId, memberId, tasks, payments) {
   try {
-    console.log('📊 Rebuilding member aggregation:', { workspaceId, memberId });
-    
+
     // Filter tasks for this member
     const memberTasks = tasks.filter(t => 
       t.members?.some(m => String(m.id) === String(memberId))
@@ -303,16 +291,10 @@ export async function rebuildMemberAggregation(workspaceId, memberId, tasks, pay
       payments: paymentStats,
       lastUpdated: serverTimestamp()
     });
-    
-    console.log('✅ Member aggregation rebuilt:', {
-      memberId,
-      tasks: taskStats.total,
-      payments: paymentStats.count
-    });
-    
+
     return true;
   } catch (error) {
-    console.error('❌ Failed to rebuild member aggregation:', error);
+
     return false;
   }
 }
@@ -326,14 +308,13 @@ export async function getMemberAggregation(workspaceId, memberId) {
     const aggSnap = await getDoc(aggRef);
     
     if (aggSnap.exists()) {
-      console.log('📊 Member aggregation loaded (1 read instead of 100+)');
+
       return aggSnap.data();
     }
-    
-    console.log('⚠️ Member aggregation not found - needs rebuild');
+
     return null;
   } catch (error) {
-    console.error('❌ Failed to load member aggregation:', error);
+
     return null;
   }
 }
@@ -343,19 +324,17 @@ export async function getMemberAggregation(workspaceId, memberId) {
  */
 export function subscribeToMemberAggregation(workspaceId, memberId, callback) {
   const aggRef = doc(db, `workspaces/${workspaceId}/memberAggregations/${memberId}`);
-  
-  console.log('📡 Subscribing to member aggregation');
-  
+
   return onSnapshot(aggRef, (snap) => {
     if (snap.exists()) {
-      console.log('📊 Member aggregation updated');
+
       callback(snap.data());
     } else {
-      console.log('⚠️ Member aggregation not found');
+
       callback(null);
     }
   }, (error) => {
-    console.error('❌ Member aggregation listener error:', error);
+
     callback(null);
   });
 }

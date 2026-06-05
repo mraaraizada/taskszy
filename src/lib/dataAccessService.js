@@ -22,32 +22,25 @@ export const DATA_ACCESS_LEVELS = {
  */
 export function getUserAccessLevel(user) {
   if (!user) return DATA_ACCESS_LEVELS.MEMBER;
-  
-  console.log('🔐 Determining access level:', {
-    userRole: user.userRole,
-    role: user.role,
-    memberId: user.memberId,
-    uid: user.uid
-  });
-  
+
   // Priority 1: Check userRole (set during login from Firestore profile)
   if (user.userRole === 'admin') {
-    console.log('🔐 Access level: ADMIN (from userRole)');
+
     return DATA_ACCESS_LEVELS.ADMIN;
   }
   if (user.userRole === 'management') {
-    console.log('🔐 Access level: MANAGER (from userRole)');
+
     return DATA_ACCESS_LEVELS.MANAGER;
   }
   
   // Priority 2: Check role field (from team collection or Firestore profile)
   // This handles cases where userRole isn't set yet but role is available
   if (user.role === 'admin') {
-    console.log('🔐 Access level: ADMIN (from role field)');
+
     return DATA_ACCESS_LEVELS.ADMIN;
   }
   if (user.role === 'management') {
-    console.log('🔐 Access level: MANAGER (from role field)');
+
     return DATA_ACCESS_LEVELS.MANAGER;
   }
   
@@ -55,16 +48,15 @@ export function getUserAccessLevel(user) {
   const role = user.userRole?.toLowerCase() || user.role?.toLowerCase() || '';
   
   if (role.includes('admin') || role.includes('owner')) {
-    console.log('🔐 Access level: ADMIN (from string match)');
+
     return DATA_ACCESS_LEVELS.ADMIN;
   }
   
   if (role.includes('management') || role.includes('manager') || role.includes('lead')) {
-    console.log('🔐 Access level: MANAGER (from string match)');
+
     return DATA_ACCESS_LEVELS.MANAGER;
   }
-  
-  console.log('🔐 Access level: MEMBER (default)');
+
   return DATA_ACCESS_LEVELS.MEMBER;
 }
 
@@ -82,14 +74,12 @@ export function getTasksQuery(workspaceId, userId, accessLevel, options = {}) {
   // ⭐ OPTIMIZATION: Aggressive limit reduction - load only recent tasks
   // Dashboard should use aggregations, not full task list
   const taskLimit = options.limit || 50; // Reduced from 100 to 50
-  
-  console.log('📊 Creating tasks query:', { workspaceId, userId, accessLevel, limit: taskLimit });
-  
+
   switch(accessLevel) {
     case DATA_ACCESS_LEVELS.MEMBER:
       // Members: Only tasks where they are in the memberIds array
       if (userId && options.useServerFiltering) {
-        console.log('👤 Member access: Loading tasks with SERVER-SIDE filtering (limit:', taskLimit, ')');
+
         // This requires Firestore composite index:
         // Collection: tasks, Fields: memberIds (Array), createdDate (Descending)
         return query(
@@ -100,23 +90,23 @@ export function getTasksQuery(workspaceId, userId, accessLevel, options = {}) {
         );
       }
       // Fallback to client-side filtering
-      console.log('👤 Member access: Loading tasks (limit:', taskLimit, ') - will filter client-side');
+
       return query(tasksRef, orderBy('createdDate', 'desc'), limit(taskLimit));
       
     case DATA_ACCESS_LEVELS.MANAGER:
       // Managers: Tasks created by management OR tasks where they are assigned
       // Since Firestore doesn't support OR queries, we load all tasks and filter client-side
       // OR we can use two separate queries and merge results
-      console.log('👔 Manager access: Loading tasks (limit:', taskLimit, ') - will filter client-side for management tasks');
+
       return query(tasksRef, orderBy('createdDate', 'desc'), limit(taskLimit));
       
     case DATA_ACCESS_LEVELS.ADMIN:
       // Admins: All tasks
-      console.log('👑 Admin access: Loading tasks (limit:', taskLimit, ')');
+
       return query(tasksRef, orderBy('createdDate', 'desc'), limit(taskLimit));
       
     default:
-      console.warn('⚠️ Unknown access level, defaulting to all tasks (limit:', taskLimit, ')');
+
       return query(tasksRef, orderBy('createdDate', 'desc'), limit(taskLimit));
   }
 }
@@ -131,14 +121,12 @@ export function getTasksQuery(workspaceId, userId, accessLevel, options = {}) {
  */
 export function getTeamQuery(workspaceId, userId, accessLevel, options = {}) {
   const teamRef = collection(db, `workspaces/${workspaceId}/team`);
-  
-  console.log('📊 Creating team query:', { workspaceId, userId, accessLevel });
-  
+
   switch(accessLevel) {
     case DATA_ACCESS_LEVELS.MEMBER:
       // Members: Only load essential team members
       // For now, load all (but in future, could limit to managers + self)
-      console.log('👤 Member access: Loading essential team members');
+
       // TODO: Optimize to load only relevant members
       // For now, return all to maintain functionality
       return query(teamRef, orderBy('name'));
@@ -146,7 +134,7 @@ export function getTeamQuery(workspaceId, userId, accessLevel, options = {}) {
     case DATA_ACCESS_LEVELS.MANAGER:
       // Managers: Their team members
       if (options.teamId) {
-        console.log('👔 Manager access: Loading team members');
+
         return query(
           teamRef,
           where('teamId', '==', options.teamId),
@@ -154,16 +142,16 @@ export function getTeamQuery(workspaceId, userId, accessLevel, options = {}) {
         );
       }
       // Fallback to all members
-      console.log('👔 Manager access: Loading all members (no teamId)');
+
       return query(teamRef, orderBy('name'));
       
     case DATA_ACCESS_LEVELS.ADMIN:
       // Admins: All team members
-      console.log('👑 Admin access: Loading all team members');
+
       return query(teamRef, orderBy('name'));
       
     default:
-      console.warn('⚠️ Unknown access level, defaulting to all members');
+
       return query(teamRef, orderBy('name'));
   }
 }
@@ -180,13 +168,12 @@ export function getActivityQuery(workspaceId, userId, accessLevel, limitCount = 
   const activityRef = collection(db, `workspaces/${workspaceId}/activity`);
   
   // ⭐ OPTIMIZATION: Reduced from 20 to 15 - most users only see recent activity
-  console.log('📊 Creating activity query:', { workspaceId, userId, accessLevel, limitCount });
-  
+
   switch(accessLevel) {
     case DATA_ACCESS_LEVELS.MEMBER:
       // Members: For now, load all activities (filtering not yet implemented)
       // TODO: Implement proper activity filtering by user
-      console.log('👤 Member access: Loading all activities (filtering not yet implemented)');
+
       return query(
         activityRef,
         orderBy('time', 'desc'),
@@ -196,7 +183,7 @@ export function getActivityQuery(workspaceId, userId, accessLevel, limitCount = 
     case DATA_ACCESS_LEVELS.MANAGER:
     case DATA_ACCESS_LEVELS.ADMIN:
       // Managers & Admins: All activities
-      console.log('👔👑 Manager/Admin access: Loading all activities');
+
       return query(
         activityRef,
         orderBy('time', 'desc'),
@@ -204,7 +191,7 @@ export function getActivityQuery(workspaceId, userId, accessLevel, limitCount = 
       );
       
     default:
-      console.warn('⚠️ Unknown access level, defaulting to all activities');
+
       return query(
         activityRef,
         orderBy('time', 'desc'),
@@ -275,14 +262,7 @@ export function getAccessSummary(accessLevel) {
  * @param {Object} metadata - Additional metadata
  */
 export function logDataAccess(userId, accessLevel, operation, metadata = {}) {
-  console.log('📊 Data Access Log:', {
-    timestamp: new Date().toISOString(),
-    userId,
-    accessLevel,
-    operation,
-    ...metadata
-  });
-  
+
   // TODO: Send to analytics service for monitoring
   // This helps track Firebase usage and optimize further
 }

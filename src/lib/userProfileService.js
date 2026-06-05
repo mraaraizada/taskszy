@@ -25,13 +25,13 @@ export async function getProfile(uid) {
   // Return in-memory cached profile if available (cache for 5 seconds)
   const cached = profileCache.get(uid);
   if (cached && Date.now() - cached.timestamp < 5000) {
-    console.log('📖 getProfile (memory cache):', { uid, name: cached.data.name });
+
     return cached.data;
   }
 
   // If a fetch is already in progress, wait for it
   if (pendingFetches.has(uid)) {
-    console.log('⏳ getProfile (waiting for pending fetch):', uid);
+
     return pendingFetches.get(uid);
   }
 
@@ -44,15 +44,15 @@ export async function getProfile(uid) {
       // Try to get from Firestore cache first
       try {
         snap = await getDocFromCache(ref);
-        console.log('📖 getProfile (Firestore cache):', uid);
+
       } catch (cacheError) {
         // Cache miss - fetch from server
-        console.log('📖 getProfile (fetching from server):', uid);
+
         snap = await getDoc(ref);
       }
       
       if (!snap.exists()) {
-        console.log('❌ getProfile: User profile not found for uid:', uid);
+
         pendingFetches.delete(uid);
         return null;
       }
@@ -79,11 +79,10 @@ export async function getProfile(uid) {
       // Cache the result in memory
       profileCache.set(uid, { data: profile, timestamp: Date.now() });
       pendingFetches.delete(uid);
-      
-      console.log('✅ getProfile loaded:', { uid, name: profile.name, source: snap.metadata.fromCache ? 'cache' : 'server' });
+
       return profile;
     } catch (error) {
-      console.error('❌ getProfile error:', error);
+
       pendingFetches.delete(uid);
       throw error;
     }
@@ -174,8 +173,7 @@ export async function createProfile(uid, data) {
  * @param {object} updates
  */
 export async function updateProfile(uid, updates) {
-  console.log('📝 updateProfile called:', { uid, updates });
-  
+
   // Update user profile first
   await updateDoc(doc(db, USERS_COLLECTION, uid), updates);
   
@@ -221,25 +219,20 @@ export async function updateProfile(uid, updates) {
           
           // Update team collection
           await updateDoc(teamDocRef, teamUpdates);
-          console.log('✅ Synced profile data to team collection:', { 
-            workspaceId, 
-            memberId, 
-            syncedFields: Object.keys(teamUpdates).filter(k => k !== 'updatedAt')
-          });
+
         } else {
-          console.warn('⚠️ Cannot sync to team - missing workspaceId or memberId:', { workspaceId, memberId });
+
         }
       }
     } catch (error) {
-      console.error('❌ Failed to sync profile data to team collection:', error);
+
       // Don't throw - profile update succeeded, team sync is secondary
     }
   }
   
   // Clear cache for this user so next getProfile fetches fresh data
   profileCache.delete(uid);
-  
-  console.log('✅ updateProfile completed');
+
 }
 
 /**

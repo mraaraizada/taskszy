@@ -138,7 +138,7 @@ export default function MemberProfile({ member }) {
         if (uid) {
           const profileData = await getProfile(uid);
           if (profileData) {
-            console.log('📖 Loading profile from Firestore:', profileData);
+
             setForm({
               name: profileData.name || member.name,
               phone: profileData.phone || member.phone || '',
@@ -151,7 +151,7 @@ export default function MemberProfile({ member }) {
           }
         }
       } catch (err) {
-        console.error('❌ Error loading profile:', err);
+
       }
     };
     
@@ -172,7 +172,7 @@ export default function MemberProfile({ member }) {
       const uid = auth.currentUser?.uid || currentUid;
       
       if (!uid) {
-        console.error('No UID available for profile update');
+
         notify.error('Unable to save profile. Please try again.');
         return;
       }
@@ -184,17 +184,15 @@ export default function MemberProfile({ member }) {
         try {
           const { uploadUserAvatar } = await import('../../lib/storageService');
           const { compressAvatar } = await import('../../lib/imageCompression');
-          
-          console.log('🗜️ Compressing avatar before upload...');
+
           const compressedFile = await compressAvatar(avatarFile);
-          
-          console.log('📤 Uploading compressed avatar to Firebase Storage...');
+
           finalAvatarUrl = await uploadUserAvatar(compressedFile, uid);
-          console.log('✅ Avatar uploaded successfully:', finalAvatarUrl);
+
           setAvatarImg(finalAvatarUrl);
           setAvatarFile(null); // Clear the file after upload
         } catch (err) {
-          console.error('Failed to upload avatar:', err);
+
           notify.error('Failed to upload avatar. Please try again.');
           return; // Don't save profile if avatar upload fails
         }
@@ -215,7 +213,7 @@ export default function MemberProfile({ member }) {
       setTimeout(() => setSaved(false), 3000);
       notify.profileUpdated();
     } catch (error) {
-      console.error('Failed to save profile:', error);
+
       notify.error('Failed to save profile. Please try again.');
     }
   }

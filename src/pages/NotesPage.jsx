@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { notify } from '../lib/notify';
 import { Plus, Tag, Clock, Trash2, X, StickyNote, Sheet, ChevronDown, UserPlus, User, Search, Check, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -30,7 +30,7 @@ function randomTagColor() {
   return RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
 }
 
-// ── Inline sheet viewer ──────────────────────────────────────────────────────
+// -- Inline sheet viewer ------------------------------------------------------
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -85,22 +85,15 @@ function SheetViewer({ sheetItem, onAutoSave }) {
         // If data is an array of sheets, extract only the first sheet
         if (Array.isArray(sheetItem.sheetData)) {
           if (sheetItem.sheetData.length > 1) {
-            console.warn('⚠️ Multiple sheets detected! Using only first sheet to prevent data split');
+
           }
           // Wrap first sheet in array to maintain x-spreadsheet format
           dataToLoad = sheetItem.sheetData.length > 0 ? [sheetItem.sheetData[0]] : sheetItem.sheetData;
         }
-        
-        console.log('📊 Loading sheet data:', {
-          hasData: !!sheetItem.sheetData,
-          originalSheetsCount: Array.isArray(sheetItem.sheetData) ? sheetItem.sheetData.length : 'N/A',
-          loadingSheetsCount: Array.isArray(dataToLoad) ? dataToLoad.length : 'N/A',
-          forcedSingleSheet: Array.isArray(sheetItem.sheetData) && sheetItem.sheetData.length > 1
-        });
-        
+
         instanceRef.current.loadData(dataToLoad);
       } catch (error) {
-        console.warn('Failed to load sheet data:', error);
+
       }
     }
     
@@ -122,21 +115,15 @@ function SheetViewer({ sheetItem, onAutoSave }) {
             let dataToSave = data;
             if (Array.isArray(data)) {
               if (data.length > 1) {
-                console.warn('⚠️ Multiple sheets detected on save! Saving only first sheet');
+
               }
               // Always save only the first sheet wrapped in array
               dataToSave = data.length > 0 ? [data[0]] : data;
             }
-            
-            console.log('💾 Autosaving sheet data:', {
-              originalSheetsCount: Array.isArray(data) ? data.length : 'N/A',
-              savingSheetsCount: Array.isArray(dataToSave) ? dataToSave.length : 'N/A',
-              forcedSingleSheet: Array.isArray(data) && data.length > 1
-            });
-            
+
             onAutoSave(dataToSave);
           } catch (error) {
-            console.error('Failed to autosave sheet:', error);
+
           }
         }, 2000);
       });
@@ -149,7 +136,7 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           // Force spreadsheet to recalculate its size
           instanceRef.current.reRender();
         } catch (error) {
-          console.warn('Failed to resize spreadsheet:', error);
+
         }
       }
     };
@@ -215,32 +202,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
     activeUser?.role?.toLowerCase().includes('manager')
   );
 
-  // Debug: Log user role info
-  useEffect(() => {
-    console.log('🔐 User Role Check:', {
-      name: activeUser?.name,
-      userRole: activeUser?.userRole,
-      role: activeUser?.role,
-      memberId: activeUser?.memberId,
-      id: activeUser?.id,
-      uid: activeUser?.uid,
-      isAdmin,
-      isManagement,
-      '⚠️ FINAL RESULT': isAdmin ? '🚨 TREATED AS ADMIN' : isManagement ? '🚨 TREATED AS MANAGEMENT' : '✅ TREATED AS REGULAR MEMBER',
-      calculation: {
-        'userRole === admin': activeUser?.userRole === 'admin',
-        'role === Admin': activeUser?.role === 'Admin',
-        'role === Administrator': activeUser?.role === 'Administrator',
-        'userRole === management': activeUser?.userRole === 'management',
-        'role === Management': activeUser?.role === 'Management',
-        'role includes management': activeUser?.role?.toLowerCase().includes('management'),
-        'role includes manager': activeUser?.role?.toLowerCase().includes('manager')
-      },
-      '📋 Raw role value': `"${activeUser?.role}"`,
-      '📋 Raw userRole value': `"${activeUser?.userRole}"`
-    });
-  }, [activeUser?.name, activeUser?.userRole, activeUser?.role, isAdmin, isManagement]);
-
   // Debug: Log user info on mount
   useEffect(() => {
     const userInfo = {
@@ -253,18 +214,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
       isAdmin,
       isManagement
     };
-    console.log('👤 Active User Info:', userInfo);
-    
-    // Check if memberId matches id
-    if (activeUser?.id && activeUser?.memberId) {
-      if (activeUser.id === activeUser.memberId) {
-        console.log('✅ memberId matches id:', activeUser.id);
-      } else {
-        console.log('⚠️ MISMATCH: id =', activeUser.id, 'but memberId =', activeUser.memberId);
-      }
-    } else if (activeUser?.id && !activeUser?.memberId) {
-      console.log('⚠️ memberId is undefined! Using id:', activeUser.id);
-    }
   }, [activeUser?.id, activeUser?.memberId]);
 
   const [selected, setSelected] = useState(null);
@@ -281,14 +230,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
 
   // Auto-select scribe when navigating from task modal
   useEffect(() => {
-    console.log('🔍 Auto-select scribe effect triggered:', {
-      selectedScribeId,
-      hasGlobalNotes: !!globalNotes,
-      globalNotesCount: globalNotes?.length || 0,
-      editing,
-      allNoteIds: globalNotes?.map(n => ({ id: n.id, title: n.title, type: n.type }))
-    });
-    
+
     if (selectedScribeId && globalNotes && globalNotes.length > 0 && !editing) {
       // Try multiple comparison methods to find the scribe
       let scribeToOpen = globalNotes.find(n => String(n.id) === String(selectedScribeId));
@@ -307,21 +249,13 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
       }
       
       if (scribeToOpen) {
-        console.log('✅ Found scribe to open:', {
-          id: scribeToOpen.id,
-          title: scribeToOpen.title,
-          type: scribeToOpen.type,
-          searchedFor: selectedScribeId
-        });
+
         setSelected(scribeToOpen);
         // For sheets, ensure we're not in editing mode so it displays properly
         setEditing(false);
         if (onScribeOpened) onScribeOpened(); // Clear the selectedScribeId in parent
       } else {
-        console.warn('❌ Scribe not found:', {
-          searchedFor: selectedScribeId,
-          availableIds: globalNotes.map(n => n.id)
-        });
+
       }
     }
   }, [selectedScribeId, globalNotes, editing, onScribeOpened]);
@@ -341,38 +275,36 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   // Function to find note by join code - uses one-time query to avoid listener conflicts
   const findNoteByJoinCode = async (code) => {
     if (!workspaceId) {
-      console.error('No workspaceId available');
+
       return null;
     }
 
     try {
-      console.log('🔍 Searching for note with join code:', code);
-      
+
       // First check globalNotes (already loaded)
       const inMemory = (globalNotes || []).find(n => n.joinCode && n.joinCode.toUpperCase() === code.toUpperCase());
       if (inMemory) {
-        console.log('✅ Found in memory:', inMemory.title);
+
         return inMemory;
       }
 
       // Query Firestore directly (one-time query, not a listener)
       const notesRef = collection(db, `workspaces/${workspaceId}/notes`);
       const q = query(notesRef, where('joinCode', '==', code.toUpperCase()));
-      
-      console.log('📡 Querying Firestore for join code...');
+
       const snapshot = await getDocs(q);
       
       if (snapshot.empty) {
-        console.log('❌ No note found with code:', code);
+
         return null;
       }
 
       const doc = snapshot.docs[0];
       const noteData = { id: doc.id, ...doc.data() };
-      console.log('✅ Found in Firestore:', noteData.title);
+
       return noteData;
     } catch (error) {
-      console.error('❌ Error finding note:', error);
+
       return null;
     }
   };
@@ -381,8 +313,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   // Firestore rules now handle all filtering - each user only sees their own scribes
   // No client-side filtering needed
   const visibleNotes = globalNotes || [];
-  
-  console.log('📝 Visible notes (filtered by Firestore rules):', visibleNotes.length);
 
   const notes = visibleNotes;
   
@@ -396,10 +326,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         const newMembers = JSON.stringify(updatedSelected.members || []);
         
         if (oldMembers !== newMembers) {
-          console.log('🔄 Updating selected note with new members:', {
-            old: selected.members,
-            new: updatedSelected.members
-          });
+
           setSelected(updatedSelected);
         }
       }
@@ -411,32 +338,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   }, [globalNotes, selected?.id]);
   
   // Debug: Log once when component mounts or notes change
-  useEffect(() => {
-    console.log('🔍 NotesPage Debug:', {
-      globalNotesCount: globalNotes?.length || 0,
-      activeUser: {
-        name: activeUser?.name,
-        id: activeUser?.id,
-        uid: activeUser?.uid,
-        memberId: activeUser?.memberId,
-        isAdmin,
-        isManagement
-      }
-    });
-    
-    if (globalNotes && globalNotes.length > 0) {
-      console.log('📝 Notes loaded from Firestore:', globalNotes.length, 'notes');
-      console.log('🔍 All notes:', globalNotes.map(n => ({
-        id: n.id,
-        title: n.title,
-        members: n.members,
-        createdBy: n.createdBy
-      })));
-    } else {
-      console.log('⚠️ No notes in globalNotes from Firestore - Database may be empty or Firestore rules blocking access');
-      console.log('💡 Check: Does getUserData().memberId match the ID in note.members array?');
-    }
-  }, [globalNotes?.length, activeUser?.id]);
   const visible = notes.filter(n => !n.archived);
   
   // Paginated notes for display
@@ -510,17 +411,10 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   }
 
   function newNote() {
-    console.log('📝 Creating new note with creator info:', {
-      name: activeUser?.name,
-      id: activeUser?.id,
-      memberId: activeUser?.memberId,
-      uid: activeUser?.uid,
-      hasUid: !!activeUser?.uid
-    });
-    
+
     // Validate that user has a uid before creating note
     if (!activeUser?.uid) {
-      console.error('❌ Cannot create note: User uid is missing');
+
       notify.error('Cannot create note: User not properly authenticated');
       return;
     }
@@ -545,33 +439,21 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
       },
       members: [], // Don't add creator to members - they're already the creator
     };
-    console.log('📝 New note created:', {
-      id: n.id,
-      title: n.title,
-      members: n.members,
-      createdBy: n.createdBy,
-      createdByUid: n.createdBy.uid
-    });
-    
+
     addGlobalNote(n);
     setSelected(n);
-    setDraft({ ...n });
+    const draftCopy = { ...n };
+
+    setDraft(draftCopy);
     setEditing(true);
     setShowCreateMenu(false);
   }
 
   function newSheet() {
-    console.log('📊 Creating new sheet with creator info:', {
-      name: activeUser?.name,
-      id: activeUser?.id,
-      memberId: activeUser?.memberId,
-      uid: activeUser?.uid,
-      hasUid: !!activeUser?.uid
-    });
-    
+
     // Validate that user has a uid before creating sheet
     if (!activeUser?.uid) {
-      console.error('❌ Cannot create sheet: User uid is missing');
+
       notify.error('Cannot create sheet: User not properly authenticated');
       return;
     }
@@ -595,14 +477,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
       },
       members: [], // Don't add creator to members - they're already the creator
     };
-    console.log('📊 New sheet created:', {
-      id: n.id,
-      title: n.title,
-      members: n.members,
-      createdBy: n.createdBy,
-      createdByUid: n.createdBy.uid
-    });
-    
+
     addGlobalNote(n);
     setSelected(n);
     setEditing(false);
@@ -641,7 +516,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         selected.id,
         activeUser.uid,
         (conflict) => {
-          console.log('⚠️ Conflict detected:', conflict);
+
           setConflictWarning({
             message: 'Another user is editing this note',
             modifiedBy: conflict.modifiedBy,
@@ -655,13 +530,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   function saveNote() {
     // Extract id from draft and pass only the fields that should be updated
     const { id, ...updates } = draft;
-    
-    console.log('💾 Saving note:', {
-      noteId: id,
-      updateKeys: Object.keys(updates),
-      hasBaseText: !!baseText,
-    });
-    
+
     // NEW: Pass base text and user info for intelligent merge
     const mergeContext = {
       baseText: baseText,
@@ -698,7 +567,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         }
       })
       .catch((error) => {
-        console.error('Failed to save note:', error);
+
         notify.error('Failed to save note', {
           description: error.message || 'Please try again',
         });
@@ -766,20 +635,20 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
     // Ensure creator is always in accessList
     if (creatorUid && !updatedAccessList.includes(creatorUid)) {
       updatedAccessList.push(creatorUid);
-      console.log('🔑 Ensuring creator UID in accessList:', creatorUid);
+
     }
     
     if (memberUid) {
       if (isAdding && !updatedAccessList.includes(memberUid)) {
         updatedAccessList.push(memberUid);
-        console.log('🔑 Adding member UID to accessList:', memberUid);
+
       } else if (!isAdding) {
         // Don't remove creator from accessList
         if (memberUid !== creatorUid) {
           updatedAccessList = updatedAccessList.filter(uid => uid !== memberUid);
-          console.log('🔑 Removing member UID from accessList:', memberUid);
+
         } else {
-          console.log('⚠️ Cannot remove creator from accessList');
+
         }
       }
     }
@@ -792,9 +661,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
     
     updateGlobalNote(selected.id, updates)
       .then(() => {
-        console.log('✅ Member list updated in Firestore:', updated);
-        console.log('✅ AccessList updated:', updatedAccessList);
-        
+
         // Update local selected state
         const updatedNote = { ...selected, members: updated, accessList: updatedAccessList };
         setSelected(updatedNote);
@@ -812,7 +679,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         }
       })
       .catch((error) => {
-        console.error('❌ Failed to update member list:', error);
+
         notify.error('Failed to update members');
       });
   }
@@ -840,9 +707,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   // Autosave handler for sheets
   function handleSheetAutoSave(sheetData) {
     if (!selected || selected.type !== 'sheet') return;
-    
-    console.log('💾 Autosaving sheet:', selected.id);
-    
+
     const updates = {
       sheetData: sheetData,
       lastModifiedAt: Date.now(),
@@ -850,12 +715,12 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
     
     updateGlobalNote(selected.id, updates)
       .then(() => {
-        console.log('✅ Sheet autosaved successfully');
+
         // Update local selected state
         setSelected(prev => ({ ...prev, ...updates }));
       })
       .catch((error) => {
-        console.error('❌ Failed to autosave sheet:', error);
+
       });
   }
 
@@ -869,7 +734,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', background: 'var(--bg-main)', padding: '20px 24px', gap: 16 }}>
 
-      {/* ── Left panel: note list ── */}
+      {/* -- Left panel: note list -- */}
       <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
         {/* Join button */}
@@ -915,14 +780,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   const match = await findNoteByJoinCode(code);
                   
                   if (match) { 
-                    console.log('📝 Found note:', match.title);
-                    console.log('👤 Current user ID:', activeUser?.id);
-                    console.log('👥 Current members:', match.members);
-                    
+
                     // Check if user is already a member (use memberId for correct identification)
                     const userMemberId = activeUser?.memberId || activeUser?.id;
                     if (userMemberId && match.members?.map(id => parseInt(id)).includes(parseInt(userMemberId))) {
-                      console.log('ℹ️ User already in members');
+
                       setSelected(match);
                       notify.success(`Already joined: ${match.title}`);
                       setShowJoin(false); 
@@ -935,15 +797,12 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                     if (userMemberId) {
                       const userIdNum = parseInt(userMemberId);
                       const updatedMembers = [...(match.members || []).map(id => parseInt(id)), userIdNum];
-                      console.log('➕ Adding user to members:', updatedMembers);
-                      console.log('👤 User memberId being added:', userIdNum);
-                      console.log('👤 User name:', activeUser?.name);
-                      
+
                       // Also add user's UID to accessList for Firestore permissions
                       const updatedAccessList = [...(match.accessList || [])];
                       if (activeUser?.uid && !updatedAccessList.includes(activeUser.uid)) {
                         updatedAccessList.push(activeUser.uid);
-                        console.log('🔑 Adding user UID to accessList:', activeUser.uid);
+
                       }
                       
                       try {
@@ -952,8 +811,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                           members: updatedMembers,
                           accessList: updatedAccessList 
                         });
-                        console.log('✅ Updated in Firestore with accessList');
-                        
+
                         // Also save to user's profile - add this scribe to their joinedScribes array
                         if (activeUser?.uid && workspaceId) {
                           try {
@@ -966,11 +824,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                                 await updateDoc(userRef, {
                                   joinedScribes: [...joinedScribes, match.id]
                                 });
-                                console.log('✅ Saved joined scribe to user profile');
+
                               }
                             }
                           } catch (err) {
-                            console.warn('⚠️ Could not update user profile:', err);
+
                           }
                         }
                         
@@ -987,11 +845,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                         
                         notify.success(`Joined: ${match.title}`);
                       } catch (error) {
-                        console.error('❌ Failed to join:', error);
+
                         notify.error('Failed to join note');
                       }
                     } else {
-                      console.log('❌ No user ID available');
+
                       notify.error('User ID not found');
                     }
                     setShowJoin(false); 
@@ -1014,14 +872,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                 const match = await findNoteByJoinCode(code);
                 
                 if (match) { 
-                  console.log('📝 Found note:', match.title);
-                  console.log('👤 Current user ID:', activeUser?.id);
-                  console.log('👥 Current members:', match.members);
-                  
+
                   // Check if user is already a member (use memberId for correct identification)
                   const userMemberId = activeUser?.memberId || activeUser?.id;
                   if (userMemberId && match.members?.map(id => parseInt(id)).includes(parseInt(userMemberId))) {
-                    console.log('ℹ️ User already in members');
+
                     setSelected(match);
                     notify.success(`Already joined: ${match.title}`);
                     setShowJoin(false); 
@@ -1034,15 +889,12 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   if (userMemberId) {
                     const userIdNum = parseInt(userMemberId);
                     const updatedMembers = [...(match.members || []).map(id => parseInt(id)), userIdNum];
-                    console.log('➕ Adding user to members:', updatedMembers);
-                    console.log('👤 User memberId being added:', userIdNum);
-                    console.log('👤 User name:', activeUser?.name);
-                    
+
                     // Also add user's UID to accessList for Firestore permissions
                     const updatedAccessList = [...(match.accessList || [])];
                     if (activeUser?.uid && !updatedAccessList.includes(activeUser.uid)) {
                       updatedAccessList.push(activeUser.uid);
-                      console.log('🔑 Adding user UID to accessList:', activeUser.uid);
+
                     }
                     
                     try {
@@ -1051,8 +903,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                         members: updatedMembers,
                         accessList: updatedAccessList 
                       });
-                      console.log('✅ Updated in Firestore with accessList');
-                      
+
                       // Also save to user's profile - add this scribe to their joinedScribes array
                       if (activeUser?.uid && workspaceId) {
                         try {
@@ -1065,11 +916,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                               await updateDoc(userRef, {
                                 joinedScribes: [...joinedScribes, match.id]
                               });
-                              console.log('✅ Saved joined scribe to user profile');
+
                             }
                           }
                         } catch (err) {
-                          console.warn('⚠️ Could not update user profile:', err);
+
                         }
                       }
                       
@@ -1086,11 +937,11 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                       
                       notify.success(`Joined: ${match.title}`);
                     } catch (error) {
-                      console.error('❌ Failed to join:', error);
+
                       notify.error('Failed to join note');
                     }
                   } else {
-                    console.log('❌ No user ID available');
+
                     notify.error('User ID not found');
                   }
                   setShowJoin(false); 
@@ -1144,7 +995,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
           )}
         </div>
 
-
         {/* Notes list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {visible.length === 0 && (
@@ -1153,7 +1003,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                 <StickyNote size={22} color="#7C3AED" strokeWidth={1.8} />
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Your Scribe is empty</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Great ideas start here — write a note or build a sheet!</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Great ideas start here � write a note or build a sheet!</div>
             </div>
           )}
           {displayedNotes.map((note) => {
@@ -1161,17 +1011,6 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
             const isTaskScribe = !!note.taskId;
             
             // Debug: Log member info for task scribes
-            if (isTaskScribe) {
-              console.log('📋 Scribe card render:', {
-                id: note.id,
-                title: note.title,
-                taskId: note.taskId,
-                members: note.members,
-                membersCount: (note.members || []).length,
-                hasMembers
-              });
-            }
-            
             return (
             <div key={note.id} onClick={() => selectNote(note)} style={{
               padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
@@ -1250,7 +1089,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         </div>
       </div>
 
-      {/* ── Right panel: note detail / editor ── */}
+      {/* -- Right panel: note detail / editor -- */}
       <div style={{ flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden', gap: 0 }}>
         <div style={{ 
           flex: showMemberPanel ? '1 1 auto' : '1 1 100%',
@@ -1264,21 +1103,25 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
           transition: 'flex 0.3s cubic-bezier(0.22,1,0.36,1)'
         }}>
         {!selected ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-            <div style={{ width: 80, height: 80, borderRadius: 22, background: 'linear-gradient(135deg, #F5F3FF, #EEF2FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(124,58,237,0.1)' }}>
-              <StickyNote size={34} color="#7C3AED" strokeWidth={1.6} />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Ready when you are</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 260 }}>Select something from the list or hit Create New to spark something great</div>
-            </div>
-            <button onClick={newNote} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 22px', background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)', border: 'none', borderRadius: 11, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(59,91,252,0.3)' }}>
-              <Plus size={15} /> Create New Note
-            </button>
-          </div>
-        ) : selected.type === 'sheet' ? (
-          /* ── Sheet mode ── */
           <>
+            {}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+              <div style={{ width: 80, height: 80, borderRadius: 22, background: 'linear-gradient(135deg, #F5F3FF, #EEF2FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(124,58,237,0.1)' }}>
+                <StickyNote size={34} color="#7C3AED" strokeWidth={1.6} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Ready when you are</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 260 }}>Select something from the list or hit Create New to spark something great</div>
+              </div>
+              <button onClick={newNote} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 22px', background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)', border: 'none', borderRadius: 11, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(59,91,252,0.3)' }}>
+                <Plus size={15} /> Create New Note
+              </button>
+            </div>
+          </>
+        ) : selected.type === 'sheet' ? (
+          /* -- Sheet mode -- */
+          <>
+            {}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1347,7 +1190,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                             setNewTag('');
                           }
                         }}
-                        placeholder="New tag…"
+                        placeholder="New tag�"
                         style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: 72 }}
                       />
                       <button 
@@ -1374,7 +1217,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                 </div>
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
-                  {/* Add member — all members can view the panel */}
+                  {/* Add member � all members can view the panel */}
                   <button
                     title="Add member"
                     onClick={() => setShowMemberPanel(true)}
@@ -1416,14 +1259,14 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
             <SheetViewer sheetItem={selected} onAutoSave={handleSheetAutoSave} key={`${selected.id}-${showMemberPanel ? 'panel' : 'full'}`} />
           </>
         ) : editing ? (
-          /* ── Edit mode ── */
+          /* -- Edit mode -- */
           <>
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
               {canEditTitleAndTags(selected) ? (
               <input
                 value={draft.title}
                 onChange={e => setDraft(p => ({ ...p, title: e.target.value }))}
-                placeholder="Note title…"
+                placeholder="Note title�"
                 style={{ width: '100%', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', border: 'none', outline: 'none', background: 'transparent', marginBottom: 10 }}
               />
               ) : (
@@ -1450,7 +1293,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                     value={newTag}
                     onChange={e => setNewTag(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addCustomTag()}
-                    placeholder="New tag…"
+                    placeholder="New tag�"
                     style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: 80 }}
                   />
                   <button onClick={addCustomTag} style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: '#3B5BFC', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1473,7 +1316,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
             <textarea
               value={draft.body}
               onChange={e => setDraft(p => ({ ...p, body: e.target.value }))}
-              placeholder="Write your note here…"
+              placeholder="Write your note here�"
               style={{ flex: 1, padding: '20px 24px', fontSize: 14, lineHeight: 1.75, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
             />
             <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 10, flexShrink: 0 }}>
@@ -1486,7 +1329,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
             </div>
           </>
         ) : (
-          /* ── View mode ── */
+          /* -- View mode -- */
           <>
             <div style={{ padding: '20px 28px', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -1515,7 +1358,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
-                  {/* Add member — all members can view the panel */}
+                  {/* Add member � all members can view the panel */}
                   <button
                     title="Add member"
                     onClick={() => setShowMemberPanel(true)}
@@ -1546,7 +1389,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         )}
         </div>
 
-        {/* ── Member panel — slides in from right ── */}
+        {/* -- Member panel � slides in from right -- */}
         {showMemberPanel && (
         <div style={{
           width: 300,
@@ -1598,7 +1441,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   <input
                     value={memberSearch}
                     onChange={e => setMemberSearch(e.target.value)}
-                    placeholder="Search members…"
+                    placeholder="Search members�"
                     style={{ width: '100%', height: 36, borderRadius: 9, border: '1.5px solid var(--border)', padding: '0 12px 0 32px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-subtle)', boxSizing: 'border-box' }}
                   />
                 </div>
@@ -1756,7 +1599,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         )}
       </div>
 
-      {/* ── Confirm delete modal ── */}
+      {/* -- Confirm delete modal -- */}
       {confirmDeleteId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={() => setConfirmDeleteId(null)}>

@@ -60,7 +60,7 @@ function SubmitModal({ member, onClose, currentUser }) {
       notify.helpSubmitted('Your request has been sent to the admin team');
       setTimeout(() => onClose(), 1800);
     } catch (error) {
-      console.error('Error submitting help request:', error);
+
       notify.error('Failed to submit request');
       setSubmitting(false);
     }
@@ -172,23 +172,7 @@ export default function ManagementHelp({ member, setPageFilteredData }) {
         // If same status, sort by timestamp (newest first)
         return b.timestamp - a.timestamp;
       });
-      
-      console.log('📋 Help submissions filtered and sorted:', {
-        isAdmin,
-        currentUid,
-        totalSubmissions: loadedSubmissions.length,
-        filteredCount: sortedSubmissions.length,
-        pendingCount: sortedSubmissions.filter(s => s.status === 'pending').length,
-        solvedCount: sortedSubmissions.filter(s => s.status === 'solved').length,
-        filtered: sortedSubmissions.map(s => ({ 
-          id: s.id, 
-          from: s.member?.name, 
-          role: s.member?.role,
-          status: s.status,
-          isOwn: s.member?.uid === currentUid 
-        }))
-      });
-      
+
       // Store all filtered and sorted submissions
       setAllSubmissions(sortedSubmissions);
     }, 50); // Load 50 at a time from Firebase
@@ -298,7 +282,7 @@ export default function ManagementHelp({ member, setPageFilteredData }) {
       setEditingResponse(false);
       notify.helpResolved();
     } catch (error) {
-      console.error('Error resolving help submission:', error);
+
       notify.error('Failed to update submission');
     }
   }
@@ -426,16 +410,7 @@ export default function ManagementHelp({ member, setPageFilteredData }) {
                                                   submitterRole === 'management' || 
                                                   submitterRole === 'mangment';
                       }
-                      
-                      console.log('🔍 Management Help - Checking response permission:', {
-                        submitterName: selectedSubmission.member?.name,
-                        submitterRole: selectedSubmission.member?.role,
-                        submitterUserRole: selectedSubmission.member?.userRole,
-                        hasUserRole: !!submitterUserRole,
-                        isFromManagementOrAdmin,
-                        canRespond: !isFromManagementOrAdmin
-                      });
-                      
+
                       // Show response form only if it's from a team member (not management/admin)
                       if (!isFromManagementOrAdmin) {
                         return <ResponseForm submissionId={selectedSubmission.id} onResolve={handleResolveWithPassword} initialResponse={editingResponse ? selectedSubmission.response : ''} isEditing={editingResponse} onCancelEdit={() => setEditingResponse(false)} />;

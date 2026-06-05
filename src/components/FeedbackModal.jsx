@@ -95,7 +95,7 @@ export default function FeedbackModal({
         setShowNotification(false); // Don't show notification after submission
       }, 2000);
     } catch (error) {
-      console.error('Error submitting feedback:', error);
+
       toast.error('Failed to submit feedback. Please try again.');
     } finally {
       setIsSubmitting(false);

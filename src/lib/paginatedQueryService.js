@@ -33,16 +33,14 @@ export class PaginatedQuery {
     try {
       const q = query(this.baseQuery, limit(this.pageSize));
       const snapshot = await getDocs(q);
-      
-      console.log(`📄 Loaded first page: ${snapshot.docs.length} documents`);
-      
+
       this.allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       this.lastDoc = snapshot.docs[snapshot.docs.length - 1];
       this.hasMore = snapshot.docs.length === this.pageSize;
       
       return this.allDocs;
     } catch (error) {
-      console.error('❌ Failed to load first page:', error);
+
       return null;
     } finally {
       this.loading = false;
@@ -64,9 +62,7 @@ export class PaginatedQuery {
         limit(this.pageSize)
       );
       const snapshot = await getDocs(q);
-      
-      console.log(`📄 Loaded next page: ${snapshot.docs.length} documents`);
-      
+
       const newDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       this.allDocs = [...this.allDocs, ...newDocs];
       this.lastDoc = snapshot.docs[snapshot.docs.length - 1];
@@ -74,7 +70,7 @@ export class PaginatedQuery {
       
       return newDocs;
     } catch (error) {
-      console.error('❌ Failed to load next page:', error);
+
       return null;
     } finally {
       this.loading = false;
@@ -88,8 +84,7 @@ export class PaginatedQuery {
     while (this.hasMore && !this.loading) {
       await this.loadNext();
     }
-    
-    console.log(`📄 Loaded all pages: ${this.allDocs.length} total documents`);
+
     return this.allDocs;
   }
   
@@ -164,7 +159,7 @@ export function usePaginatedQuery(baseQuery, pageSize = 20) {
         setHasMore(paginatorRef.current.hasMore);
       }
     } catch (err) {
-      console.error('Failed to load first page:', err);
+
       setError(err);
     } finally {
       setLoading(false);
@@ -187,7 +182,7 @@ export function usePaginatedQuery(baseQuery, pageSize = 20) {
         setHasMore(paginatorRef.current.hasMore);
       }
     } catch (err) {
-      console.error('Failed to load next page:', err);
+
       setError(err);
     } finally {
       setLoading(false);
@@ -210,7 +205,7 @@ export function usePaginatedQuery(baseQuery, pageSize = 20) {
         setHasMore(false);
       }
     } catch (err) {
-      console.error('Failed to load all pages:', err);
+
       setError(err);
     } finally {
       setLoading(false);

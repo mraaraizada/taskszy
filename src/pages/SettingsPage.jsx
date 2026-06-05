@@ -78,7 +78,7 @@ function ProfileTab() {
           }
         }
       } catch (err) {
-        console.error('❌ Error loading profile:', err);
+
       }
     };
     
@@ -94,7 +94,7 @@ function ProfileTab() {
       const uid = auth.currentUser?.uid || currentUid;
       
       if (!uid) {
-        console.error('No UID available for profile update');
+
         notify.error('Unable to save profile. Please try again.');
         return;
       }
@@ -116,14 +116,13 @@ function ProfileTab() {
         about: form.about,
         avatarImg: avatarImg,
       }));
-      
-      console.log('✅ Profile saved to Firestore');
+
       setEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       notify.profileUpdated();
     } catch (err) {
-      console.error('❌ Error saving profile to Firestore:', err);
+
       notify.error('Failed to save profile. Please try again.');
     }
   }
@@ -145,7 +144,7 @@ function ProfileTab() {
       const uid = auth.currentUser?.uid || currentUid;
       
       if (!uid) {
-        console.error('No UID available for avatar upload');
+
         alert('Unable to upload avatar. Please try again.');
         return;
       }
@@ -165,7 +164,7 @@ function ProfileTab() {
             notify.avatarUpdated();
           })
           .catch(err => {
-            console.error('Failed to upload avatar:', err);
+
             alert('Failed to upload avatar. Please try again.');
           });
       });

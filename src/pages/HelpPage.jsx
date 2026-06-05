@@ -144,7 +144,7 @@ export default function HelpPage({ setPageFilteredData = null }) {
       setEditingResponse(false);
       notify.helpResolved();
     } catch (error) {
-      console.error('Error resolving help submission:', error);
+
       notify.error('Failed to update submission');
     }
   };

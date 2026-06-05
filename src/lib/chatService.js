@@ -11,19 +11,19 @@
  */
 export function canAccessTaskChat(task, currentUser) {
   if (!task || !currentUser) {
-    console.log('❌ Chat access denied: Missing task or user');
+
     return false;
   }
 
   // Admin users can access all chats (whether assigned or not)
   if (currentUser.userRole === 'admin') {
-    console.log('✅ Chat access granted: User is admin');
+
     return true;
   }
 
   // Management users can access all chats (whether assigned or not)
   if (currentUser.userRole === 'manager' || currentUser.userRole === 'management') {
-    console.log('✅ Chat access granted: User is management');
+
     return true;
   }
 
@@ -31,7 +31,7 @@ export function canAccessTaskChat(task, currentUser) {
   const userId = currentUser.memberId || currentUser.id;
   
   if (!userId) {
-    console.log('❌ Chat access denied: User has no memberId');
+
     return false;
   }
 
@@ -39,7 +39,7 @@ export function canAccessTaskChat(task, currentUser) {
   if (task.memberIds && Array.isArray(task.memberIds)) {
     const isInMemberIds = task.memberIds.some(id => String(id) === String(userId));
     if (isInMemberIds) {
-      console.log('✅ Chat access granted: User in memberIds array');
+
       return true;
     }
   }
@@ -48,19 +48,11 @@ export function canAccessTaskChat(task, currentUser) {
   if (task.members && Array.isArray(task.members)) {
     const isInMembers = task.members.some(m => String(m.id) === String(userId));
     if (isInMembers) {
-      console.log('✅ Chat access granted: User in members array');
+
       return true;
     }
   }
 
-  console.log('❌ Chat access denied: User not assigned to task', {
-    userId,
-    userRole: currentUser.userRole,
-    taskId: task.id,
-    memberIds: task.memberIds,
-    members: task.members?.map(m => m.id)
-  });
-  
   return false;
 }
 

@@ -17,19 +17,16 @@ import { collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, query,
  */
 export function subscribeToBroadcasts(workspaceId, callback, limitCount = 20) {
   if (!workspaceId) {
-    console.error('❌ Broadcast: Missing workspaceId');
+
     callback([]);
     return () => {};
   }
 
   const broadcastRef = collection(db, `workspaces/${workspaceId}/broadcasts`);
   const q = query(broadcastRef, orderBy('time', 'desc'), limit(limitCount));
-  
-  console.log('📢 Broadcast: Setting up subscription', { workspaceId, limit: limitCount });
-  
+
   return onSnapshot(q, (snapshot) => {
-    console.log('📢 Broadcast: Snapshot received', { count: snapshot.docs.length, reads: snapshot.size });
-    
+
     const broadcasts = snapshot.docs.map(doc => {
       const data = doc.data();
       
@@ -44,7 +41,7 @@ export function subscribeToBroadcasts(workspaceId, callback, limitCount = 20) {
     
     callback(broadcasts);
   }, (error) => {
-    console.error('❌ Error loading broadcasts:', error);
+
     callback([]);
   });
 }
@@ -59,13 +56,6 @@ export async function createBroadcast(workspaceId, broadcast) {
   if (!workspaceId) {
     throw new Error('Missing workspaceId');
   }
-
-  console.log('📢 Broadcast: Creating new broadcast', { 
-    workspaceId, 
-    title: broadcast.title,
-    recipientMode: broadcast.recipientMode,
-    recipientCount: broadcast.recipientCount
-  });
 
   const broadcastRef = collection(db, `workspaces/${workspaceId}/broadcasts`);
   
@@ -84,14 +74,12 @@ export async function createBroadcast(workspaceId, broadcast) {
     creatorInfo: broadcast.creatorInfo || null // { name, avatar, avatarImg, color, role }
   };
 
-  console.log('📢 Broadcast: Data to save:', broadcastData);
-
   try {
     const docRef = await addDoc(broadcastRef, broadcastData);
-    console.log('✅ Broadcast: Created successfully', { id: docRef.id });
+
     return docRef.id;
   } catch (error) {
-    console.error('❌ Error creating broadcast:', error);
+
     throw error;
   }
 }
@@ -108,8 +96,6 @@ export async function updateBroadcast(workspaceId, broadcastId, updates) {
     throw new Error('Missing workspaceId or broadcastId');
   }
 
-  console.log('📢 Broadcast: Updating', { workspaceId, broadcastId, updates });
-
   const broadcastRef = doc(db, `workspaces/${workspaceId}/broadcasts`, String(broadcastId));
   
   try {
@@ -117,9 +103,9 @@ export async function updateBroadcast(workspaceId, broadcastId, updates) {
       ...updates,
       updatedAt: serverTimestamp()
     });
-    console.log('✅ Broadcast: Updated successfully');
+
   } catch (error) {
-    console.error('❌ Error updating broadcast:', error);
+
     throw error;
   }
 }
@@ -143,15 +129,11 @@ export function shouldMemberSeeBroadcast(broadcast, member) {
       
       // If broadcast was created before user joined, don't show it
       if (broadcastDate < joinedDate) {
-        console.log('🚫 Broadcast hidden: Created before user joined', {
-          broadcast: broadcast.title,
-          broadcastDate: broadcastDate.toISOString(),
-          userJoined: joinedDate.toISOString()
-        });
+
         return false;
       }
     } catch (error) {
-      console.warn('⚠️ Error comparing dates:', error);
+
       // If date comparison fails, continue with role-based filtering
     }
   }

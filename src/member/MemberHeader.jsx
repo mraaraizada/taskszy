@@ -86,23 +86,12 @@ export default function MemberHeader({ member, searchAllTasks = false, currentPa
                    m.id == member.memberId;
           });
         });
-        console.log('🔍 MemberHeader search debug:', {
-          currentPage,
-          searchAllTasks,
-          totalTasks: tasks.length,
-          memberId: member.id,
-          memberIdType: typeof member.id,
-          memberUid: member.uid,
-          memberName: member.name,
-          searchPoolSize: searchPool.length,
-          query: q,
-          firstTaskMembers: tasks[0]?.members?.map(m => ({ id: m.id, idType: typeof m.id, memberId: m.memberId, name: m.name })),
-        });
+
         results = searchPool.filter(t =>
           (t.id && t.id.toLowerCase().includes(q)) ||
           (t.title && t.title.toLowerCase().includes(q))
         ).slice(0, 5).map(t => ({ type: 'task', data: t }));
-        console.log('🔍 Search results:', results.length, results.map(r => ({ id: r.data.id, title: r.data.title })));
+
         break;
     }
   }
@@ -349,9 +338,6 @@ export default function MemberHeader({ member, searchAllTasks = false, currentPa
             </div>
           )}
         </div>
-
-
-
 
       </div>
     </div>

@@ -160,7 +160,7 @@ export async function createScribe(workspaceId, scribeData, options = {}) {
 
     return scribe;
   } catch (error) {
-    console.error('Error creating scribe:', error);
+
     throw error;
   }
 }
@@ -182,7 +182,7 @@ export async function getScribe(workspaceId, noteId) {
 
     return prepareScribeFromFirestore({ id: scribeSnap.id, ...scribeSnap.data() });
   } catch (error) {
-    console.error('Error getting scribe:', error);
+
     throw error;
   }
 }
@@ -229,7 +229,7 @@ export async function getScribes(workspaceId, options = {}) {
 
     return scribes;
   } catch (error) {
-    console.error('Error getting scribes:', error);
+
     throw error;
   }
 }
@@ -250,7 +250,7 @@ export async function updateScribe(workspaceId, noteId, updates) {
     const scribeRef = doc(db, getNotePath(workspaceId, noteId));
     await updateDoc(scribeRef, firestoreUpdates);
   } catch (error) {
-    console.error('Error updating scribe:', error);
+
     throw error;
   }
 }
@@ -270,7 +270,7 @@ export async function archiveScribe(workspaceId, noteId, archived = true) {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error archiving scribe:', error);
+
     throw error;
   }
 }
@@ -305,7 +305,7 @@ export async function deleteScribe(workspaceId, noteId, options = {}) {
 
     return trashedScribe;
   } catch (error) {
-    console.error('Error deleting scribe:', error);
+
     throw error;
   }
 }
@@ -335,7 +335,7 @@ export async function addMemberToScribe(workspaceId, noteId, memberId) {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error adding member to scribe:', error);
+
     throw error;
   }
 }
@@ -361,7 +361,7 @@ export async function removeMemberFromScribe(workspaceId, noteId, memberId) {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error removing member from scribe:', error);
+
     throw error;
   }
 }
@@ -386,7 +386,7 @@ export async function findScribeByJoinCode(workspaceId, joinCode) {
     const doc = snapshot.docs[0];
     return prepareScribeFromFirestore({ id: doc.id, ...doc.data() });
   } catch (error) {
-    console.error('Error finding scribe by join code:', error);
+
     throw error;
   }
 }
@@ -426,7 +426,7 @@ export async function addTagToScribe(workspaceId, noteId, tag, tagColor = null) 
     const scribeRef = doc(db, getNotePath(workspaceId, noteId));
     await updateDoc(scribeRef, updates);
   } catch (error) {
-    console.error('Error adding tag to scribe:', error);
+
     throw error;
   }
 }
@@ -452,7 +452,7 @@ export async function removeTagFromScribe(workspaceId, noteId, tag) {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error removing tag from scribe:', error);
+
     throw error;
   }
 }

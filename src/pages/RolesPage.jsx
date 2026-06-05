@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Shield, ChevronDown, Check, X, Tag, FolderOpen, Lock, Edit2, Copy, FileImage, Users, Settings2, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
@@ -10,17 +10,17 @@ const COLOR_PALETTE = [
   '#06B6D4','#EC4899','#F59E0B','#8B5CF6','#10B981',
 ];
 
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    TAGS TAB
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 const INITIAL_TAGS = [];
 
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    CATEGORIES TAB
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 const INITIAL_CATS = [];
 
-const ICONS = ['[PC]','[Phone]','🎨','[Mega]','[Chart]','✍️','⚙️','[Lock]','📁','[Rocket]','[Idea]','[Target]'];
+const ICONS = ['[PC]','[Phone]','??','[Mega]','[Chart]','??','??','[Lock]','??','[Rocket]','[Idea]','[Target]'];
 
 // Function to lighten a color for background use
 function lightenColor(color, opacity = 0.15) {
@@ -38,10 +38,9 @@ function lightenColor(color, opacity = 0.15) {
   return `#${lightR.toString(16).padStart(2, '0')}${lightG.toString(16).padStart(2, '0')}${lightB.toString(16).padStart(2, '0')}`;
 }
 
-
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    TEXT IMAGE ADD COMPONENT
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const [name, setName] = useState('');
@@ -101,7 +100,7 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
         if (file.type.startsWith('image/')) {
           const { color: extractedColor, bg: extractedBg } = await extractColorFromImage(preview);
           setColor(extractedColor);
-          console.log('🎨 Extracted color:', extractedColor, 'Light bg:', extractedBg);
+
         } else {
           setColor('#3B5BFC');
         }
@@ -123,7 +122,7 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
       const lightB = Math.round(b + (255 - b) * 0.85);
       const lightBg = '#' + [lightR, lightG, lightB].map(x => x.toString(16).padStart(2, '0')).join('');
       
-      onAdd({ name: name.trim(), image: imagePreview || '📌', color, bg: lightBg, type });
+      onAdd({ name: name.trim(), image: imagePreview || '??', color, bg: lightBg, type });
       setName('');
       setImage(null);
       setImagePreview('');
@@ -315,10 +314,9 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
   );
 }
 
-
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    ROLES TAB
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 
 function CopyModal({ item, type, onClose, onSave }) {
   const [name, setName] = useState(item.name + ' (Copy)');
@@ -425,7 +423,7 @@ function NewRoleModal({ onClose, onSave, managementMode = false }) {
               onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
           </div>
 
-          {/* About — single line */}
+          {/* About � single line */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
             <input value={about} onChange={e => setAbout(e.target.value)} placeholder="Brief description of this role..."
@@ -580,29 +578,20 @@ function RolesTab() {
   };
 
   const saveDesc = () => {
-    console.log('💾 saveDesc called:', {
-      roleId: selectedId,
-      roleName: role.name,
-      tempDesc: tempDesc,
-      tempDescLength: tempDesc?.length || 0
-    });
-    
+
     const updatedAt = Date.now();
-    console.log('🔥 Calling setRoles (saveRoles) to update Firebase...');
+
     setRoles(prev => prev.map(r => r.id === selectedId ? { 
       ...r, 
       workDescription: tempDesc,
       workDescriptionUpdatedAt: updatedAt // Track when description was updated
     } : r));
-    console.log('✅ setRoles called - role should be saved to Firebase');
-    
+
     // Sync work description to all team members whose role matches this role's name (case-insensitive)
     const affectedMembers = team.filter(m => m.role?.toLowerCase() === role.name?.toLowerCase());
-    console.log(`📝 Syncing work description to ${affectedMembers.length} team member(s) with role "${role.name}"`);
-    console.log('📝 Affected members:', affectedMembers.map(m => ({ id: m.id, name: m.name, role: m.role, currentDesc: m.desc })));
-    
+
     affectedMembers.forEach(m => {
-      console.log(`  ✅ Updating ${m.name} (ID: ${m.id}) with desc:`, tempDesc);
+
       // Reset the descReadAt timestamp so users see the unread indicator
       saveMember({ ...m, desc: tempDesc, descReadAt: null });
     });
@@ -623,7 +612,7 @@ function RolesTab() {
 
   return (
     <div style={{ display: 'flex', gap: 18, minHeight: 0, flex: 1, overflow: 'hidden', width: '100%' }}>
-      {/* Left — Role list */}
+      {/* Left � Role list */}
       <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2, flexShrink: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Roles</span>
@@ -636,7 +625,7 @@ function RolesTab() {
         </div>
       </div>
 
-      {/* Right — Role detail panel */}
+      {/* Right � Role detail panel */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
         {role ? (
           <div style={{ background: 'var(--bg-surface)', borderRadius: 16, border: `2px solid ${role.color}30`, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -797,9 +786,9 @@ function RolesTab() {
   );
 }
 
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    TAGS & CATEGORIES COMBINED TAB
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 function TagsAndCategoriesTab({ managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const { TAGS: tags, CATEGORIES: cats, saveTags, saveCategories, deleteTag: deleteTagFromContext, deleteCategory: deleteCategoryFromContext, tasks, updateTask } = useApp();
@@ -816,11 +805,23 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   function addItem(item) {
     const newId = Date.now();
     if (item.type === 'tag') {
-      saveTags(prev => [...prev, { id: newId, name: item.name, image: item.image, color: item.color, bg: item.bg, createdByManagement: managementMode }]);
+      saveTags(prev => [...prev, { id: newId, name: item.name, image: item.image, color: item.color, bg: item.bg, createdByManagement: managementMode, visible: true }]);
     } else {
-      saveCategories(prev => [...prev, { id: newId, name: item.name, icon: item.image, color: item.color, bg: item.bg, count: 0, createdByManagement: managementMode }]);
+      saveCategories(prev => [...prev, { id: newId, name: item.name, icon: item.image, color: item.color, bg: item.bg, count: 0, createdByManagement: managementMode, visible: true }]);
     }
     setShowCreate(false);
+  }
+
+  function toggleTagVisibility(tagId) {
+    requestAdminPassword('toggle tag visibility', () => {
+      saveTags(prev => prev.map(t => t.id === tagId ? { ...t, visible: t.visible === false ? true : false } : t));
+    });
+  }
+
+  function toggleCatVisibility(catId) {
+    requestAdminPassword('toggle category visibility', () => {
+      saveCategories(prev => prev.map(c => c.id === catId ? { ...c, visible: c.visible === false ? true : false } : c));
+    });
   }
 
   function startEditTag(tag) {
@@ -838,7 +839,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   function saveEditTag() {
     if (!editName.trim()) return;
     
-    // ⭐ CRITICAL: Capture the old name BEFORE updating the tag
+    // ? CRITICAL: Capture the old name BEFORE updating the tag
     const oldTag = tags.find((t) => t.id === editTagId);
     const oldName = oldTag?.name;
     const newName = editName.trim();
@@ -849,19 +850,13 @@ function TagsAndCategoriesTab({ managementMode = false }) {
     }
     
     requestAdminPassword('save tag changes', async () => {
-      console.log(`🏷️ Updating tag "${oldName}" to "${newName}" in all tasks`);
-      console.log(`📊 Total tasks to check: ${tasks.length}`);
-      
+
       let updatedCount = 0;
       
       // First, update all tasks that use this tag
       const updatePromises = tasks.map(async (task) => {
         if (task.tags && Array.isArray(task.tags)) {
-          console.log(`🔍 Checking task #${task.id}:`, {
-            tags: task.tags.map(t => t.label),
-            hasOldTag: task.tags.some((tag) => tag.label === oldName)
-          });
-          
+
           // Check if this task uses the old tag name (stored as 'label' in task)
           const hasTag = task.tags.some((tag) => tag.label === oldName);
           
@@ -870,8 +865,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
             const updatedTags = task.tags.map((tag) => 
               tag.label === oldName ? { ...tag, label: newName } : tag
             );
-            
-            console.log(`  ✅ Updating task #${task.id}: "${task.title}"`);
+
             updatedCount++;
             await updateTask(task.id, { ...task, tags: updatedTags });
           }
@@ -879,8 +873,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
       });
       
       await Promise.all(updatePromises);
-      console.log(`✅ Updated ${updatedCount} tasks with new tag name`);
-      
+
       // Then update the tag in tags array
       saveTags(prev => prev.map((t) => t.id === editTagId ? { ...t, name: newName } : t));
       
@@ -891,7 +884,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   function saveEditCat() {
     if (!editName.trim()) return;
     
-    // ⭐ CRITICAL: Capture the old name BEFORE updating the category
+    // ? CRITICAL: Capture the old name BEFORE updating the category
     const oldCat = cats.find((c) => c.id === editCatId);
     const oldName = oldCat?.name;
     const newName = editName.trim();
@@ -902,22 +895,15 @@ function TagsAndCategoriesTab({ managementMode = false }) {
     }
     
     requestAdminPassword('save category changes', async () => {
-      console.log(`📁 Updating category "${oldName}" to "${newName}" in all tasks`);
-      console.log(`📊 Total tasks to check: ${tasks.length}`);
-      
+
       let updatedCount = 0;
       
       // First, update all tasks that use this category
       const updatePromises = tasks.map(async (task) => {
-        console.log(`🔍 Checking task #${task.id}:`, {
-          hasCategory: !!task.category,
-          categoryLabel: task.category?.label,
-          matches: task.category?.label === oldName
-        });
-        
+
         // Check if this task uses the old category name (stored as 'label' in task.category object)
         if (task.category && task.category.label === oldName) {
-          console.log(`  ✅ Updating task #${task.id}: "${task.title}"`);
+
           updatedCount++;
           // Update the category label in this task
           const updatedCategory = { ...task.category, label: newName };
@@ -926,8 +912,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
       });
       
       await Promise.all(updatePromises);
-      console.log(`✅ Updated ${updatedCount} tasks with new category name`);
-      
+
       // Then update the category in categories array
       saveCategories(prev => prev.map((c) => c.id === editCatId ? { ...c, name: newName } : c));
       
@@ -1013,6 +998,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
           {tags.map(tag => {
             // Use saved bg or generate from color
             const bgColor = tag.bg || (tag.color ? lightenColor(tag.color, 0.15) : '#F0F2F8');
+            const isVisible = tag.visible !== false; // Default to true if not set
             return (
               <div key={`tag-${tag.id}`}
                 onClick={() => { setSelectedTagId(selectedTagId === tag.id ? null : tag.id); setSelectedCatId(null); }}
@@ -1025,6 +1011,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   transition: 'all 0.15s',
                   cursor: 'pointer',
                   minHeight: 38,
+                  opacity: isVisible ? 1 : 0.4,
                 }}
               >
               {editTagId === tag.id ? (
@@ -1062,6 +1049,38 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tag.name}</span>
                   {selectedTagId === tag.id && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+                      {/* Visibility Checkbox - Only visible when selected */}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleTagVisibility(tag.id); }}
+                        style={{ 
+                          width: 26, 
+                          height: 26, 
+                          borderRadius: 7, 
+                          border: 'none',
+                          background: 'transparent',
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          position: 'relative'
+                        }}
+                        title={isVisible ? 'Hide from task creation' : 'Show in task creation'}
+                      >
+                        <div style={{ 
+                          width: 18, 
+                          height: 18, 
+                          borderRadius: 5, 
+                          border: `2px solid ${isVisible ? tag.color || '#3B5BFC' : '#D1D5DB'}`, 
+                          background: isVisible ? (tag.color || '#3B5BFC') : 'transparent',
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          transition: 'all 0.15s'
+                        }}>
+                          {isVisible && <Check size={12} color="#fff" strokeWidth={3} />}
+                        </div>
+                      </button>
                       {!managementMode && (
                         <button onClick={(e) => { e.stopPropagation(); copyTag(tag); }} style={{ background: 'transparent', border: 'none', borderRadius: 7, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
                           <Copy size={13} />
@@ -1094,6 +1113,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
           {cats.map(cat => {
             // Use saved bg or generate from color
             const bgColor = cat.bg || (cat.color ? lightenColor(cat.color, 0.15) : '#F0F2F8');
+            const isVisible = cat.visible !== false; // Default to true if not set
             return (
               <div key={`cat-${cat.id}`}
                 onClick={() => { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedTagId(null); }}
@@ -1106,6 +1126,7 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   transition: 'all 0.15s',
                   cursor: 'pointer',
                   minHeight: 38,
+                  opacity: isVisible ? 1 : 0.4,
                 }}
               >
               {editCatId === cat.id ? (
@@ -1143,6 +1164,38 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{cat.name}</span>
                   {selectedCatId === cat.id && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+                      {/* Visibility Checkbox - Only visible when selected */}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleCatVisibility(cat.id); }}
+                        style={{ 
+                          width: 26, 
+                          height: 26, 
+                          borderRadius: 7, 
+                          border: 'none',
+                          background: 'transparent',
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          position: 'relative'
+                        }}
+                        title={isVisible ? 'Hide from task creation' : 'Show in task creation'}
+                      >
+                        <div style={{ 
+                          width: 18, 
+                          height: 18, 
+                          borderRadius: 5, 
+                          border: `2px solid ${isVisible ? cat.color || '#3B5BFC' : '#D1D5DB'}`, 
+                          background: isVisible ? (cat.color || '#3B5BFC') : 'transparent',
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          transition: 'all 0.15s'
+                        }}>
+                          {isVisible && <Check size={12} color="#fff" strokeWidth={3} />}
+                        </div>
+                      </button>
                       {!managementMode && (
                         <button onClick={(e) => { e.stopPropagation(); copyCat(cat); }} style={{ background: 'transparent', border: 'none', borderRadius: 7, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
                           <Copy size={13} />
@@ -1181,9 +1234,9 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   );
 }
 
-/* ═══════════════════════════════════════════════
+/* -----------------------------------------------
    MANAGEMENT PAGE (TABS)
-═══════════════════════════════════════════════ */
+----------------------------------------------- */
 const TABS = [
   { id: 'tags',        label: 'Tags',                icon: Tag,        desc: 'Manage task labels' },
   { id: 'categories',  label: 'Categories',          icon: FolderOpen, desc: 'Organize task types' },

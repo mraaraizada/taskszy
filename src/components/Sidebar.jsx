@@ -67,10 +67,27 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
     }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '22px 8px 20px' }}>
+        <img 
+          src="/logo.png" 
+          alt="TasksZy Logo" 
+          onError={(e) => {
+            // Fallback to gradient badge if logo image fails to load
+            e.target.style.display = 'none';
+            e.target.nextElementSibling.style.display = 'flex';
+          }}
+          style={{ 
+            width: 34, 
+            height: 34, 
+            borderRadius: 10,
+            objectFit: 'contain',
+            flexShrink: 0,
+          }} 
+        />
         <div style={{
           width: 34, height: 34, borderRadius: 10,
           background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'none',
+          alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 4px 14px rgba(59,91,252,0.4)', flexShrink: 0,
         }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -79,8 +96,8 @@ export default function Sidebar({ activeItem, setActiveItem, onLogout }) {
           </svg>
         </div>
         <div>
-          <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>Taskzy</span>
-          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Admin Portal</div>
+          <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>TasksZy</span>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Organize Better, Scale Faster</div>
         </div>
       </div>
 

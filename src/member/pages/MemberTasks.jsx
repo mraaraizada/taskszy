@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, Search, Filter } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -22,7 +22,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
   const [search, setSearch] = useState('');
 
   const myTasks = tasks.filter(t => {
-    // ⭐ Exclude tasks if member is on hold
+    // ? Exclude tasks if member is on hold
     if (member.isOnHold) return false;
     
     return t.members.some(m => m.id === member.id);
@@ -124,7 +124,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search tasks…"
+            placeholder="Search tasks�"
             style={{ width: '100%', height: 36, borderRadius: 10, border: '1.5px solid #E8EAEF', paddingLeft: 32, paddingRight: 12, fontSize: 12, color: '#374151', outline: 'none', background: '#fff' }}
             onFocus={e => e.target.style.borderColor = '#3B5BFC'}
             onBlur={e => e.target.style.borderColor = '#E8EAEF'}
@@ -258,7 +258,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
 
               {/* Budget + expand */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: isComplete ? '#12C479' : '#374151' }}>₹ {mem?.budget?.toLocaleString()}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: isComplete ? '#12C479' : '#374151' }}>? {mem?.budget?.toLocaleString()}</div>
                 <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>your share</div>
               </div>
 
@@ -364,7 +364,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                             return (
                               <button key={i} type="button"
                                 onClick={() => { 
-                                  console.log('🖱️ Scribe card clicked (MemberTasks):', { title: s.title, type: s.type, taskId: task.id });
+
                                   // Find the actual note ID from globalNotes by matching title and taskId
                                   const actualNote = (globalNotes || []).find(n => 
                                     n.taskId === task.id && 
@@ -372,9 +372,9 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                                     n.type === s.type
                                   );
                                   const noteId = actualNote?.id;
-                                  console.log('📝 Found note ID:', noteId);
+
                                   if (onNavigateToNotes && noteId) {
-                                    console.log('📞 Calling onNavigateToNotes with ID:', noteId);
+
                                     onNavigateToNotes(noteId);
                                   }
                                 }}
@@ -473,7 +473,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                                   fontSize: 10, fontWeight: 800, color: isPast || isCurrent ? '#fff' : '#9CA3AF',
                                   flexShrink: 0,
                                 }}>
-                                  {isPast ? '✓' : i + 1}
+                                  {isPast ? '?' : i + 1}
                                 </div>
                                 <span style={{ fontSize: 8, fontWeight: isCurrent ? 800 : 500, color: isCurrent ? '#3B5BFC' : '#9CA3AF', marginTop: 4, whiteSpace: 'nowrap' }}>{s}</span>
                                 {canControl && (
@@ -504,7 +504,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                           value={stageSelect[task.id] || ''}
                           onChange={e => setStageSelect(prev => ({ ...prev, [task.id]: e.target.value }))}
                           style={{ height: 38, borderRadius: 10, border: `1.5px solid ${stageSelect[task.id] ? '#3B5BFC' : '#E8EAEF'}`, padding: '0 12px', fontSize: 12, fontWeight: 600, color: '#1A1D2E', background: '#fff', cursor: 'pointer', outline: 'none', minWidth: 160 }}>
-                          <option value="">Select new stage…</option>
+                          <option value="">Select new stage�</option>
                           {allowedNext.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                         <button
@@ -521,7 +521,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                             transition: 'all 0.15s',
                           }}>
                           {updating === task.id
-                            ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</>
+                            ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving�</>
                             : <>Update Stage</>
                           }
                         </button>
@@ -577,7 +577,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#F0FDF4', borderRadius: 12, border: '1.5px solid #BBF7D0' }}>
                       <CheckCircle size={18} color="#12C479" strokeWidth={2.5} />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed — great work!</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed � great work!</div>
                       </div>
                     </div>
                   )}

@@ -7,8 +7,13 @@ const crypto = require('crypto');
 // RAZORPAY CONFIGURATION
 // ══════════════════════════════════════════════════════════════════════
 
-const RAZORPAY_KEY_ID = 'rzp_test_Skaa4Xfmz2vE2G';
-const RAZORPAY_KEY_SECRET = 'jw5XbgQ33DXPjplWs3JqoTaR';
+// Use environment variables for Razorpay keys
+// For local development, create functions/.env file with:
+// RAZORPAY_KEY_ID=rzp_live_SwQkTJ7VdTAUhE
+// RAZORPAY_KEY_SECRET=c2Ot2dlkie0wDWlem2OHc1qO
+
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_SwQkTJ7VdTAUhE';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'c2Ot2dlkie0wDWlem2OHc1qO';
 
 const razorpay = new Razorpay({
   key_id: RAZORPAY_KEY_ID,

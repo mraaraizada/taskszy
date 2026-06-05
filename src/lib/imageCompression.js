@@ -67,15 +67,7 @@ export async function compressImage(file, options = {}) {
                 lastModified: Date.now(),
               }
             );
-            
-            console.log('📦 Image compressed:', {
-              originalSize: `${(file.size / 1024).toFixed(2)} KB`,
-              compressedSize: `${(compressedFile.size / 1024).toFixed(2)} KB`,
-              reduction: `${(((file.size - compressedFile.size) / file.size) * 100).toFixed(1)}%`,
-              originalDimensions: `${img.width}x${img.height}`,
-              newDimensions: `${width}x${height}`,
-            });
-            
+
             resolve(compressedFile);
           },
           'image/jpeg',

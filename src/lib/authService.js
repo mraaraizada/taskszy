@@ -8,7 +8,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from './firebase';
 
 /**
  * Sign in with email and password.
@@ -19,7 +20,7 @@ export async function signIn(email, password) {
     return await signInWithEmailAndPassword(auth, email, password);
   } catch (error) {
     // Log authentication errors for debugging (but these are expected for wrong credentials)
-    console.log('🔐 Authentication failed:', error.code);
+
     throw error; // Re-throw so the UI can handle it
   }
 }
@@ -40,17 +41,26 @@ export async function signOutUser() {
 }
 
 /**
- * Send a password reset email to the given address.
+ * Send a branded password reset email using custom Cloud Function.
+ * The email will contain TasksZy branding with logo and custom template.
  */
 export async function sendPasswordReset(email) {
-  return sendPasswordResetEmail(auth, email);
+  const generatePasswordResetLink = httpsCallable(functions, 'generatePasswordResetLink');
+  const result = await generatePasswordResetLink({ email });
+  return result.data;
 }
 
 /**
  * Send an email verification to the given Firebase user.
+ * The email will contain a link that opens in your app (not Firebase's default page).
  */
 export async function sendVerificationEmail(user) {
-  return sendEmailVerification(user);
+  const actionCodeSettings = {
+    // URL to redirect to after the user clicks the email link
+    url: window.location.origin,
+    handleCodeInApp: true,
+  };
+  return sendEmailVerification(user, actionCodeSettings);
 }
 
 /**
@@ -95,7 +105,7 @@ export function mapAuthError(code) {
     case 'auth/network-request-failed':
       return 'Network error. Please check your connection and try again.';
     default:
-      console.warn('Unmapped auth error:', code);
+
       return 'An unexpected error occurred. Please try again.';
   }
 }

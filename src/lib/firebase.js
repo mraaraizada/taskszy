@@ -20,7 +20,7 @@ export const auth = getAuth(app);
 
 // Explicitly set auth persistence to LOCAL (survives page reloads and browser restarts)
 setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error('Failed to set auth persistence:', error);
+
 });
 
 // Initialize Firestore with modern cache settings (replaces deprecated enableMultiTabIndexedDbPersistence)
@@ -33,12 +33,12 @@ try {
       tabManager: persistentMultipleTabManager()
     })
   });
-  console.log('✅ Firestore initialized with persistent multi-tab cache');
+
 } catch (error) {
   // If already initialized (e.g., during HMR), just get the existing instance
   if (error.code === 'failed-precondition' || error.message?.includes('already been called')) {
     db = getFirestore(app);
-    console.log('✅ Firestore instance reused (already initialized)');
+
   } else {
     throw error;
   }

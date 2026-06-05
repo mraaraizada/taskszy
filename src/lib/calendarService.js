@@ -18,7 +18,7 @@ function getCalendarRef(orgId, userId = null, isShared = true) {
     // Personal calendar for team members
     path = `workspaces/${orgId}/calendar/users/${userId}/events`;
   }
-  console.log('📅 Calendar path:', path);
+
   return doc(db, path);
 }
 
@@ -34,24 +34,18 @@ function getCalendarRef(orgId, userId = null, isShared = true) {
  */
 export function subscribeToCalendarEvents(orgId, userId, isShared, callback) {
   const calendarRef = getCalendarRef(orgId, userId, isShared);
-  
-  console.log('📅 Setting up calendar subscription', { orgId, userId, isShared });
-  
+
   return onSnapshot(calendarRef, (snapshot) => {
-    console.log('📅 Calendar snapshot received', { 
-      exists: snapshot.exists(), 
-      data: snapshot.data(),
-      reads: 1 // Single document read
-    });
+
     if (snapshot.exists()) {
       const data = snapshot.data();
       callback(data.events || []);
     } else {
-      console.log('📅 Calendar document does not exist yet');
+
       callback([]);
     }
   }, (error) => {
-    console.error('❌ Error loading calendar events:', error);
+
     callback([]);
   });
 }
@@ -65,9 +59,7 @@ export function subscribeToCalendarEvents(orgId, userId, isShared, callback) {
  */
 export async function addCalendarEvent(orgId, userId, isShared, event) {
   const calendarRef = getCalendarRef(orgId, userId, isShared);
-  
-  console.log('📅 Adding calendar event', { orgId, userId, isShared, event });
-  
+
   try {
     const snapshot = await getDoc(calendarRef);
     
@@ -78,30 +70,27 @@ export async function addCalendarEvent(orgId, userId, isShared, event) {
       createdAt: new Date().toISOString(),
       createdBy: userId
     };
-    
-    console.log('📅 Event with ID:', eventWithId);
-    
+
     if (snapshot.exists()) {
       // Update existing document
-      console.log('📅 Updating existing calendar document');
+
       await updateDoc(calendarRef, {
         events: arrayUnion(eventWithId),
         updatedAt: new Date().toISOString()
       });
     } else {
       // Create new document
-      console.log('📅 Creating new calendar document');
+
       await setDoc(calendarRef, {
         events: [eventWithId],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
     }
-    
-    console.log('✅ Calendar event added successfully');
+
     return eventWithId;
   } catch (error) {
-    console.error('❌ Error adding calendar event:', error);
+
     throw error;
   }
 }
@@ -122,7 +111,7 @@ export async function removeCalendarEvent(orgId, userId, isShared, event) {
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error removing calendar event:', error);
+
     throw error;
   }
 }
@@ -145,7 +134,7 @@ export async function loadCalendarEvents(orgId, userId, isShared) {
     }
     return [];
   } catch (error) {
-    console.error('Error loading calendar events:', error);
+
     return [];
   }
 }

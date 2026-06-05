@@ -35,7 +35,7 @@ export async function submitFeedback(feedbackData) {
     const docRef = await addDoc(feedbackRef, feedbackDoc);
     return docRef.id;
   } catch (error) {
-    console.error('Error submitting feedback:', error);
+
     throw error;
   }
 }
@@ -56,7 +56,7 @@ export async function getAllFeedback() {
       submittedAt: doc.data().submittedAt?.toDate() || new Date(),
     }));
   } catch (error) {
-    console.error('Error getting feedback:', error);
+
     throw error;
   }
 }
@@ -82,7 +82,7 @@ export async function getOrganizationFeedback(organizationId) {
       submittedAt: doc.data().submittedAt?.toDate() || new Date(),
     }));
   } catch (error) {
-    console.error('Error getting organization feedback:', error);
+
     throw error;
   }
 }
@@ -108,7 +108,7 @@ export async function hasRecentFeedback(userId, organizationId) {
     const snapshot = await getDocs(q);
     return !snapshot.empty;
   } catch (error) {
-    console.error('Error checking recent feedback:', error);
+
     return false;
   }
 }

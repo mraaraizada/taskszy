@@ -68,7 +68,7 @@ export default function MemberHelp({ setPageFilteredData }) {
       setHelpText('');
       notify.helpSubmitted('Your request has been sent to the admin team');
     } catch (error) {
-      console.error('Error submitting help request:', error);
+
       notify.error('Failed to submit request');
     } finally {
       setSubmitting(false);

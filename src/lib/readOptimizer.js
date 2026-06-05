@@ -29,13 +29,13 @@ class ListenerRegistry {
   register(key, unsubscribe) {
     // If listener already exists, unsubscribe the old one
     if (this.activeListeners.has(key)) {
-      console.warn(`⚠️ Duplicate listener detected: ${key} - removing old listener`);
+
       const oldUnsub = this.activeListeners.get(key);
       oldUnsub();
     }
     
     this.activeListeners.set(key, unsubscribe);
-    console.log(`✅ Listener registered: ${key} (Total: ${this.activeListeners.size})`);
+
   }
 
   /**
@@ -46,7 +46,7 @@ class ListenerRegistry {
       const unsub = this.activeListeners.get(key);
       unsub();
       this.activeListeners.delete(key);
-      console.log(`🔌 Listener unregistered: ${key} (Remaining: ${this.activeListeners.size})`);
+
     }
   }
 
@@ -68,7 +68,7 @@ class ListenerRegistry {
    * Unregister all listeners
    */
   unregisterAll() {
-    console.log(`🔌 Unregistering all listeners (${this.activeListeners.size})`);
+
     this.activeListeners.forEach((unsub, key) => {
       unsub();
     });
@@ -103,25 +103,22 @@ class ListenerRegistry {
       if (listener.disposeTimeout) {
         clearTimeout(listener.disposeTimeout);
         listener.disposeTimeout = null;
-        console.log(`⏰ Cancelled disposal timeout for shared listener: ${key}`);
+
       }
       
       // Create a subscriber callback placeholder
       const subscriberId = Symbol('subscriber');
       listener.subscribers.add(subscriberId);
-      
-      console.log(`♻️ Reusing shared listener: ${key} (Subscribers: ${listener.subscribers.size})`);
-      
+
       // Return unsubscribe function for this subscriber
       return () => {
         listener.subscribers.delete(subscriberId);
-        console.log(`🔌 Subscriber removed from: ${key} (Remaining: ${listener.subscribers.size})`);
-        
+
         // If no subscribers remain, schedule disposal after grace period
         if (listener.subscribers.size === 0) {
           listener.disposeTimeout = setTimeout(() => {
             if (listener.subscribers.size === 0 && this.sharedListeners.has(key)) {
-              console.log(`🗑️ Disposing shared listener after grace period: ${key}`);
+
               listener.unsubscribe();
               this.sharedListeners.delete(key);
             }
@@ -131,7 +128,7 @@ class ListenerRegistry {
     }
     
     // Create new shared listener
-    console.log(`✨ Creating new shared listener: ${key}`);
+
     const unsubscribe = listenerFactory();
     const subscriberId = Symbol('subscriber');
     
@@ -146,18 +143,16 @@ class ListenerRegistry {
     };
     
     this.sharedListeners.set(key, listener);
-    console.log(`✅ Shared listener registered: ${key} (Total shared: ${this.sharedListeners.size})`);
-    
+
     // Return unsubscribe function for this subscriber
     return () => {
       listener.subscribers.delete(subscriberId);
-      console.log(`🔌 Subscriber removed from: ${key} (Remaining: ${listener.subscribers.size})`);
-      
+
       // If no subscribers remain, schedule disposal after grace period
       if (listener.subscribers.size === 0) {
         listener.disposeTimeout = setTimeout(() => {
           if (listener.subscribers.size === 0 && this.sharedListeners.has(key)) {
-            console.log(`🗑️ Disposing shared listener after grace period: ${key}`);
+
             listener.unsubscribe();
             this.sharedListeners.delete(key);
           }
@@ -174,7 +169,7 @@ class ListenerRegistry {
    */
   subscribe(key, callback) {
     if (!this.sharedListeners.has(key)) {
-      console.warn(`⚠️ Cannot subscribe to non-existent shared listener: ${key}`);
+
       return () => {}; // Return no-op unsubscribe
     }
     
@@ -192,18 +187,16 @@ class ListenerRegistry {
     
     // Store callback for this subscriber (we'll need to enhance the listener to support callbacks)
     // For now, just track the subscriber
-    console.log(`📡 Subscribed to shared listener: ${key} (Subscribers: ${listener.subscribers.size})`);
-    
+
     // Return unsubscribe function
     return () => {
       listener.subscribers.delete(subscriberId);
-      console.log(`🔌 Unsubscribed from: ${key} (Remaining: ${listener.subscribers.size})`);
-      
+
       // If no subscribers remain, schedule disposal after grace period
       if (listener.subscribers.size === 0) {
         listener.disposeTimeout = setTimeout(() => {
           if (listener.subscribers.size === 0 && this.sharedListeners.has(key)) {
-            console.log(`🗑️ Disposing shared listener after grace period: ${key}`);
+
             listener.unsubscribe();
             this.sharedListeners.delete(key);
           }
@@ -235,10 +228,9 @@ class ListenerRegistry {
       listener.unsubscribe();
       listener.paused = true;
       pausedCount++;
-      console.log(`⏸️ Paused non-critical listener: ${key}`);
+
     });
-    
-    console.log(`⏸️ Paused ${pausedCount} non-critical listeners`);
+
     return pausedCount;
   }
 
@@ -254,11 +246,10 @@ class ListenerRegistry {
       if (listener.paused) {
         listener.paused = false;
         resumedCount++;
-        console.log(`▶️ Resumed listener: ${key}`);
+
       }
     });
-    
-    console.log(`▶️ Resumed ${resumedCount} listeners`);
+
     return resumedCount;
   }
 
@@ -308,7 +299,7 @@ class SnapshotCache {
   set(key, snapshot) {
     this.snapshots.set(key, snapshot);
     this.timestamps.set(key, Date.now());
-    console.log(`📸 Snapshot cached: ${key}`);
+
   }
 
   /**
@@ -324,11 +315,10 @@ class SnapshotCache {
       // Expired
       this.snapshots.delete(key);
       this.timestamps.delete(key);
-      console.log(`⏰ Snapshot expired: ${key} (age: ${age}ms)`);
+
       return null;
     }
-    
-    console.log(`📸 Snapshot reused: ${key} (age: ${age}ms)`);
+
     return this.snapshots.get(key);
   }
 
@@ -338,7 +328,7 @@ class SnapshotCache {
   clear() {
     this.snapshots.clear();
     this.timestamps.clear();
-    console.log('🗑️ All snapshots cleared');
+
   }
 }
 
@@ -353,7 +343,7 @@ let persistenceEnabled = false;
  */
 export async function enableOfflinePersistence() {
   if (persistenceEnabled) {
-    console.log('✅ Offline persistence already enabled');
+
     return true;
   }
 
@@ -361,7 +351,7 @@ export async function enableOfflinePersistence() {
     // Try multi-tab persistence first (better for multiple tabs)
     await enableMultiTabIndexedDbPersistence(db);
     persistenceEnabled = true;
-    console.log('✅ Multi-tab offline persistence enabled');
+
     return true;
   } catch (err) {
     if (err.code === 'failed-precondition') {
@@ -369,17 +359,17 @@ export async function enableOfflinePersistence() {
       try {
         await enableIndexedDbPersistence(db);
         persistenceEnabled = true;
-        console.log('✅ Single-tab offline persistence enabled');
+
         return true;
       } catch (err2) {
-        console.error('❌ Failed to enable offline persistence:', err2);
+
         return false;
       }
     } else if (err.code === 'unimplemented') {
-      console.warn('⚠️ Offline persistence not supported in this browser');
+
       return false;
     } else {
-      console.error('❌ Failed to enable offline persistence:', err);
+
       return false;
     }
   }
@@ -405,13 +395,13 @@ export function createPaginatedQuery(baseQuery, pageSize = 20) {
 export function shouldLoadData(dataType, lastLoadTime, userActive = true) {
   // Don't load if user is inactive
   if (!userActive) {
-    console.log(`⏸️ Skipping ${dataType} load - user inactive`);
+
     return false;
   }
 
   // Don't reload if recently loaded (within 1 minute)
   if (lastLoadTime && Date.now() - lastLoadTime < 60 * 1000) {
-    console.log(`⏸️ Skipping ${dataType} load - recently loaded (${Math.floor((Date.now() - lastLoadTime) / 1000)}s ago)`);
+
     return false;
   }
 
@@ -453,9 +443,7 @@ class ReadBatcher {
    */
   async executeBatch() {
     if (this.queue.length === 0) return;
-    
-    console.log(`📦 Executing read batch: ${this.queue.length} reads`);
-    
+
     const batch = [...this.queue];
     this.queue = [];
     
@@ -561,14 +549,7 @@ if (typeof window !== 'undefined') {
     savings: () => readStats.getSavings(),
     enablePersistence: () => enableOfflinePersistence(),
   };
-  
-  console.log('✅ Read optimizer loaded. Available commands:');
-  console.log('  - window.readOptimizer.listeners() - List active listeners');
-  console.log('  - window.readOptimizer.unregisterAll() - Remove all listeners');
-  console.log('  - window.readOptimizer.clearSnapshots() - Clear snapshot cache');
-  console.log('  - window.readOptimizer.stats() - View read statistics');
-  console.log('  - window.readOptimizer.savings() - View read savings');
-  console.log('  - window.readOptimizer.enablePersistence() - Enable offline mode');
+
 }
 
 export default {

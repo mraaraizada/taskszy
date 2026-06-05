@@ -31,7 +31,7 @@ export function usePaginatedTasks(pageSize = 15) {
       paginationQueryRef.current = createTasksPaginatedQuery(workspaceId, pageSize);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Initialized paginated tasks query');
+
       }
     }
   }, [workspaceId, pageSize]);
@@ -65,14 +65,10 @@ export function usePaginatedTasks(pageSize = 15) {
       }
       
       if (process.env.NODE_ENV === 'development') {
-        console.log(`📄 Loaded page ${pageNumber}:`, {
-          tasks: processedDocs.length,
-          hasMore: result.hasMore,
-          totalPages: result.totalPages,
-        });
+
       }
     } catch (error) {
-      console.error('Failed to load tasks page:', error);
+
     } finally {
       setLoading(false);
     }

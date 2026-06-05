@@ -115,26 +115,14 @@ export default function MemberApp({ memberId, onLogout, visible }) {
     
     // Get user's join date to filter out old broadcasts
     const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
-    
-    console.log('🎯 [MemberApp] Feedback listener setup check:', {
-      hasWorkspaceId: !!workspaceId,
-      workspaceId: workspaceId,
-      hasCurrentUid: !!currentUid,
-      currentUid: currentUid,
-      listenerId: listenerId,
-      currentUser: currentUser,
-      userCreatedAt: userCreatedAt?.toISOString()
-    });
-    
-    console.log('👂 [MemberApp] Setting up feedback request listener with ID:', listenerId);
-    
+
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('📢 [MemberApp] Feedback request received:', request);
+
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('🔇 [MemberApp] Cleaning up feedback request listener');
+
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser]);
@@ -162,7 +150,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
     // CRITICAL: Don't update if newMember is null/undefined - this prevents flickering
     // when currentUid temporarily becomes null during initialization
     if (!newMember || !newMember.id) {
-      console.log('⏳ MemberApp: Skipping displayMember update - newMember is null/undefined');
+
       return;
     }
     
@@ -174,10 +162,10 @@ export default function MemberApp({ memberId, onLogout, visible }) {
           prev.avatarImg !== newMember.avatarImg ||
           prev.role !== newMember.role ||
           prev.status !== newMember.status) {
-        console.log('✅ MemberApp: Updating displayMember with new data');
+
         return newMember;
       }
-      console.log('✅ MemberApp: displayMember unchanged, keeping previous');
+
       return prev;
     });
   }, [currentUser, member, memberId]);
@@ -193,7 +181,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
     // Wait for profile data to load from Firestore before checking
     // hasSeenWelcomeAnimation can be: undefined (not loaded), false (new user), true (returning user)
     if (currentUser.hasSeenWelcomeAnimation === undefined) {
-      console.log('⏳ Waiting for profile data to load... hasSeenWelcomeAnimation is undefined');
+
       return;
     }
     
@@ -202,25 +190,17 @@ export default function MemberApp({ memberId, onLogout, visible }) {
       
       // Show profile card animation for first-time users who haven't seen welcome animation
       const hasSeenWelcome = currentUser.hasSeenWelcomeAnimation === true;
-      console.log('🎬 Member welcome check:', { 
-        hasSeenWelcome, 
-        hasSeenDonutWelcome,
-        willShowAnimation: !hasSeenWelcome,
-        dataLoaded,
-        hasSeenWelcomeAnimationValue: currentUser.hasSeenWelcomeAnimation,
-        valueType: typeof currentUser.hasSeenWelcomeAnimation
-      });
-      
+
       if (!hasSeenWelcome) {
-        console.log('🎬 First-time member user - showing profile card animation');
+
         setWaitingForAnimation(true); // Block dashboard rendering
         setTimeout(() => {
-          console.log('🎬 Setting showProfileCard to true');
+
           setShowProfileCard(true);
           // Keep waitingForAnimation true until profile card completes
         }, 500);
       } else {
-        console.log('✅ Returning member - skipping animation, showing dashboard immediately');
+
         // For returning users, skip both animation and initial loading
         setWaitingForAnimation(false);
         setInitialLoading(false);
@@ -231,7 +211,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
 
   // Wait for data to load before checking member (but skip for returning users)
   if ((!dataLoaded || waitingForAnimation) && initialLoading) {
-    console.log('⏳ Waiting for data to load or animation to complete...', { dataLoaded, waitingForAnimation, initialLoading });
+
     return (
       <>
         <SkeletonStyles />
@@ -296,14 +276,13 @@ export default function MemberApp({ memberId, onLogout, visible }) {
               try {
                 const { updateProfile } = await import('../lib/userProfileService');
                 await updateProfile(currentUid, { hasSeenWelcomeAnimation: true });
-                console.log('✅ Welcome animation marked as seen (Member)');
-                
+
                 setCurrentUser(prev => ({
                   ...prev,
                   hasSeenWelcomeAnimation: true
                 }));
               } catch (err) {
-                console.error('❌ Failed to mark welcome animation as seen:', err);
+
               }
             }
             
@@ -313,7 +292,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
             
             // Show donut welcome if not seen yet
             if (!hasSeenDonutWelcome) {
-              console.log('🍩 Showing donut welcome after profile card (Member)');
+
               setTimeout(() => setShowDonutWelcome(true), 400);
             }
           }} />
@@ -325,13 +304,13 @@ export default function MemberApp({ memberId, onLogout, visible }) {
   // Set initial loading to false once data is loaded (for returning users ONLY)
   // Don't do this if we haven't checked for welcome animation yet
   if (initialLoading && dataLoaded && !waitingForAnimation && hasMarkedWelcomeSeenRef.current) {
-    console.log('✅ Data loaded and welcome check complete - setting initialLoading to false');
+
     setInitialLoading(false);
   }
 
   if (!member) {
     // Show loading skeleton while auto-fix creates the team entry
-    console.log('⏳ Member not found, auto-fix in progress...');
+
     return (
       <>
         <SkeletonStyles />
@@ -422,8 +401,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
   };
   
   const handleSearchResultClick = ({ type, data }) => {
-    console.log('🔍 Search result clicked (Member):', { type, data, currentPage: activePage });
-    
+
     switch (type) {
       case 'task':
         if (activePage === 'home') {
@@ -473,7 +451,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
   function renderPage() {
     switch (activePage) {
       case 'tasks':    return <MemberTasks    member={displayMember} onNavigateToNotes={(scribeId) => { 
-        console.log('📥 MemberApp received scribe ID from MemberTasks:', scribeId);
+
         setSelectedScribeId(scribeId); 
         handleNav('notes'); 
       }} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
@@ -500,7 +478,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
         }}
         selectedScribeId={selectedScribeId}
         onScribeOpened={() => {
-          console.log('🧹 Clearing selectedScribeId');
+
           setSelectedScribeId(null);
         }}
         setPageFilteredData={setPageFilteredData}
@@ -508,7 +486,7 @@ export default function MemberApp({ memberId, onLogout, visible }) {
       case 'help':     return <MemberHelp setPageFilteredData={setPageFilteredData} />;
       case 'profile':  return <MemberProfile  member={displayMember} />;
       default:         return <MemberHome     member={displayMember} setActivePage={handleNav} onNavigateToNotes={(scribeId) => { 
-        console.log('📥 MemberApp received scribe ID from MemberHome:', scribeId);
+
         setSelectedScribeId(scribeId); 
         handleNav('notes'); 
       }} openTaskId={pageExtraProps.openTaskId} />;

@@ -125,29 +125,20 @@ function merge3Way(baseText, localText, remoteText, userInfo = {}) {
   const base = normalizeText(baseText || '');
   const local = normalizeText(localText || '');
   const remote = normalizeText(remoteText || '');
-  
-  console.log('🔀 3-Way Merge Input:', {
-    baseLength: base.length,
-    localLength: local.length,
-    remoteLength: remote.length,
-    baseLines: base.split('\n').length,
-    localLines: local.split('\n').length,
-    remoteLines: remote.split('\n').length,
-  });
-  
+
   // Quick checks
   if (local === remote) {
-    console.log('✅ Local and remote are identical - no merge needed');
+
     return { mergedText: localText, hasConflicts: false, conflictCount: 0 };
   }
   
   if (local === base) {
-    console.log('✅ Local unchanged - using remote');
+
     return { mergedText: remoteText, hasConflicts: false, conflictCount: 0 };
   }
   
   if (remote === base) {
-    console.log('✅ Remote unchanged - using local');
+
     return { mergedText: localText, hasConflicts: false, conflictCount: 0 };
   }
   
@@ -158,7 +149,7 @@ function merge3Way(baseText, localText, remoteText, userInfo = {}) {
     
     if (localAddition && remoteAddition && !localAddition.includes(remoteAddition) && !remoteAddition.includes(localAddition)) {
       // Both users appended different content - merge both
-      console.log('✅ Append-only merge - combining both additions');
+
       return { 
         mergedText: base + localAddition + '\n' + remoteAddition, 
         hasConflicts: false, 
@@ -173,13 +164,7 @@ function merge3Way(baseText, localText, remoteText, userInfo = {}) {
   const remoteLines = remote.split('\n');
   
   const result = merge3WayWithDiff(baseLines, localLines, remoteLines, userInfo);
-  
-  console.log('🔀 3-Way Merge Result:', {
-    hasConflicts: result.conflictCount > 0,
-    conflictCount: result.conflictCount,
-    mergedLines: result.lines.length,
-  });
-  
+
   return {
     mergedText: result.lines.join('\n'),
     hasConflicts: result.conflictCount > 0,
@@ -197,12 +182,7 @@ function merge3WayWithDiff(baseLines, localLines, remoteLines, userInfo) {
   // Compute diffs
   const localDiff = computeLineDiff(baseLines, localLines);
   const remoteDiff = computeLineDiff(baseLines, remoteLines);
-  
-  console.log('📊 Diff Analysis:', {
-    localChanges: localDiff.changes.length,
-    remoteChanges: remoteDiff.changes.length,
-  });
-  
+
   const merged = [];
   let conflictCount = 0;
   
@@ -261,7 +241,7 @@ function merge3WayWithDiff(baseLines, localLines, remoteLines, userInfo) {
           }
           merged.push(...localChangedLines);
         }
-        console.log('🔀 Merged both changes without conflict markers');
+
       }
       
       baseIdx += Math.max(localChange.baseCount, remoteChange.baseCount);
@@ -469,7 +449,7 @@ async function getUserName(workspaceId, userId) {
       return userDoc.data().name || 'Unknown User';
     }
   } catch (error) {
-    console.warn('Failed to get user name:', error);
+
   }
   return 'Another User';
 }
@@ -488,14 +468,7 @@ export async function updateNoteWithConflictResolution(
 ) {
   const notePath = `workspaces/${workspaceId}/notes/${noteId}`;
   const noteRef = doc(db, notePath);
-  
-  console.log('🔄 updateNoteWithConflictResolution called:', {
-    noteId,
-    updateKeys: Object.keys(updates),
-    currentUserId,
-    hasBaseText: !!mergeContext?.baseText,
-  });
-  
+
   try {
     const result = await runTransaction(db, async (transaction) => {
       // Read current state from Firestore
@@ -510,13 +483,7 @@ export async function updateNoteWithConflictResolution(
       // Get remote user info for conflict markers
       const remoteUserId = currentData.lastModifiedBy;
       const remoteUserName = await getUserName(workspaceId, remoteUserId);
-      
-      console.log('📖 Current note data:', {
-        id: noteDoc.id,
-        lastModifiedBy: remoteUserId,
-        lastModifiedAt: currentData.lastModifiedAt?.toMillis(),
-      });
-      
+
       // Check if note was modified by another user since we started editing
       const lastModifiedBy = currentData.lastModifiedBy;
       const lastModifiedAt = currentData.lastModifiedAt?.toMillis() || 0;
@@ -529,17 +496,16 @@ export async function updateNoteWithConflictResolution(
           ...updates,
           lastModifiedBy: currentUserId,
           lastModifiedAt: serverTimestamp(),
+          updatedAt: Date.now(), // Required for Firestore query ordering
         };
-        
-        console.log('✅ No conflict - simple update');
+
         transaction.update(noteRef, updateData);
         
         return { merged: false, data: updateData, conflictCount: 0 };
       }
       
       // Conflict detected - merge changes
-      console.log('⚠️ Conflict detected - performing intelligent merge');
-      
+
       const merged = {};
       
       // Fields that should NEVER be merged (system fields)
@@ -561,7 +527,7 @@ export async function updateNoteWithConflictResolution(
         // Last-write-wins fields - no merge, just use local value
         if (LAST_WRITE_WINS_FIELDS.includes(key)) {
           merged[key] = localValue;
-          console.log(`📝 Last-write-wins for ${key}: using local value`);
+
           continue;
         }
         
@@ -575,16 +541,11 @@ export async function updateNoteWithConflictResolution(
             localUserName: mergeContext.currentUserName || 'You',
             remoteUserName: remoteUserName,
           };
-          
-          console.log(`📝 Performing 3-way merge for ${key}`);
+
           const mergeResult = merge3Way(baseText, localValue, remoteValue, userInfo);
           merged[key] = mergeResult.mergedText;
           totalConflicts += mergeResult.conflictCount;
-          
-          console.log(`  ${mergeResult.hasConflicts ? '⚠️' : '✅'} Merge result:`, {
-            hasConflicts: mergeResult.hasConflicts,
-            conflictCount: mergeResult.conflictCount,
-          });
+
         } else if (key === 'sheetData') {
           // Special handling for sheet data - ensure only first sheet is used
           let localSheet = localValue;
@@ -593,14 +554,14 @@ export async function updateNoteWithConflictResolution(
           // Extract first sheet if array
           if (Array.isArray(localValue) && localValue.length > 0) {
             if (localValue.length > 1) {
-              console.warn('⚠️ Local has multiple sheets - using only first sheet');
+
             }
             localSheet = [localValue[0]];
           }
           
           if (Array.isArray(remoteValue) && remoteValue.length > 0) {
             if (remoteValue.length > 1) {
-              console.warn('⚠️ Remote has multiple sheets - using only first sheet');
+
             }
             remoteSheet = [remoteValue[0]];
           }
@@ -608,7 +569,7 @@ export async function updateNoteWithConflictResolution(
           // Use last-write-wins for sheet data (most recent edit wins)
           // This prevents data split across multiple sheets
           merged[key] = localSheet;
-          console.log('📊 Sheet data merge: using local (last-write-wins) with single sheet only');
+
         } else {
           // Fallback to existing merge strategies for other fields
           merged[key] = mergeField(key, localValue, remoteValue, strategy);
@@ -618,23 +579,18 @@ export async function updateNoteWithConflictResolution(
       // Add metadata
       merged.lastModifiedBy = currentUserId;
       merged.lastModifiedAt = serverTimestamp();
+      merged.updatedAt = Date.now(); // Required for Firestore query ordering
       merged.conflictResolved = totalConflicts > 0;
       merged.conflictResolvedAt = totalConflicts > 0 ? serverTimestamp() : null;
-      
-      console.log('📝 Merged data:', {
-        keys: Object.keys(merged),
-        conflictCount: totalConflicts,
-      });
-      
+
       transaction.update(noteRef, merged);
-      
-      console.log('✅ Note updated with conflict resolution');
+
       return { merged: true, data: merged, conflictCount: totalConflicts };
     });
     
     return result;
   } catch (error) {
-    console.error('❌ Failed to update note with conflict resolution:', error);
+
     throw error;
   }
 }
@@ -690,7 +646,7 @@ export async function checkForConflicts(workspaceId, noteId, lastKnownModifiedAt
     
     return { hasConflict: false };
   } catch (error) {
-    console.error('❌ Failed to check for conflicts:', error);
+
     return { hasConflict: false, error };
   }
 }

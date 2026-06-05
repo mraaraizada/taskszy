@@ -387,13 +387,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
   
   // ⭐ Debug: Log team data to check avatarImg
   useEffect(() => {
-    console.log('🔍 AddPaymentModal team data:', team.map(m => ({
-      id: m.id,
-      name: m.name,
-      avatar: m.avatar,
-      avatarImg: m.avatarImg,
-      hasAvatarImg: !!m.avatarImg
-    })));
+
   }, [team]);
   
   // All admin users get full access
@@ -453,7 +447,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
   // ⭐ Auto-fill task ID when navigating from Task Detail Modal
   useEffect(() => {
     if (prefilledTaskId) {
-      console.log('🎯 Pre-filling task ID:', prefilledTaskId);
+
       setPaymentType('investment'); // Set to Payment type (investment)
       setTaskId(prefilledTaskId.toString());
       setTaskSearchQuery(prefilledTaskId.toString());
@@ -462,18 +456,16 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
 
   // ⭐ Auto-fill due date and category from selected task
   useEffect(() => {
-    console.log('🔵 Auto-fill effect triggered - taskId:', taskId, 'tasks count:', tasks?.length);
-    
+
     if (taskId && tasks && tasks.length > 0) {
       const selectedTask = tasks.find(t => t.id.toString() === taskId.toString());
-      console.log('🔵 Found task:', selectedTask ? `#${selectedTask.id} - ${selectedTask.title}` : 'NOT FOUND');
-      
+
       if (selectedTask) {
         // Auto-fill due date from task deadline
         if (selectedTask.deadline) {
           const taskDeadline = new Date(selectedTask.deadline);
           const formattedDate = taskDeadline.toISOString().split('T')[0];
-          console.log('🔵 Setting due date:', formattedDate, 'Current dueDate:', dueDate);
+
           setDueDate(formattedDate);
         }
         
@@ -482,11 +474,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
           const taskCategoryLabel = typeof selectedTask.category === 'object' 
             ? (selectedTask.category.label || selectedTask.category.name)
             : selectedTask.category;
-          
-          console.log('🔵 Task category label:', taskCategoryLabel);
-          console.log('🔵 Task category object:', selectedTask.category);
-          console.log('🔵 Available categories:', PAYMENT_CATEGORIES.map(c => ({ label: c.label, name: c.name })));
-          
+
           // Try multiple matching strategies
           let matchingCategory = PAYMENT_CATEGORIES.find(c => {
             // Try exact label match
@@ -502,8 +490,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
           
           // ⭐ If no match found, use the task's category directly
           if (!matchingCategory && typeof selectedTask.category === 'object') {
-            console.log('🔵 No match in PAYMENT_CATEGORIES, using task category directly');
-            
+
             // Check if icon field contains image data
             const taskIcon = selectedTask.category.icon || selectedTask.category.emoji;
             const taskImage = selectedTask.category.image || selectedTask.category.img;
@@ -516,24 +503,18 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
               bg: selectedTask.category.bg || '#F3F4F6',
               image: taskImage || (isIconImage ? taskIcon : null), // Use image field for actual images
             };
-            
-            console.log('🔵 Created category:', matchingCategory);
+
           }
-          
-          console.log('🔵 Final category to use:', matchingCategory);
-          
+
           if (matchingCategory) {
-            console.log('🔵 Setting selectedCategory to:', matchingCategory);
+
             setSelectedCategory(matchingCategory);
-            console.log('🔵 selectedCategory state should be updated');
+
           } else {
-            console.log('❌ Could not create category from task data');
+
           }
         } else {
-          console.log('🔵 No category on task or PAYMENT_CATEGORIES empty', {
-            hasCategory: !!selectedTask.category,
-            categoriesCount: PAYMENT_CATEGORIES.length
-          });
+
         }
         
         // ⭐ Don't auto-fill title - user should enter it manually
@@ -543,7 +524,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
 
   // ⭐ Monitor selectedCategory changes
   useEffect(() => {
-    console.log('🟢 selectedCategory changed:', selectedCategory);
+
   }, [selectedCategory]);
 
   const selectedMember = team.find(m => String(m.id) === String(memberId));
@@ -556,29 +537,16 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
 
   // ⭐ Debug validation
   useEffect(() => {
-    console.log('🔵 Validation check:', {
-      paymentType,
-      amount: !!amount,
-      amountValid: amount && parseFloat(amount) > 0,
-      title: !!title.trim(),
-      selectedCategory: !!selectedCategory,
-      selectedCategoryLabel: selectedCategory?.label,
-      taskId: !!taskId,
-      isValid
-    });
+
   }, [paymentType, amount, title, selectedCategory, taskId, isValid]);
 
   const handleSubmit = () => {
-    console.log('🟢 AddPaymentModal handleSubmit called');
-    console.log('🟢 isValid:', isValid);
-    console.log('🟢 wordCount:', wordCount);
-    
+
     if (!isValid || wordCount > 100) {
-      console.log('❌ Validation failed - isValid:', isValid, 'wordCount:', wordCount);
+
       return;
     }
-    
-    console.log('🟢 Requesting admin password...');
+
     requestAdminPassword('add payment', () => {
       const today = new Date().toISOString().split('T')[0];
       
@@ -604,14 +572,9 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
           taskDeadline: linkedTask.deadline || null,
         }),
       };
-      
-      console.log('🟢 Raw memberId:', memberId, 'Type:', typeof memberId);
-      console.log('🟢 Converted memberId to:', paymentData.memberId, 'Type:', typeof paymentData.memberId);
-      console.log('🟢 Available team members:', team.map(m => ({ id: m.id, name: m.name, idType: typeof m.id })));
-      console.log('🟢 Linked task data:', linkedTask ? { title: linkedTask.title, category: linkedTask.category, stage: linkedTask.stage } : 'NONE');
-      console.log('🟢 Calling onAdd with payment data:', paymentData);
+
       onAdd(paymentData);
-      console.log('🟢 Closing modal...');
+
       onClose();
     });
   };
@@ -877,7 +840,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                       key={cat.label} 
                       type="button"
                       onClick={() => {
-                        console.log('🔵 Category clicked:', cat.label, 'Currently selected:', selectedCategory?.label);
+
                         setSelectedCategory(sel ? null : cat);
                       }} 
                       style={{
@@ -1166,14 +1129,7 @@ function CategoryPaymentModal({ selectedRows, onClose, onConfirm, team }) {
   
   // ⭐ Log for debugging
   useEffect(() => {
-    console.log('🏷️ CategoryPaymentModal state:', {
-      selectedRowsCount: selectedRows.length,
-      totalAmount,
-      calculatedTotal,
-      taskAmounts,
-      taskAmountsKeys: Object.keys(taskAmounts),
-      selectedRowKeys: selectedRows.map(r => r.paymentId || `${r.id}-${r.memberName}-${r.memberId}`)
-    });
+
   }, [totalAmount, calculatedTotal, taskAmounts, selectedRows]);
 
   const handleAmountChange = (key, value) => {
@@ -1216,15 +1172,7 @@ function CategoryPaymentModal({ selectedRows, onClose, onConfirm, team }) {
       
       // ⭐ Verify distribution
       const distributedTotal = Object.values(newAmounts).reduce((sum, amt) => sum + amt, 0);
-      console.log('💰 Auto-distribution:', {
-        inputTotal: floatValue,
-        numTasks,
-        perTask: perTask.toFixed(2),
-        amounts: Object.values(newAmounts),
-        distributedTotal: distributedTotal.toFixed(2),
-        matches: Math.abs(distributedTotal - floatValue) < 0.01,
-        '✅': Math.abs(distributedTotal - floatValue) < 0.01 ? 'CORRECT ✓' : '❌ MISMATCH'
-      });
+
     } else if (floatValue === '') {
       // ⭐ Clear all amounts when input is cleared
       const newAmounts = {};
@@ -1263,15 +1211,7 @@ function CategoryPaymentModal({ selectedRows, onClose, onConfirm, team }) {
     
     // ⭐ Verify distribution
     const distributedTotal = Object.values(newAmounts).reduce((sum, amt) => sum + amt, 0);
-    console.log('💰 Manual distribution:', {
-      inputTotal: totalAmount,
-      numTasks,
-      perTask: perTask.toFixed(2),
-      amounts: Object.values(newAmounts),
-      distributedTotal: distributedTotal.toFixed(2),
-      matches: Math.abs(distributedTotal - totalAmount) < 0.01,
-      '✅': Math.abs(distributedTotal - totalAmount) < 0.01 ? 'CORRECT ✓' : '❌ MISMATCH'
-    });
+
   };
 
   const handleConfirm = () => {
@@ -1482,7 +1422,7 @@ function PaymentDetailPanel({ payment, onClose }) {
 
   // Close on click outside
   const handleDownloadPDF = () => {
-    console.log('Download PDF for payment:', payment);
+
     // In a real app, this would generate and download a PDF receipt
     alert('PDF download functionality would be implemented here');
   };
@@ -1671,7 +1611,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   
   // ⭐ OPTIMIZATION: Only log in development mode
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔄 FinancialPage rendering');
+
   }
   
   // ⭐ State declarations MUST come before using them
@@ -1756,7 +1696,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // ⭐ Auto-open Add Payment modal when navigating from Task Detail with prefilled task ID
   useEffect(() => {
     if (prefilledTaskId && !showAddPaymentModal) {
-      console.log('🎯 Auto-opening Add Payment modal with task ID:', prefilledTaskId);
+
       setPrefilledTask(prefilledTaskId);
       setShowAddPaymentModal(true);
     }
@@ -1795,12 +1735,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     
     // ⭐ OPTIMIZATION: Only log once, not for every payment
     if (process.env.NODE_ENV === 'development') {
-      console.log('💰 FinancialPage: Building rows', {
-        paymentsCount: paymentsToUse?.length || 0,
-        tasksCount: tasks?.length || 0,
-        hasActiveFilters,
-        usingAllPayments: hasActiveFilters,
-      });
+
     }
     
     // Add payments from payments collection
@@ -1808,14 +1743,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       paymentsToUse.forEach(payment => {
         // ⭐ Handle subscription payments differently
         if (payment.isSubscriptionPayment) {
-          console.log('💳 Processing subscription payment:', {
-            id: payment.id,
-            status: payment.status,
-            plan: payment.plan?.name,
-            amount: payment.pricing?.total,
-            userInfo: payment.userInfo
-          });
-          
+
           // Format subscription payment for table
           const planName = payment.plan?.name || 'Unknown Plan';
           const billingCycle = payment.plan?.billingCycle || 'monthly';
@@ -1879,9 +1807,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
               previousPlan: payment.previousPlan || null,
             }
           });
-          
-          console.log('✅ Subscription payment row added:', rows[rows.length - 1]);
-          
+
           return; // Skip regular payment processing
         }
         
@@ -1890,25 +1816,12 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         
         // ⭐ Debug: Log the newest payment to verify title field
         if (payment.id === 'm1uheZTtervAPHDA9XqS') {
-          console.log('🆕 NEW PAYMENT DATA:', {
-            id: payment.id,
-            title: payment.title,
-            notes: payment.notes,
-            taskTitle: payment.taskTitle,
-            paymentType: payment.paymentType
-          });
+
         }
         
         // ⭐ Debug: Log paused status for task B6I41C7A
         if (payment.taskId === 'B6I41C7A') {
-          console.log('🔍 Admin Payment - Task B6I41C7A:', {
-            paymentId: payment.id,
-            taskId: payment.taskId,
-            taskPaused: task?.paused,
-            taskIsPaused: task?.isPaused,
-            taskStage: task?.stage,
-            taskObject: task
-          });
+
         }
         
         // Create a row for each payment
@@ -1948,14 +1861,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           
           // ⭐ Debug: Log for task B6I41C7A
           if (payment.taskId === 'B6I41C7A') {
-            console.log('🔍 Admin Payment - Member Hold Check:', {
-              paymentId: payment.id,
-              taskId: payment.taskId,
-              memberId: memberId,
-              taskMember: taskMember,
-              isOnHold: isOnHold,
-              taskMembers: task.members
-            });
+
           }
           
           return isOnHold;
@@ -2058,7 +1964,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('💰 Total rows built:', rows.length);
+
   }
 
   // Add manual payments (keep existing manual payment logic for backward compatibility)
@@ -2138,7 +2044,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // ═══════════════════════════════════════════════════════════════
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('💰 Starting filter chain with', allRows.length, 'total rows');
+
   }
   
   let filtered = allRows;
@@ -2165,7 +2071,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       });
     });
     if (process.env.NODE_ENV === 'development') {
-      console.log('📊 After category/role filter:', filtered.length, 'rows');
+
     }
   }
   
@@ -2185,7 +2091,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       });
     });
     if (process.env.NODE_ENV === 'development') {
-      console.log('👥 After team member filter:', filtered.length, 'rows');
+
     }
   }
   
@@ -2197,7 +2103,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       
       // Skip if no date
       if (!dateToCheck) {
-        console.log('⚠️ No date for row:', row.paymentId || row.id);
+
         return true; // Include rows without dates
       }
       
@@ -2212,7 +2118,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       
       // Validate date
       if (isNaN(rowDate.getTime())) {
-        console.warn('⚠️ Invalid date:', dateToCheck);
+
         return true; // Include rows with invalid dates
       }
       
@@ -2233,28 +2139,22 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       
       return matches;
     });
-    console.log('📅 After date filter:', filtered.length, 'rows (from:', dateFrom, 'to:', dateTo, ')');
+
   }
   
   // STEP 4: Filter by Status (All/Pending/Paid)
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Before status filter:', {
-      statusFilter,
-      totalRows: filtered.length,
-    pendingCount: filtered.filter(r => !r.isPaid).length,
-    paidCount: filtered.filter(r => r.isPaid).length,
-  });
-  
+
   if (statusFilter === 'Pending') {
     filtered = filtered.filter(row => !row.isPaid);
-    console.log('⏳ After status filter (Pending):', filtered.length, 'rows');
+
   } else if (statusFilter === 'Paid') {
     filtered = filtered.filter(row => row.isPaid);
-    console.log('✅ After status filter (Paid):', filtered.length, 'rows');
+
   } else {
     // ⭐ "All" - show everything (no filtering)
     if (process.env.NODE_ENV === 'development') {
-      console.log('📋 Status filter (All) - showing all rows:', filtered.length, 'rows');
+
     }
   }
   
@@ -2272,7 +2172,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('🎯 Final sorted results:', finalFiltered.length, 'rows', filterToTaskId ? `(filtered to task ${filterToTaskId})` : '');
+
   }
   
   // ⭐ STEP 6: Client-side pagination for filtered results
@@ -2294,13 +2194,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     : paymentsTotalPages;
   
   if (process.env.NODE_ENV === 'development' && (hasActiveFilters || filterToTaskId)) {
-    console.log('📄 Client-side pagination:', {
-      totalFiltered: finalFiltered.length,
-      page: filteredPage,
-      pageSize: filteredPageSize,
-      showing: paginatedFiltered.length,
-      totalPages: filteredTotalPages,
-    });
+
   }
   
   // Calculate totals from filtered results
@@ -2311,12 +2205,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   const paidRate     = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
 
   if (process.env.NODE_ENV === 'development') {
-    console.log('💵 Financial Stats:', {
-      totalBudget,
-      totalPaid,
-      totalPending,
-      paidRate: paidRate + '%',
-    });
+
   }
 
   // ⭐ Only include unpaid rows for selection (exclude paid entries and task-budget)
@@ -2462,8 +2351,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         setTimeout(() => {
           paymentsRefresh();
         }, 500);
-        
-        console.log('💰 Payment process complete');
+
         // Loading overlay will auto-hide after animation completes
         notify.paymentsProcessed(count, `₹ ${totalAmount.toLocaleString()} marked as paid`);
       }, 100); // Start processing after 100ms (animation has started)
@@ -2471,8 +2359,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   };
 
   const handleAddPayment = async (paymentData) => {
-    console.log('🔵 handleAddPayment called with:', paymentData);
-    
+
     // ⭐ Generate unique payment ID (not taskId)
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let generatedTaskId = 'PAY-';
@@ -2480,22 +2367,14 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
 
     const linkedTaskId = paymentData.taskId?.trim();
     const linkedTask = linkedTaskId ? tasks.find(t => t.id === linkedTaskId) : null;
-    
-    console.log('🔵 Generated Task ID:', generatedTaskId);
-    console.log('🔵 Linked Task ID:', linkedTaskId);
-    console.log('🔵 Linked Task:', linkedTask);
-    
+
     // ⭐ Create payment entry in Firebase (works WITHOUT taskId)
     if (paymentData.paymentType === 'member' && paymentData.memberId) {
-      console.log('🔵 Creating MEMBER payment...');
-      console.log('🔵 Looking for member with ID:', paymentData.memberId, 'Type:', typeof paymentData.memberId);
-      console.log('🔵 Available team:', team.map(m => ({ id: m.id, name: m.name, idType: typeof m.id })));
-      
+
       // Team member payment - create in Firebase
       // ⭐ Use == instead of === to handle type coercion (string vs number)
       const member = team.find(m => m.id == paymentData.memberId);
-      console.log('🔵 Found member:', member);
-      
+
       if (member) {
         // ⭐ Build payment object with task data if linked
         const payment = {
@@ -2544,29 +2423,16 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
             taskCreatedAt: linkedTask.createdAt || null
           })
         };
-        
-        console.log('🔵 Payment object to save:', payment);
-        console.log('🔵 User-entered title (title):', payment.title);
-        console.log('🔵 User-entered notes (notes):', payment.notes);
-        console.log('🔵 Task title (taskTitle):', payment.taskTitle);
-        console.log('🔵 Task description (description):', payment.description);
-        console.log('🔵 Has taskId:', !!linkedTaskId, linkedTaskId || 'NONE');
-        console.log('🔵 Task data included:', linkedTask ? 'YES' : 'NO', linkedTask ? {
-          category: linkedTask.category,
-          tags: linkedTask.tags,
-          stage: linkedTask.stage
-        } : 'N/A');
-        
+
         // ⭐ Add payment to Firebase
         try {
-          console.log('🔵 Calling addPaymentToTask...');
+
           // ⭐ Pass "PAYMENT" as taskId if no task is linked (manual payment)
           await addPaymentToTask(linkedTaskId || 'PAYMENT', payment);
-          console.log('✅ Payment added to Firebase successfully!');
-          
+
           // Add task history if linked to task
           if (linkedTask) {
-            console.log('🔵 Adding task history...');
+
             addTaskHistoryEntry(linkedTaskId, {
               stage: linkedTask.stage,
               date: new Date(),
@@ -2582,21 +2448,20 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           setShowAddPaymentModal(false);
           
           // ⭐ Wait for Firebase real-time listener to sync the new payment
-          console.log('🔵 Waiting for Firebase sync (1.5 seconds)...');
+
           setTimeout(() => {
-            console.log('🔄 Clearing pagination cache and reloading page 1...');
+
             paymentsRefresh(); // This clears cache and loads page 1
           }, 1500); // 1.5 seconds should be enough for Firebase real-time listener
         } catch (error) {
-          console.error('❌ Error adding payment to Firebase:', error);
+
           notify.error('Failed to add payment: ' + error.message);
         }
       } else {
-        console.error('❌ Member not found for ID:', paymentData.memberId);
+
       }
     } else if (paymentData.paymentType === 'investment') {
-      console.log('🔵 Creating INVESTMENT payment...');
-      
+
       // ⭐ Investment/company expense - also create in Firebase
       const payment = {
         // ⭐ Use "PAYMENT" as default taskId if no task is linked
@@ -2636,27 +2501,12 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           taskCreatedAt: linkedTask.createdAt || null
         })
       };
-      
-      console.log('🔵 Investment payment object to save:', payment);
-      console.log('🔵 User-entered title (title):', payment.title);
-      console.log('🔵 User-entered notes (notes):', payment.notes);
-      console.log('🔵 Task title (taskTitle):', payment.taskTitle);
-      console.log('🔵 Task description (description):', payment.description);
-      console.log('🔵 assignedTo array:', payment.assignedTo);
-      console.log('🔵 assignedTo length:', payment.assignedTo.length);
-      console.log('🔵 Has taskId:', !!linkedTaskId, linkedTaskId || 'NONE');
-      console.log('🔵 Task data included:', linkedTask ? 'YES' : 'NO', linkedTask ? {
-        category: linkedTask.category,
-        tags: linkedTask.tags,
-        stage: linkedTask.stage
-      } : 'N/A');
-      
+
       try {
-        console.log('🔵 Calling addPaymentToTask for investment...');
+
         // ⭐ Pass "PAYMENT" as taskId if no task is linked (manual payment)
         await addPaymentToTask(linkedTaskId || 'PAYMENT', payment);
-        console.log('✅ Investment payment added to Firebase successfully!');
-        
+
         if (linkedTask) {
           addTaskHistoryEntry(linkedTaskId, {
             stage: linkedTask.stage,
@@ -2671,17 +2521,17 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         setShowAddPaymentModal(false);
         
         // ⭐ Wait for Firebase real-time listener to sync the new payment
-        console.log('🔵 Waiting for Firebase sync (1.5 seconds)...');
+
         setTimeout(() => {
-          console.log('🔄 Clearing pagination cache and reloading page 1...');
+
           paymentsRefresh(); // This clears cache and loads page 1
         }, 1500); // 1.5 seconds should be enough for Firebase real-time listener
       } catch (error) {
-        console.error('❌ Error adding investment payment to Firebase:', error);
+
         notify.error('Failed to add payment: ' + error.message);
       }
     } else {
-      console.error('❌ Invalid payment type or missing data:', paymentData);
+
     }
   };
 
@@ -2787,12 +2637,11 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       setTimeout(() => {
         paymentsRefresh();
       }, 1500);
-      
-      console.log('✅ Category payment processing complete');
+
       // Loading overlay will auto-hide after animation completes
       notify.paymentsProcessed(categoryData.tasks.length, `₹${categoryData.totalAmount.toLocaleString()} processed via category payment`);
     } catch (error) {
-      console.error('❌ Error processing category payment:', error);
+
       notify.error('Failed to process category payment');
       setShowLoadingOverlay(false);
     }
@@ -2879,7 +2728,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       // Refresh data immediately to show updated payment history
       paymentsRefresh();
     } catch (error) {
-      console.error('❌ Error recording payment:', error);
+
       notify.error('Failed to record payment');
     }
   };
@@ -2959,13 +2808,13 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                   <button
                     key={range.value}
                     onClick={() => {
-                      console.log('🔘 Date filter clicked:', range.value, 'current:', dateRangeFilter);
+
                       setDateRangeFilter(range.value);
                       const today = new Date();
                       if (range.value === 'all') { 
                         setDateFrom(''); 
                         setDateTo(''); 
-                        console.log('✅ Cleared date filters - showing all');
+
                       }
                       else if (range.value === '7days') { 
                         // ⭐ Show tasks from 7 days ago to 7 days in the future
@@ -2977,7 +2826,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                         const to = future.toISOString().split('T')[0];
                         setDateFrom(from); 
                         setDateTo(to);
-                        console.log('✅ Set 7 days filter (±7 days):', from, 'to', to);
+
                       }
                       else if (range.value === '30days') { 
                         // ⭐ Show tasks from 30 days ago to 30 days in the future
@@ -2989,7 +2838,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                         const to = future.toISOString().split('T')[0];
                         setDateFrom(from); 
                         setDateTo(to);
-                        console.log('✅ Set 30 days filter (±30 days):', from, 'to', to);
+
                       }
                     }}
                     style={{

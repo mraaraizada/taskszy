@@ -130,26 +130,14 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
     
     // Get user's join date to filter out old broadcasts
     const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
-    
-    console.log('🎯 [ManagementApp] Feedback listener setup check:', {
-      hasWorkspaceId: !!workspaceId,
-      workspaceId: workspaceId,
-      hasCurrentUid: !!currentUid,
-      currentUid: currentUid,
-      listenerId: listenerId,
-      currentUser: currentUser,
-      userCreatedAt: userCreatedAt?.toISOString()
-    });
-    
-    console.log('👂 [ManagementApp] Setting up feedback request listener with ID:', listenerId);
-    
+
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('📢 [ManagementApp] Feedback request received:', request);
+
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('🔇 [ManagementApp] Cleaning up feedback request listener');
+
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser]);
@@ -174,7 +162,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
     // CRITICAL: Don't update if newMember is null/undefined - this prevents flickering
     // when currentUid temporarily becomes null during initialization
     if (!newMember || !newMember.id) {
-      console.log('⏳ ManagementApp: Skipping displayMember update - newMember is null/undefined');
+
       return;
     }
     
@@ -186,10 +174,10 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
           prev.avatarImg !== newMember.avatarImg ||
           prev.role !== newMember.role ||
           prev.status !== newMember.status) {
-        console.log('✅ ManagementApp: Updating displayMember with new data');
+
         return newMember;
       }
-      console.log('✅ ManagementApp: displayMember unchanged, keeping previous');
+
       return prev;
     });
   }, [currentUser, member, memberId]);
@@ -197,7 +185,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   // Auto-fix missing team entry silently in the background
   useEffect(() => {
     if (dataLoaded && !member && currentUser && workspaceId && !autoFixAttemptedRef.current) {
-      console.log('🔧 Auto-fixing missing team entry for management:', memberId);
+
       autoFixAttemptedRef.current = true; // Mark as attempted to prevent duplicates
       
       const autoFix = async () => {
@@ -212,7 +200,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
           // Load user profile to get email
           const userProfile = await getProfile(uid);
           if (!userProfile || !userProfile.email) {
-            console.error('❌ Cannot auto-fix: user profile or email not found');
+
             return;
           }
           
@@ -237,11 +225,10 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
             uid: uid,
             addedBy: { name: 'System', avatar: 'S', color: '#3B5BFC' }
           };
-          
-          console.log('💾 Auto-creating team entry:', newMember);
+
           saveMember(newMember, null);
         } catch (error) {
-          console.error('❌ Auto-fix failed:', error);
+
         }
       };
       
@@ -264,7 +251,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
       // Show profile card for first-time users ONLY after workspace setup
       // The profile card will be triggered from App.jsx after setup completes
       if (!hasSeenDonutWelcome) {
-        console.log('🎴 First-time management user - ready for animations after setup');
+
         // Don't trigger here - let App.jsx trigger after workspace setup
       }
     }
@@ -275,12 +262,12 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   useEffect(() => {
     // Prevent duplicate triggers
     if (animationTriggeredRef.current) {
-      console.log('⚠️ Animation already triggered, skipping');
+
       return;
     }
     
     if (triggerWelcomeAnimation && !hasSeenDonutWelcome && visible) {
-      console.log('🎴 Triggering profile card animation after workspace setup');
+
       animationTriggeredRef.current = true; // Mark as triggered
       
       // Set initial loading to false first
@@ -293,7 +280,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
       }, 500);
     } else if (visible && currentUser && currentUid && !triggerWelcomeAnimation) {
       // Returning user - no animation needed, unblock dashboard immediately
-      console.log('✅ Returning management user - skipping animation, showing dashboard immediately');
+
       setWaitingForAnimation(false);
       setInitialLoading(false);
     }
@@ -302,7 +289,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
 
   // Wait for data to load before checking member (but skip for returning users)
   if ((!dataLoaded || waitingForAnimation) && initialLoading) {
-    console.log('⏳ Management waiting for data to load or animation...', { dataLoaded, waitingForAnimation, initialLoading });
+
     return <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading...</div>
     </div>;
@@ -310,13 +297,13 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
 
   // Set initial loading to false once data is loaded (for returning users)
   if (initialLoading && dataLoaded && !waitingForAnimation) {
-    console.log('✅ Data loaded - setting initialLoading to false');
+
     setInitialLoading(false);
   }
 
   if (!member) {
     // Show loading skeleton while auto-fix creates the team entry
-    console.log('⏳ Management member not found, auto-fix in progress...');
+
     return <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading...</div>
     </div>;
@@ -350,8 +337,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   };
   
   const handleSearchResultClick = ({ type, data }) => {
-    console.log('🔍 Search result clicked (Management):', { type, data, currentPage: activePage });
-    
+
     switch (type) {
       case 'task':
         if (activePage === 'home') {
@@ -415,7 +401,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   function renderPage() {
     switch (activePage) {
       case 'tasks':    return <TasksPage hideBudget={true} hideTimeline={true} currentUser={displayMember} managementMode={true} onNavigateToNotes={(scribeId) => { 
-        console.log('📥 ManagementApp received scribe ID from TasksPage:', scribeId);
+
         setSelectedScribeId(scribeId); 
         handleNav('notes'); 
       }} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
@@ -444,7 +430,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
         }}
         selectedScribeId={selectedScribeId}
         onScribeOpened={() => {
-          console.log('🧹 Clearing selectedScribeId (Management)');
+
           setSelectedScribeId(null);
         }}
         onNavigateToTask={() => handleNav('tasks')} 
@@ -453,7 +439,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
       case 'help':     return <ManagementHelp member={displayMember} setPageFilteredData={setPageFilteredData} filterToHelpId={pageExtraProps.filterToHelpId} />;
       case 'profile':  return <ManagementProfile member={displayMember} />;
       default:         return <ManagementHome member={displayMember} setActivePage={handleNav} onNavigateToNotes={(noteId) => {
-        console.log('📥 ManagementApp received note ID:', noteId);
+
         setSelectedScribeId(noteId);
         handleNav('notes');
       }} openTaskId={pageExtraProps.openTaskId} />;
@@ -572,14 +558,13 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
             try {
               const { updateProfile } = await import('../lib/userProfileService');
               await updateProfile(currentUid, { hasSeenWelcomeAnimation: true });
-              console.log('✅ Welcome animation marked as seen (Management)');
-              
+
               setCurrentUser(prev => ({
                 ...prev,
                 hasSeenWelcomeAnimation: true
               }));
             } catch (err) {
-              console.error('❌ Failed to mark welcome animation as seen:', err);
+
             }
           }
           
@@ -588,7 +573,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
           
           // Show donut welcome if not seen yet
           if (!hasSeenDonutWelcome) {
-            console.log('🍩 Showing donut welcome after profile card (Management)');
+
             setTimeout(() => setShowDonutWelcome(true), 400);
           }
         }} />

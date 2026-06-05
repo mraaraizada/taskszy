@@ -47,20 +47,20 @@ export function useDashboardAggregation(workspaceId, options = {}) {
       if (aggData) {
         setStats(aggData);
         setLastUpdated(aggData.lastUpdated);
-        console.log('📊 Dashboard aggregation loaded (1 read)');
+
       } else {
-        console.warn('⚠️ Dashboard aggregation not found');
+
         setError(new Error('Aggregation not found'));
         
         // Auto-rebuild if enabled
         if (autoRebuild) {
-          console.log('🔄 Auto-rebuilding aggregation...');
+
           // Note: This requires tasks, team, payments, activity data
           // In production, trigger Cloud Function to rebuild
         }
       }
     } catch (err) {
-      console.error('❌ Failed to load dashboard aggregation:', err);
+
       setError(err);
     } finally {
       setLoading(false);
@@ -81,24 +81,22 @@ export function useDashboardAggregation(workspaceId, options = {}) {
     
     setLoading(true);
     setError(null);
-    
-    console.log('📡 Subscribing to dashboard aggregation (1 listener)');
-    
+
     const unsubscribe = subscribeToDashboardAggregation(workspaceId, (aggData) => {
       if (aggData) {
         setStats(aggData);
         setLastUpdated(aggData.lastUpdated);
         setLoading(false);
-        console.log('📊 Dashboard aggregation updated');
+
       } else {
-        console.warn('⚠️ Dashboard aggregation not found');
+
         setError(new Error('Aggregation not found'));
         setLoading(false);
       }
     });
     
     return () => {
-      console.log('🔌 Unsubscribing from dashboard aggregation');
+
       unsubscribe();
     };
   }, [workspaceId, realtime, loadOnce]);
@@ -114,7 +112,7 @@ export function useDashboardAggregation(workspaceId, options = {}) {
     setError(null);
     
     try {
-      console.log('🔄 Rebuilding dashboard aggregation...');
+
       const success = await rebuildDashboardAggregation(
         workspaceId,
         tasks,
@@ -124,7 +122,7 @@ export function useDashboardAggregation(workspaceId, options = {}) {
       );
       
       if (success) {
-        console.log('✅ Dashboard aggregation rebuilt');
+
         // Reload aggregation
         if (!realtime) {
           await loadOnce();
@@ -135,7 +133,7 @@ export function useDashboardAggregation(workspaceId, options = {}) {
       
       return success;
     } catch (err) {
-      console.error('❌ Failed to rebuild dashboard aggregation:', err);
+
       setError(err);
       return false;
     } finally {
@@ -229,13 +227,12 @@ export function useDashboardStatsWithFallback(workspaceId, tasks, team, payments
     
     if (aggStats && !aggError) {
       // Use aggregation stats
-      console.log('📊 Using aggregation stats (optimized)');
+
       setStats(aggStats);
       setLoading(false);
     } else {
       // Fallback to calculating from full data
-      console.warn('⚠️ Aggregation not available, calculating from full data (slow)');
-      
+
       const taskStats = {
         total: tasks.length,
         completed: tasks.filter(t => t.stage === 'Complete').length,

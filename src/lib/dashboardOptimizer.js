@@ -309,7 +309,7 @@ export function useSmartRefresh(refreshFn, options = {}) {
       const timeSinceRefresh = now - lastRefresh;
       
       if (timeSinceRefresh >= staleTime) {
-        console.log('🔄 Auto-refreshing dashboard data...');
+
         refreshFn();
         setLastRefresh(now);
       }
@@ -319,7 +319,7 @@ export function useSmartRefresh(refreshFn, options = {}) {
   }, [refreshFn, interval, lastRefresh, isActive, onlyWhenActive, staleTime]);
   
   const manualRefresh = useCallback(() => {
-    console.log('🔄 Manual refresh triggered');
+
     refreshFn();
     setLastRefresh(Date.now());
   }, [refreshFn]);

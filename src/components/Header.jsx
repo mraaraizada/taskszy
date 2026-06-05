@@ -57,25 +57,22 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
 
   // Calculate plan status dot color
   const getPlanStatusColor = () => {
-    console.log('🎨 Header: Calculating badge color - isPlanActive:', isPlanActive, 'currentPlan:', currentPlan, 'planExpiryDate:', planExpiryDate);
-    
+
     // Check if plan is manually deactivated first (highest priority)
     if (!isPlanActive) {
-      console.log('🔴 Header: Plan is inactive - returning red');
+
       return '#EF4444'; // Red for manually deactivated plan
     }
     
     if (currentPlan === 'Free Plan' || !planExpiryDate) {
-      console.log('🔴 Header: Free plan or no expiry - returning red');
+
       return '#EF4444'; // Red for no plan/inactive
     }
     
     const today = new Date();
     const expiry = new Date(planExpiryDate);
     const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-    
-    console.log('📅 Header: Days left:', daysLeft);
-    
+
     if (daysLeft <= 0) return '#EF4444'; // Red - expired
     if (daysLeft <= 10) return '#F97316'; // Orange - 10 days or less
     if (daysLeft <= 30) return '#F59E0B'; // Yellow/Orange - 30 days or less (1 month)
@@ -198,18 +195,18 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
         import('../lib/storageService'),
         import('../lib/imageCompression')
       ]).then(([{ uploadWorkspaceLogo }, { compressLogo }]) => {
-        console.log('🗜️ Compressing logo before upload...');
+
         return compressLogo(file)
           .then(compressedFile => {
-            console.log('📤 Uploading compressed logo to Firebase Storage...');
+
             return uploadWorkspaceLogo(compressedFile, workspaceId);
           })
           .then(downloadURL => {
-            console.log('✅ Logo uploaded successfully');
+
             saveWorkspaceSettings({ workspaceLogo: downloadURL });
           })
           .catch(err => {
-            console.error('Failed to upload logo:', err);
+
             alert('Failed to upload logo. Please try again.');
           });
       });
@@ -672,8 +669,6 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
             </div>
           )}
         </div>
-
-
 
       </div>
 

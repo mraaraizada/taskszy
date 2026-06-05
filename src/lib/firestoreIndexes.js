@@ -45,22 +45,11 @@ export const REQUIRED_INDEXES = [
  * Run this in console to verify: checkIndexes()
  */
 export function checkIndexes() {
-  console.log('📊 Required Firestore Indexes:');
-  console.log('');
-  
+
   REQUIRED_INDEXES.forEach((index, i) => {
-    console.log(`${i + 1}. Collection: ${index.collection}`);
-    console.log(`   Fields: ${index.fields.join(', ')}`);
-    console.log(`   Purpose: ${index.purpose}`);
-    console.log(`   Impact: ${index.impact}`);
-    console.log('');
+
   });
-  
-  console.log('To deploy indexes:');
-  console.log('  firebase deploy --only firestore:indexes');
-  console.log('');
-  console.log('To check index status:');
-  console.log('  Visit: https://console.firebase.google.com/project/_/firestore/indexes');
+
 }
 
 // Expose to window for debugging

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { notify } from '../../lib/notify';
 import { CheckCircle, DollarSign, RotateCcw, Calendar, ChevronLeft, ChevronRight, AlertCircle, ChevronDown, RefreshCw, Clock, Plus, X, MessageSquare, Send } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -69,19 +69,17 @@ function MiniCalendar({ tasks, member, onDateSelect, orgId, userId }) {
   // Subscribe to calendar events from Firebase (personal calendar for team members)
   useEffect(() => {
     if (!orgId || !userId) {
-      console.log('⚠️ Calendar: Missing orgId or userId', { orgId, userId });
+
       return;
     }
-    
-    console.log('📅 Calendar: Subscribing to personal events', { orgId, userId });
-    
+
     const unsubscribe = subscribeToCalendarEvents(orgId, userId, false, (loadedEvents) => {
-      console.log('📅 Calendar: Events loaded', { count: loadedEvents.length, events: loadedEvents });
+
       setEvents(loadedEvents);
     });
     
     return () => {
-      console.log('📅 Calendar: Unsubscribing');
+
       unsubscribe();
     };
   }, [orgId, userId]);
@@ -143,7 +141,7 @@ function MiniCalendar({ tasks, member, onDateSelect, orgId, userId }) {
         setEventColor('#22C55E');
         setSelectedDate(null);
       } catch (error) {
-        console.error('Error saving event:', error);
+
         notify.error('Failed to save event');
       }
     }
@@ -157,7 +155,7 @@ function MiniCalendar({ tasks, member, onDateSelect, orgId, userId }) {
       notify.success('Event deleted');
       setSelectedEvent(null);
     } catch (error) {
-      console.error('Error deleting event:', error);
+
       notify.error('Failed to delete event');
     }
   };
@@ -609,7 +607,7 @@ function MemberTaskDonut({ tasks, member }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1D2E' }}>Task Overview</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed · Active · Pending</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed � Active � Pending</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 600, color: '#6B7280', background: '#F0F2F8', padding: '3px 9px', borderRadius: 6, border: '1px solid #E8EAEF' }}>All Tasks</span>
       </div>
@@ -641,7 +639,7 @@ function MemberTaskDonut({ tasks, member }) {
         </div>
       </div>
 
-      {/* Welcome lottie overlay — covers full card */}
+      {/* Welcome lottie overlay � covers full card */}
       {showDonutWelcome && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none', opacity: donutFading ? 0 : 1, transition: 'opacity 0.5s ease', borderRadius: 18, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <DonutLottie />
@@ -667,7 +665,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
   // Upcoming
   const myTasks     = tasks.filter(t => {
-    // ⭐ Exclude all tasks if member is on hold
+    // ? Exclude all tasks if member is on hold
     if (member.isOnHold) return false;
     
     return t.members.some(m => String(m.id) === String(member.id));
@@ -679,7 +677,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
   const enrichedTasks = myTasks.map(task => {
     const enrichedTask = { ...task };
     
-    // ⭐ Enrich members with latest team data to ensure budget and profile info is current
+    // ? Enrich members with latest team data to ensure budget and profile info is current
     if (task.members && task.members.length > 0) {
       enrichedTask.members = task.members.map(taskMember => {
         // Find the latest team member data
@@ -728,18 +726,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
     
     return enrichedTask;
   });
-  
-  console.log('🎨 MemberHome: Enriched tasks created', {
-    myTasksCount: myTasks.length,
-    enrichedTasksCount: enrichedTasks.length,
-    enrichedTasksWithStages: enrichedTasks.map(t => ({
-      id: t.id,
-      stage: t.stage,
-      myStage: t.members?.find(m => String(m.id) === String(member.id))?.stage,
-      memberCount: t.members?.length
-    }))
-  });
-  
+
   const activeTasks = enrichedTasks.filter(t => t.stage !== 'Complete');
   const upcoming    = [...activeTasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 4);
 
@@ -758,22 +745,19 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
     if (openTaskId) {
       const taskToOpen = tasks.find(t => t.id === openTaskId);
       if (taskToOpen) {
-        console.log('🔍 MemberHome: Opening task from search:', openTaskId);
+
         setModalTask(taskToOpen);
       }
     }
   }, [openTaskId, tasks]);
   
-  // ⭐ CRITICAL: Update modalTask when tasks array changes (real-time updates)
+  // ? CRITICAL: Update modalTask when tasks array changes (real-time updates)
   // This ensures the modal shows the latest member stages after updates
   useEffect(() => {
     if (modalTask) {
       const updatedTask = tasks.find(t => t.id === modalTask.id);
       if (updatedTask) {
-        console.log('🔄 MemberHome: Updating modalTask with latest data', {
-          taskId: updatedTask.id,
-          members: updatedTask.members?.map(m => ({ id: m.id, name: m.name, stage: m.stage }))
-        });
+
         // Always update to ensure we have the latest data
         setModalTask(updatedTask);
       }
@@ -869,7 +853,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
       // Show success notification only after successful submission
       notify.taskRequestSubmitted(requestTitle.trim());
     } catch (error) {
-      console.error('Error submitting task request:', error);
+
       notify.error('Failed to submit task request');
     }
   };
@@ -889,16 +873,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
       alert('Please describe the issue before submitting.');
       return;
     }
-    
-    console.log('🔄 MemberHome: Stage update initiated', {
-      taskId: task.id,
-      oldStage: task.members?.find(m => String(m.id) === String(member.id))?.stage,
-      newStage: newStage,
-      memberId: member.id,
-      memberName: member.name,
-      hasIssueNote: newStage === 'Issue' && !!issueText[task.id]
-    });
-    
+
     setUpdating(task.id);
     setTimeout(() => {
       // Pass issue text if stage is Issue
@@ -908,11 +883,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
       setStageSelect(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       setIssueText(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       setModalTask(null);
-      
-      console.log('✅ MemberHome: Stage update completed, modal closed', {
-        taskId: task.id,
-        newStage: newStage
-      });
+
     }, 700);
   }
 
@@ -922,13 +893,13 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
   return (
     <div style={{ flex: 1, overflow: 'hidden', padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* ── Single two-column layout filling full height ── */}
+      {/* -- Single two-column layout filling full height -- */}
       <div style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
 
         {/* LEFT: Upcoming Tasks (fixed) + My Tasks (fills rest, scrollable) */}
         <div style={{ flex: 3, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0 }}>
 
-          {/* Upcoming Tasks — wrapped in one card with heading */}
+          {/* Upcoming Tasks � wrapped in one card with heading */}
           <div style={{ background: '#fff', borderRadius: 18, border: '1.5px solid #E8EAEF', overflow: 'hidden', flexShrink: 0 }}>
             {/* Heading */}
             <div style={{ padding: '14px 18px', borderBottom: '1.5px solid #F0F2F8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -994,7 +965,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
             </div>
           </div>
 
-          {/* My Tasks — fills remaining height, scrollable inside */}
+          {/* My Tasks � fills remaining height, scrollable inside */}
           <div style={{ flex: 1, background: '#fff', borderRadius: 18, border: '1.5px solid #E8EAEF', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
             {/* Header */}
@@ -1083,14 +1054,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
             
             // Debug logging for budget
             if (!mem || !mem.budget) {
-              console.log('⚠️ Member budget issue:', {
-                taskId: task.id,
-                memberId: member.id,
-                memberIdType: typeof member.id,
-                taskMembers: task.members.map(m => ({ id: m.id, idType: typeof m.id, budget: m.budget })),
-                foundMem: !!mem,
-                memBudget: mem?.budget
-              });
+
             }
             
             const overdueFlag = isOverdue(task);
@@ -1194,7 +1158,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: isComplete ? '#12C479' : '#374151' }}>
-                    ₹ {mem?.budget ? mem.budget.toLocaleString() : '0'}
+                    ? {mem?.budget ? mem.budget.toLocaleString() : '0'}
                   </div>
                 </div>
               </div>
@@ -1224,7 +1188,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
             <MemberTaskDonut tasks={tasks} member={member} />
 
-            {/* Updates card — always visible */}
+            {/* Updates card � always visible */}
             <div
               onClick={() => setShowUpdates(true)}
               style={{ flex: 1, background: '#fff', borderRadius: 18, padding: '18px 22px', border: `1.5px solid ${showUpdates ? '#3B5BFC' : '#E8EAEF'}`, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', cursor: showUpdates ? 'default' : 'pointer', transition: 'box-shadow 0.2s, border-color 0.2s' }}
@@ -1234,10 +1198,10 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
               {/* Header */}
               {(() => {
                 const now = new Date();
-                // ⭐ Only show: broadcast messages (exclude all task-related activities)
+                // ? Only show: broadcast messages (exclude all task-related activities)
                 const TASK_STAGE_TYPES = new Set(['broadcast']);
                 
-                // ⭐ Role-based activity filtering for team members
+                // ? Role-based activity filtering for team members
                 const filterActivityByRole = (act) => {
                   // For broadcasts, check visibility
                   if (act.type === 'broadcast') {
@@ -1285,10 +1249,10 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
               {/* List preview */}
               {(() => {
                 const now = new Date();
-                // ⭐ Only show: broadcast messages (exclude all task-related activities)
+                // ? Only show: broadcast messages (exclude all task-related activities)
                 const TASK_STAGE_TYPES = new Set(['broadcast']);
                 
-                // ⭐ Role-based activity filtering for team members
+                // ? Role-based activity filtering for team members
                 const filterActivityByRole = (act) => {
                   // For broadcasts, check visibility
                   if (act.type === 'broadcast') {
@@ -1308,7 +1272,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                   return filterActivityByRole(act);
                 });
                 
-                // ⭐ COLLAPSED VIEW: Show only UNREAD messages
+                // ? COLLAPSED VIEW: Show only UNREAD messages
                 const items = allItems.filter(act => !readUpdateIds.has(act.id));
                 
                 if (items.length === 0) return (
@@ -1389,10 +1353,10 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                 <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {(() => {
                     const now = new Date();
-                    // ⭐ Only show: broadcast messages (exclude all task-related activities)
+                    // ? Only show: broadcast messages (exclude all task-related activities)
                     const TASK_STAGE_TYPES = new Set(['broadcast']);
                     
-                    // ⭐ Role-based activity filtering for team members
+                    // ? Role-based activity filtering for team members
                     const filterActivityByRole = (act) => {
                       // For broadcasts, check visibility
                       if (act.type === 'broadcast') {
@@ -1412,7 +1376,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                       return filterActivityByRole(act);
                     });
                     
-                    // ⭐ EXPANDED VIEW: Show all messages with pagination
+                    // ? EXPANDED VIEW: Show all messages with pagination
                     const items = allItems.slice(0, updatesDisplayLimit);
                     const hasMore = allItems.length > updatesDisplayLimit;
                     
@@ -1523,7 +1487,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
       {chatTask && <TaskChatPanel task={chatTask} onClose={() => setChatTask(null)} currentUser={member} team={[]} />}
 
-      {/* ── Broadcast Read Modal ── */}
+      {/* -- Broadcast Read Modal -- */}
       {viewBroadcast && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.08)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
@@ -1553,35 +1517,20 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
         </div>
       )}
 
-      {/* ── Task Modal ── */}
+      {/* -- Task Modal -- */}
       {modalTask && (() => {
-        // ⭐ CRITICAL: Always use fresh task data from enrichedTasks (never use stale modalTask)
+        // ? CRITICAL: Always use fresh task data from enrichedTasks (never use stale modalTask)
         const t = enrichedTasks.find(task => task.id === modalTask.id);
         
         // If task not found in enrichedTasks, close modal (task might have been deleted)
         if (!t) {
-          console.warn('⚠️ Task not found in enrichedTasks, closing modal:', modalTask.id);
+
           setModalTask(null);
           return null;
         }
         
         // Log task member data for debugging
-        console.log('📋 MemberHome TaskModal - Task member data:', {
-          taskId: t.id,
-          taskStage: t.stage,
-          membersCount: t.members?.length || 0,
-          members: t.members?.map(m => ({
-            id: m.id,
-            name: m.name,
-            avatar: m.avatar,
-            role: m.role,
-            color: m.color,
-            stage: m.stage,
-            budget: m.budget
-          })),
-          currentMemberStage: t.members?.find(m => m.id === member.id)?.stage
-        });
-        
+
         const mem = t.members.find(m => String(m.id) === String(member.id));
         const overdueFlag = isOverdue(t);
         const isComplete  = t.stage === 'Complete' || mem?.stage === 'Complete';
@@ -1662,10 +1611,10 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                     })}
                   </div>
                 </div>
-                <button onClick={() => setModalTask(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F2F8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#6B7280' }}>✕</button>
+                <button onClick={() => setModalTask(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F2F8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#6B7280' }}>?</button>
               </div>
 
-              {/* Modal body — scrollable */}
+              {/* Modal body � scrollable */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                 {/* Overview */}
@@ -1746,7 +1695,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                           return (
                             <button key={i} type="button"
                               onClick={() => { 
-                                console.log('🖱️ Scribe card clicked:', { title: s.title, type: s.type, taskId: t.id });
+
                                 // Find the actual note ID from globalNotes by matching title and taskId
                                 const actualNote = (globalNotes || []).find(n => 
                                   n.taskId === t.id && 
@@ -1754,13 +1703,13 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                                   n.type === s.type
                                 );
                                 const noteId = actualNote?.id;
-                                console.log('📝 Found note ID:', noteId, 'Note:', actualNote);
+
                                 setModalTask(null); 
                                 if (onNavigateToNotes && noteId) {
-                                  console.log('📞 Calling onNavigateToNotes with ID:', noteId);
+
                                   onNavigateToNotes(noteId);
                                 } else {
-                                  console.warn('⚠️ Note ID not found or onNavigateToNotes not available');
+
                                 }
                               }}
                               style={{ 
@@ -1862,7 +1811,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                               color: isActive ? '#fff' : '#9CA3AF',
                               transition: 'all 0.3s ease'
                             }}>
-                              {isPast ? '✓' : i + 1}
+                              {isPast ? '?' : i + 1}
                             </div>
                             <span style={{ 
                               fontSize: 9, 
@@ -1896,7 +1845,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                       </select>
                       <button disabled={!stageSelect[t.id] || stageSelect[t.id] === currentStage || updating === t.id} onClick={() => handleStageUpdate(t)}
                         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 20px', borderRadius: 10, border: 'none', background: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : '#F0F2F8', color: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700, cursor: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'pointer' : 'default', boxShadow: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '0 4px 12px rgba(59,91,252,0.3)' : 'none', transition: 'all 0.15s' }}>
-                        {updating === t.id ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving…</> : 'Update Stage'}
+                        {updating === t.id ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving�</> : 'Update Stage'}
                       </button>
                     </div>
                     
@@ -1950,7 +1899,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#F0FDF4', borderRadius: 12, border: '1.5px solid #BBF7D0' }}>
                     <CheckCircle size={20} color="#12C479" strokeWidth={2.5} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed — great work!</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed � great work!</div>
                     </div>
                   </div>
                 )}

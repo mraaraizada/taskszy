@@ -82,14 +82,7 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
   
   // Debug: Log when displayMember changes
   useEffect(() => {
-    console.log('👤 ManagementSidebar: displayMember updated:', {
-      id: displayMember?.id,
-      name: displayMember?.name,
-      avatarImg: displayMember?.avatarImg,
-      hasAvatar: !!displayMember?.avatarImg,
-      avatar: displayMember?.avatar,
-      color: displayMember?.color
-    });
+
   }, [displayMember?.id, displayMember?.name, displayMember?.avatarImg, displayMember?.avatar, displayMember?.color]);
   
   // Track paid earnings and show animation when it increases
@@ -117,17 +110,7 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
   }) : [];
   
   const currentPaidAmount = myPaidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  
-  console.log('💰 Management Sidebar - Payment tracking:', {
-    totalPayments: payments?.length || 0,
-    myPaidPayments: myPaidPayments.length,
-    currentPaidAmount,
-    lastSeenPaidAmount,
-    showWalletAnimation,
-    memberId: displayMember?.id,
-    memberName: displayMember?.name
-  });
-  
+
   // Wallet animation
   const walletAnimData = useWalletAnimation();
   const [walletAnimKey, setWalletAnimKey] = useState(0); // ⭐ Key to force re-render animation
@@ -141,56 +124,34 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
     });
     return View;
   };
-  
-  console.log('💰 Wallet animation check:', {
-    currentPaidAmount,
-    lastSeenPaidAmount,
-    showWalletAnimation,
-    activePage,
-    hasWalletAnimData: !!walletAnimData,
-    memberId: displayMember?.id,
-    walletAnimKey
-  });
-  
+
   // Load last seen paid amount from localStorage on mount
   useEffect(() => {
     if (!displayMember?.id) return;
     
     const storageKey = `wallet_seen_${displayMember.id}`;
     const stored = localStorage.getItem(storageKey);
-    
-    console.log('💰 Checking wallet animation visibility:', {
-      memberId: displayMember.id,
-      currentPaidAmount,
-      stored,
-      activePage
-    });
-    
+
     if (stored) {
       const lastSeen = parseFloat(stored);
       setLastSeenPaidAmount(lastSeen);
-      console.log('💰 Loaded last seen amount from storage:', lastSeen);
-      
+
       // Show animation if current amount is greater than last seen AND not on payments page
       if (currentPaidAmount > lastSeen && activePage !== 'payments') {
-        console.log('✅ Showing wallet animation - paid amount increased since last seen!');
+
         setShowWalletAnimation(true);
         setWalletAnimKey(k => k + 1); // ⭐ Force animation restart
       } else {
-        console.log('❌ Not showing animation:', { 
-          amountIncreased: currentPaidAmount > lastSeen,
-          notOnPaymentsPage: activePage !== 'payments'
-        });
+
       }
     } else {
       // First time - set current amount as last seen, but show animation if there are paid payments
       setLastSeenPaidAmount(currentPaidAmount);
       localStorage.setItem(storageKey, currentPaidAmount.toString());
-      console.log('💰 First time - set initial amount:', currentPaidAmount);
-      
+
       // ⭐ Show animation if there are paid payments (even on first load)
       if (currentPaidAmount > 0 && activePage !== 'payments') {
-        console.log('✅ First time with paid payments - showing animation!');
+
         setShowWalletAnimation(true);
         setWalletAnimKey(k => k + 1);
       }
@@ -200,14 +161,14 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
   // Mark as seen when user clicks on payments page
   useEffect(() => {
     if (activePage === 'payments' && displayMember?.id) {
-      console.log('❌ Hiding wallet animation - on payments page, marking as seen');
+
       setShowWalletAnimation(false);
       
       // Update last seen amount in localStorage
       const storageKey = `wallet_seen_${displayMember.id}`;
       localStorage.setItem(storageKey, currentPaidAmount.toString());
       setLastSeenPaidAmount(currentPaidAmount);
-      console.log('💾 Saved last seen amount:', currentPaidAmount);
+
     }
   }, [activePage, displayMember?.id, currentPaidAmount]);
 
@@ -223,16 +184,7 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
       // Check if user has viewed this version of the description
       const storageKey = `desc_viewed_${displayMember.id}_${roleUpdatedAt}`;
       const hasViewed = localStorage.getItem(storageKey) === 'true';
-      
-      console.log('🔔 Checking unread description for management sidebar:', {
-        memberId: displayMember.id,
-        memberName: displayMember.name,
-        roleUpdatedAt,
-        storageKey,
-        hasViewed,
-        shouldShowDot: !hasViewed
-      });
-      
+
       setHasUnreadDesc(!hasViewed);
     } else {
       setHasUnreadDesc(false);
@@ -248,10 +200,27 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
     }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '22px 8px 20px' }}>
+        <img 
+          src="/logo.png" 
+          alt="TasksZy Logo" 
+          onError={(e) => {
+            // Fallback to gradient badge if logo image fails to load
+            e.target.style.display = 'none';
+            e.target.nextElementSibling.style.display = 'flex';
+          }}
+          style={{ 
+            width: 34, 
+            height: 34, 
+            borderRadius: 10,
+            objectFit: 'contain',
+            flexShrink: 0,
+          }} 
+        />
         <div style={{
           width: 34, height: 34, borderRadius: 10,
           background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'none',
+          alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 4px 14px rgba(59,91,252,0.4)', flexShrink: 0,
         }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -260,8 +229,8 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
           </svg>
         </div>
         <div>
-          <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>Taskzy</span>
-          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Management</div>
+          <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>TasksZy</span>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: -1 }}>Organize Better, Scale Faster</div>
         </div>
       </div>
 
@@ -271,8 +240,6 @@ export default function ManagementSidebar({ activePage, setActivePage, member, o
           <NavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
         ))}
       </nav>
-
-
 
       {/* Personal section */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>

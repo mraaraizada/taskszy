@@ -30,7 +30,7 @@ export function getFeatureFlags() {
       return { ...DEFAULT_FLAGS, ...JSON.parse(stored) };
     }
   } catch (error) {
-    console.error('Failed to load feature flags:', error);
+
   }
   return DEFAULT_FLAGS;
 }
@@ -51,10 +51,10 @@ export function setFeatureFlag(flagName, value) {
     const flags = getFeatureFlags();
     flags[flagName] = value;
     localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(flags));
-    console.log(`✅ Feature flag "${flagName}" set to:`, value);
+
     return true;
   } catch (error) {
-    console.error('Failed to set feature flag:', error);
+
     return false;
   }
 }
@@ -65,8 +65,7 @@ export function setFeatureFlag(flagName, value) {
 export function enableServerSideFiltering() {
   setFeatureFlag('serverSideTaskFiltering', true);
   setFeatureFlag('serverSideActivityFiltering', true);
-  console.log('✅ Server-side filtering enabled!');
-  console.log('🔄 Please refresh the page for changes to take effect.');
+
 }
 
 /**
@@ -75,8 +74,7 @@ export function enableServerSideFiltering() {
 export function disableServerSideFiltering() {
   setFeatureFlag('serverSideTaskFiltering', false);
   setFeatureFlag('serverSideActivityFiltering', false);
-  console.log('⚠️ Server-side filtering disabled!');
-  console.log('🔄 Please refresh the page for changes to take effect.');
+
 }
 
 /**
@@ -84,8 +82,7 @@ export function disableServerSideFiltering() {
  */
 export function resetFeatureFlags() {
   localStorage.removeItem(FEATURE_FLAGS_KEY);
-  console.log('✅ Feature flags reset to defaults');
-  console.log('🔄 Please refresh the page for changes to take effect.');
+
 }
 
 // Expose to window for console access
@@ -97,13 +94,7 @@ if (typeof window !== 'undefined') {
     disable: disableServerSideFiltering,
     reset: resetFeatureFlags,
   };
-  
-  console.log('✅ Feature flags loaded. Available commands:');
-  console.log('  - window.featureFlags.get()');
-  console.log('  - window.featureFlags.set("flagName", true/false)');
-  console.log('  - window.featureFlags.enable()  // Enable server-side filtering');
-  console.log('  - window.featureFlags.disable() // Disable server-side filtering');
-  console.log('  - window.featureFlags.reset()');
+
 }
 
 export default {

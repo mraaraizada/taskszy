@@ -45,9 +45,7 @@ export async function createMemberAccount(memberData) {
 export async function updateMemberPassword(uid, newPassword) {
   const { getAuth } = await import('firebase/auth');
   const { updatePassword } = await import('firebase/auth');
-  
-  console.log('🔐 Updating password for user:', uid);
-  
+
   try {
     const auth = getAuth();
     
@@ -59,7 +57,7 @@ export async function updateMemberPassword(uid, newPassword) {
     throw new Error('Password reset not yet implemented. Please use Firebase Console to reset the password, or ask the user to use "Forgot Password" on the login page.');
     
   } catch (error) {
-    console.error('❌ updateMemberPassword error:', error);
+
     throw error;
   }
 }
@@ -70,16 +68,14 @@ export async function updateMemberPassword(uid, newPassword) {
  */
 export async function sendPasswordResetEmail(email) {
   const { getAuth, sendPasswordResetEmail: firebaseSendPasswordReset } = await import('firebase/auth');
-  
-  console.log('📧 Sending password reset email to:', email);
-  
+
   try {
     const auth = getAuth();
     await firebaseSendPasswordReset(auth, email);
-    console.log('✅ Password reset email sent');
+
     return { success: true, message: 'Password reset email sent successfully.' };
   } catch (error) {
-    console.error('❌ sendPasswordResetEmail error:', error);
+
     if (error.code === 'auth/user-not-found') {
       throw new Error('No account found with this email address.');
     }
@@ -100,8 +96,7 @@ export async function sendPasswordResetEmail(email) {
  * @param {string} phone - Member phone number
  */
 export async function createMemberWithoutAuth(email, role, workspaceId, memberId, name, phone) {
-  console.log('👤 Creating member without auth:', { email, role, workspaceId, memberId, name, phone });
-  
+
   // We'll create the Firestore profile without a uid
   // When the user signs up using the invitation link, we'll link it
   
@@ -126,8 +121,7 @@ export async function createMemberWithoutAuth(email, role, workspaceId, memberId
  * @param {string} phone - Member phone
  */
 export async function sendMemberInvitation(email, password, role, workspaceId, memberId, name, phone) {
-  console.log('📧 Sending invitation to:', email);
-  
+
   try {
     // Use the existing createMemberFallback but catch the logout issue
     const result = await createMemberFallback(email, password, role, workspaceId, memberId, name, phone);
@@ -139,16 +133,16 @@ export async function sendMemberInvitation(email, password, role, workspaceId, m
       // Only send if there's a current user (admin might be logged out)
       if (auth.currentUser) {
         await firebaseSendPasswordReset(auth, email);
-        console.log('✅ Invitation email sent');
+
       }
     } catch (emailErr) {
-      console.warn('Could not send invitation email:', emailErr);
+
       // Not critical - user can still log in with the password
     }
     
     return result;
   } catch (error) {
-    console.error('❌ sendMemberInvitation error:', error);
+
     throw error;
   }
 }
@@ -157,9 +151,7 @@ export async function createMemberFallback(email, password, role, workspaceId, m
   const { initializeApp, getApps } = await import('firebase/app');
   const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
   const { db } = await import('./firebase');
-  
-  console.log('🔐 createMemberFallback called:', { email, role, workspaceId, memberId, name, phone });
-  
+
   try {
     const auth = getAuth();
     
@@ -171,8 +163,7 @@ export async function createMemberFallback(email, password, role, workspaceId, m
     
     const adminEmail = currentUser.email;
     const adminUid = currentUser.uid;
-    console.log('👤 Current admin:', adminEmail, adminUid);
-    
+
     // Create a temporary secondary Firebase app instance for creating the new user
     // This prevents the new user from replacing the admin's session
     let secondaryApp;
@@ -193,20 +184,17 @@ export async function createMemberFallback(email, password, role, workspaceId, m
       }
       
       secondaryAuth = getAuth(secondaryApp);
-      
-      console.log('🔑 Creating Firebase Auth account using secondary app for:', email);
+
       const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const uid = credential.user.uid;
-      console.log('✅ Firebase Auth account created:', uid);
-      
+
       // Sign out from secondary app immediately to avoid permission issues
-      console.log('🚪 Signing out from secondary app...');
+
       await signOut(secondaryAuth);
-      console.log('✅ Signed out from secondary app');
-      
+
       // Now create Firestore profile using the ADMIN's authentication (main app)
       // This way the admin's permissions are used, not the new user's
-      console.log('💾 Creating Firestore profile using admin auth...');
+
       await setDoc(doc(db, 'users', uid), {
         email: email.toLowerCase().trim(),
         name: name || null,
@@ -221,14 +209,12 @@ export async function createMemberFallback(email, password, role, workspaceId, m
         createdAt: serverTimestamp(),
         createdBy: adminUid,
       });
-      console.log('✅ Firestore profile created');
-      
+
       // Verify admin is still logged in
       const stillLoggedIn = auth.currentUser?.uid === adminUid;
-      console.log('✅ Admin still logged in:', stillLoggedIn);
-      
+
       if (!stillLoggedIn) {
-        console.warn('⚠️ Admin session was lost');
+
         return { 
           success: true, 
           uid, 
@@ -245,13 +231,12 @@ export async function createMemberFallback(email, password, role, workspaceId, m
       };
       
     } catch (error) {
-      console.error('❌ Secondary app creation failed:', error);
+
       throw error;
     }
     
   } catch (error) {
-    console.error('❌ createMemberFallback error:', error);
-    
+
     // Handle specific Firebase Auth errors with user-friendly messages
     if (error.code === 'auth/email-already-in-use') {
       throw new Error('An account with this email already exists. Please use a different email address.');
