@@ -21,18 +21,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       
-      - name: Install root dependencies
-        run: npm install
-      
-      - name: Build root website
-        run: npm run build
-      
-      - name: Install app dependencies
-        working-directory: ./app
-        run: npm install
-      
-      - name: Build app
-        working-directory: ./app
+      - name: Build all projects
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -43,44 +32,7 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
           VITE_RAZORPAY_KEY_ID: ${{ secrets.VITE_RAZORPAY_KEY_ID }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
-        run: npm run build
-      
-      - name: Install admin dependencies
-        working-directory: ./adminzdashboard
-        run: npm install
-      
-      - name: Build admin dashboard
-        working-directory: ./adminzdashboard
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-        run: npm run build
-      
-      - name: Merge build outputs
-        run: |
-          mkdir -p build
-          echo "Copying root website..."
-          cp -r dist/* build/
-          echo "Copying app..."
-          mkdir -p build/app
-          cp -r app/dist/* build/app/
-          echo "Copying admin dashboard..."
-          mkdir -p build/adminzdashboard
-          cp -r adminzdashboard/dist/* build/adminzdashboard/
-          echo "Merge complete!"
-      
-      - name: Create SPA redirects
-        run: |
-          echo "/app/* /app/index.html 200" > build/_redirects
-          echo "/adminzdashboard/* /adminzdashboard/index.html 200" >> build/_redirects
-          echo "/* /index.html 200" >> build/_redirects
-          echo "_redirects file created:"
-          cat build/_redirects
+        run: npm run build:cloudflare
       
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
@@ -88,7 +40,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: taskszy
-          directory: build
+          directory: deploy
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: main
       

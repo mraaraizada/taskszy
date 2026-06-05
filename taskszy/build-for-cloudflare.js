@@ -81,25 +81,25 @@ try {
   run('npm ci', './adminzdashboard');
   run('npm run build', './adminzdashboard');
   
-  // Step 4: Clean and create build directory
-  console.log('\n🗑️  Step 4: Creating clean build directory...');
-  if (fs.existsSync('./build')) {
-    fs.rmSync('./build', { recursive: true, force: true });
+  // Step 4: Clean and create deploy directory
+  console.log('\n🗑️  Step 4: Creating clean deploy directory...');
+  if (fs.existsSync('./deploy')) {
+    fs.rmSync('./deploy', { recursive: true, force: true });
   }
-  fs.mkdirSync('./build', { recursive: true });
-  fs.mkdirSync('./build/app', { recursive: true });
-  fs.mkdirSync('./build/adminzdashboard', { recursive: true });
+  fs.mkdirSync('./deploy', { recursive: true });
+  fs.mkdirSync('./deploy/app', { recursive: true });
+  fs.mkdirSync('./deploy/adminzdashboard', { recursive: true });
   
   // Step 5: Copy dist files
   console.log('\n📋 Step 5: Copying build outputs...');
-  copyDir('./dist', './build');
-  copyDir('./app/dist', './build/app');
-  copyDir('./adminzdashboard/dist', './build/adminzdashboard');
+  copyDir('./dist', './deploy');
+  copyDir('./app/dist', './deploy/app');
+  copyDir('./adminzdashboard/dist', './deploy/adminzdashboard');
   
   // Step 6: Copy functions folder
   console.log('\n📝 Step 6: Copying functions for SPA routing...');
   if (fs.existsSync('./functions')) {
-    copyDir('./functions', './build/functions');
+    copyDir('./functions', './deploy/functions');
     console.log('✅ Functions folder copied');
   } else {
     console.log('⚠️  No functions folder found');
@@ -107,8 +107,8 @@ try {
   
   // Step 7: Verify
   console.log('\n✅ Build complete! Verifying structure...');
-  console.log('📂 Build structure:');
-  console.log('   build/');
+  console.log('📂 Deploy structure:');
+  console.log('   deploy/');
   console.log('   ├── index.html (root website)');
   console.log('   ├── functions/_middleware.js (SPA routing)');
   console.log('   ├── app/');
@@ -118,10 +118,10 @@ try {
   
   // Verify files exist
   const filesToCheck = [
-    './build/index.html',
-    './build/functions/_middleware.js',
-    './build/app/index.html',
-    './build/adminzdashboard/index.html'
+    './deploy/index.html',
+    './deploy/functions/_middleware.js',
+    './deploy/app/index.html',
+    './deploy/adminzdashboard/index.html'
   ];
   
   let allGood = true;
@@ -135,7 +135,10 @@ try {
   }
   
   if (allGood) {
-    console.log('\n🎉 Build successful! Ready to deploy.');
+    console.log('\n🎉 Build successful! Ready to deploy to Cloudflare Pages.');
+    console.log('\n📝 Next steps:');
+    console.log('   1. Run: npx wrangler pages deploy deploy --project-name=taskszy');
+    console.log('   2. Or push to GitHub to trigger automatic deployment');
     process.exit(0);
   } else {
     console.error('\n❌ Build completed with errors.');
