@@ -73,7 +73,7 @@ export function Footer7({
               <span className="absolute inset-0 bg-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out rounded-full"></span>
             </a>
             <a
-              href="#"
+              href="/app"
               className="relative px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium overflow-hidden group transition-all cursor-pointer uppercase tracking-wider border border-primary group-hover:border-primary flex items-center gap-1"
             >
               <span className="relative z-10 transition-colors duration-300 group-hover:text-primary">
