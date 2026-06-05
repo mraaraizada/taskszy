@@ -1026,152 +1026,163 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
 
               {/* Password Reset Form */}
               {authActionStatus === 'reset-form' && (
-                <form onSubmit={handleResetPasswordSubmit}>
+                <div style={{ padding: '20px 0' }}>
+                  {/* Lottie Animation */}
                   <div style={{
-                    width: '80px',
-                    height: '80px',
-                    margin: '32px auto',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)',
+                    width: '120px',
+                    height: '120px',
+                    margin: '0 auto 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(59,91,252,0.2)',
-                    animation: 'scaleIn 0.5s ease-out'
+                    justifyContent: 'center'
                   }}>
-                    <Lock size={40} color="#3B5BFC" strokeWidth={2.5} />
+                    <LoginLottie />
                   </div>
+
                   <p style={{ fontSize: '24px', fontWeight: '800', color: '#1A1D2E', marginBottom: '8px', letterSpacing: '-0.5px', textAlign: 'center' }}>
-                    Reset Password
+                    Reset Your Password
                   </p>
                   <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '32px', fontWeight: '500', textAlign: 'center' }}>
                     {authActionEmail}
                   </p>
 
-                  <div style={{ marginBottom: '16px', textAlign: 'left' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>
-                      New Password
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showResetNewPassword ? 'text' : 'password'}
-                        value={resetNewPassword}
-                        onChange={(e) => setResetNewPassword(e.target.value)}
-                        placeholder="Enter new password"
-                        required
-                        minLength={6}
-                        style={{
-                          width: '100%',
-                          padding: '12px 40px 12px 16px',
-                          border: '1.5px solid #E8EAEF',
-                          borderRadius: '10px',
-                          fontSize: '14px',
-                          outline: 'none',
-                          boxSizing: 'border-box'
-                        }}
-                        onFocus={(e) => e.target.style.borderColor = '#3B5BFC'}
-                        onBlur={(e) => e.target.style.borderColor = '#E8EAEF'}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowResetNewPassword(!showResetNewPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {showResetNewPassword ? <EyeOff size={18} color="#6B7280" /> : <Eye size={18} color="#6B7280" />}
-                      </button>
+                  <form onSubmit={handleResetPasswordSubmit}>
+                    {/* New Password */}
+                    <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                      <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>
+                        New Password
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showResetNewPassword ? 'text' : 'password'}
+                          value={resetNewPassword}
+                          onChange={(e) => setResetNewPassword(e.target.value)}
+                          placeholder="Enter new password"
+                          required
+                          minLength={6}
+                          style={{
+                            width: '100%',
+                            padding: '12px 40px 12px 16px',
+                            border: '1.5px solid #E8EAEF',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                            transition: 'border-color 0.2s'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3B5BFC'}
+                          onBlur={(e) => e.target.style.borderColor = '#E8EAEF'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResetNewPassword(!showResetNewPassword)}
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {showResetNewPassword ? <EyeOff size={18} color="#6B7280" /> : <Eye size={18} color="#6B7280" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>
-                      Confirm Password
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showResetConfirmPassword ? 'text' : 'password'}
-                        value={resetConfirmPassword}
-                        onChange={(e) => setResetConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
-                        required
-                        minLength={6}
-                        style={{
-                          width: '100%',
-                          padding: '12px 40px 12px 16px',
-                          border: '1.5px solid #E8EAEF',
-                          borderRadius: '10px',
-                          fontSize: '14px',
-                          outline: 'none',
-                          boxSizing: 'border-box'
-                        }}
-                        onFocus={(e) => e.target.style.borderColor = '#3B5BFC'}
-                        onBlur={(e) => e.target.style.borderColor = '#E8EAEF'}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {showResetConfirmPassword ? <EyeOff size={18} color="#6B7280" /> : <Eye size={18} color="#6B7280" />}
-                      </button>
+                    {/* Confirm Password */}
+                    <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                      <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>
+                        Confirm Password
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showResetConfirmPassword ? 'text' : 'password'}
+                          value={resetConfirmPassword}
+                          onChange={(e) => setResetConfirmPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          required
+                          minLength={6}
+                          style={{
+                            width: '100%',
+                            padding: '12px 40px 12px 16px',
+                            border: '1.5px solid #E8EAEF',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                            transition: 'border-color 0.2s'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3B5BFC'}
+                          onBlur={(e) => e.target.style.borderColor = '#E8EAEF'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {showResetConfirmPassword ? <EyeOff size={18} color="#6B7280" /> : <Eye size={18} color="#6B7280" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {authActionMessage && authActionStatus === 'reset-form' && (
-                    <p style={{ fontSize: '13px', color: '#EF4444', marginBottom: '16px', textAlign: 'center' }}>{authActionMessage}</p>
-                  )}
+                    {/* Error Message */}
+                    {authActionMessage && authActionStatus === 'reset-form' && (
+                      <p style={{ fontSize: '13px', color: '#EF4444', marginBottom: '16px', textAlign: 'center' }}>{authActionMessage}</p>
+                    )}
 
-                  <button
-                    type="submit"
-                    style={{
-                      width: '100%',
-                      padding: '14px 24px',
-                      background: 'linear-gradient(135deg, #3B5BFC, #2142D9)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '12px',
-                      fontSize: '15px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 16px rgba(59,91,252,0.3)',
-                      transition: 'all 0.2s',
-                      letterSpacing: '-0.2px'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.transform = 'translateY(-2px)';
-                      e.target.style.boxShadow = '0 6px 20px rgba(59,91,252,0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.transform = 'translateY(0)';
-                      e.target.style.boxShadow = '0 4px 16px rgba(59,91,252,0.3)';
-                    }}
-                  >
-                    Reset Password
-                  </button>
-                </form>
+                    {/* Update Password Button */}
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '14px 24px',
+                        background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #3B5BFC, #2142D9)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '15px',
+                        fontWeight: '700',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        boxShadow: loading ? 'none' : '0 4px 16px rgba(59,91,252,0.3)',
+                        transition: 'all 0.2s',
+                        letterSpacing: '-0.2px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!loading) {
+                          e.target.style.transform = 'translateY(-2px)';
+                          e.target.style.boxShadow = '0 6px 20px rgba(59,91,252,0.4)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!loading) {
+                          e.target.style.transform = 'translateY(0)';
+                          e.target.style.boxShadow = '0 4px 16px rgba(59,91,252,0.3)';
+                        }
+                      }}
+                    >
+                      {loading ? 'Updating...' : 'Update Password'}
+                    </button>
+                  </form>
+                </div>
               )}
             </>
           ) : !showForgotPassword ? (

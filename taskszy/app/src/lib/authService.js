@@ -57,7 +57,7 @@ export async function sendPasswordReset(email) {
 export async function sendVerificationEmail(user) {
   const actionCodeSettings = {
     // URL to redirect to after the user clicks the email link
-    url: window.location.origin,
+    url: 'https://www.taskszy.com/app',
     handleCodeInApp: true,
   };
   return sendEmailVerification(user, actionCodeSettings);
