@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, Search, Filter } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -124,7 +124,7 @@ export default function MemberTasks({ member, onNavigateToNotes = null, setPageF
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search tasks..."
+            placeholder="Search tasks�"
             style={{ width: '100%', height: 36, borderRadius: 10, border: '1.5px solid #E8EAEF', paddingLeft: 32, paddingRight: 12, fontSize: 12, color: '#374151', outline: 'none', background: '#fff' }}
             onFocus={e => e.target.style.borderColor = '#3B5BFC'}
             onBlur={e => e.target.style.borderColor = '#E8EAEF'}

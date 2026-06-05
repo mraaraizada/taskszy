@@ -4,11 +4,10 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/adminzdashboard/',  // Production base path
+  base: '/adminzdashboard/',
   server: {
     port: 5175,
     strictPort: true,
-    host: '0.0.0.0'
   },
   resolve: {
     alias: {

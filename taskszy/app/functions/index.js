@@ -7,24 +7,9 @@ const nodemailer = require('nodemailer');
 const cors = require('cors')({ 
   origin: [
     'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://localhost:5177',
-    'http://localhost:5178',
-    'http://localhost:5179',
-    'http://localhost:5180',
-    'http://localhost:5181',
-    'http://localhost:5182',
+    'http://localhost:5174', 
     'https://taskzy-9c2e5.web.app',
-    'https://taskzy-9c2e5.firebaseapp.com',
-    'https://taskszy.com',
-    'https://www.taskszy.com',
-    'https://app.taskszy.com',
-    'https://admin.taskszy.com',
-    'https://taskszy-website.pages.dev',
-    'https://taskszy-app.pages.dev',
-    'https://taskszy-admin.pages.dev'
+    'https://taskzy-9c2e5.firebaseapp.com'
   ],
   credentials: true 
 });

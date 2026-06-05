@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useMemo } from 'react';
 import { notify } from '../../lib/notify';
 import { CheckCircle, DollarSign, RotateCcw, Calendar, ChevronLeft, ChevronRight, AlertCircle, ChevronDown, RefreshCw, Clock, Plus, X, MessageSquare, Send } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -607,7 +607,7 @@ function MemberTaskDonut({ tasks, member }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1D2E' }}>Task Overview</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed • Active • Pending</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed � Active � Pending</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 600, color: '#6B7280', background: '#F0F2F8', padding: '3px 9px', borderRadius: 6, border: '1px solid #E8EAEF' }}>All Tasks</span>
       </div>

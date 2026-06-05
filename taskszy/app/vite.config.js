@@ -1,14 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
-  base: '/app/',  // Production base path
+  plugins: [react(), tailwindcss()],
+  base: '/',  // Root path on its own port
   server: {
     port: 5174,
     strictPort: true,
-    host: '0.0.0.0'
   },
   test: {
     environment: 'node',
@@ -21,10 +21,10 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
     chunkSizeWarningLimit: 1000,
     rolldownOptions: {
       output: {
+        // rolldown requires manualChunks as a function
         manualChunks(id) {
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor-react';
           if (id.includes('node_modules/recharts') || id.includes('node_modules/chart.js') || id.includes('node_modules/react-chartjs-2')) return 'vendor-charts';

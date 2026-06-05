@@ -4,10 +4,22 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',  // Root website
+  base: '/',
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/app': {
+        target: 'http://localhost:5174',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/app/, ''),
+      },
+      '/adminzdashboard': {
+        target: 'http://localhost:5175',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/adminzdashboard/, ''),
+      },
+    },
   },
   resolve: {
     alias: {
