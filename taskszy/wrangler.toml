@@ -1,29 +1,27 @@
 # Cloudflare Pages Configuration for Taskszy
+# Note: Cloudflare Pages uses dashboard configuration for builds
+# This file is primarily for documentation and local wrangler usage
+
 name = "taskszy"
 compatibility_date = "2024-01-01"
 
-# Pages configuration
-pages_build_output_dir = "deploy"
+# Pages build output directory is configured in dashboard as: deploy
+# Build command in dashboard: npm run build:cloudflare
+# Root directory in dashboard: taskszy
 
-# Custom domains
-[[pages_custom_domains]]
-domain = "taskszy.com"
-
-# Environment variables (add these in Cloudflare Dashboard for security)
-# VITE_FIREBASE_API_KEY
-# VITE_FIREBASE_AUTH_DOMAIN
-# VITE_FIREBASE_PROJECT_ID
-# etc.
-
-[build]
-command = "npm run build:cloudflare"
-cwd = "."
-
-[build.upload]
-format = "directory"
-dir = "./deploy"
-
-# Routing rules are handled by _redirects file
+# Routing rules are handled by _redirects file and functions/_middleware.js
 # /app/* -> serves app SPA
 # /adminzdashboard/* -> serves admin SPA  
 # /* -> serves main website
+
+# Environment variables are set in Cloudflare Dashboard:
+# VITE_FIREBASE_API_KEY
+# VITE_FIREBASE_AUTH_DOMAIN
+# VITE_FIREBASE_PROJECT_ID
+# VITE_FIREBASE_STORAGE_BUCKET
+# VITE_FIREBASE_MESSAGING_SENDER_ID
+# VITE_FIREBASE_APP_ID
+# VITE_FIREBASE_MEASUREMENT_ID
+# VITE_RAZORPAY_KEY_ID
+# VITE_TURNSTILE_SITE_KEY
+# NODE_VERSION=20
