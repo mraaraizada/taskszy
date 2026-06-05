@@ -1,8 +1,9 @@
 {
-  "name": "nexora-landing",
+  "name": "taskszy-website",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "description": "Taskszy - Marketing Website & Landing Page",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

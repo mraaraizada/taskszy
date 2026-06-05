@@ -131,7 +131,7 @@ export default function Navbar() {
         <div className="flex items-center gap-2">
           {/* Contact Sales button */}
           <a
-            href="#"
+            href="/app"
             className="hidden md:block relative px-4 py-2 rounded-full border border-foreground text-foreground text-xs font-medium overflow-hidden group transition-all cursor-pointer uppercase tracking-wider"
           >
             <span className="relative z-10 transition-colors duration-300 group-hover:text-background">

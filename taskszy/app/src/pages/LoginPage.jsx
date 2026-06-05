@@ -1336,7 +1336,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
               {/* Cloudflare Turnstile */}
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8, marginBottom: 4 }}>
                 <Turnstile
-                  siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+                  siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAADfjyyUsdMWtCILb'}
                   onSuccess={(token) => {
                     setTurnstileToken(token);
                     setTurnstileError(false);

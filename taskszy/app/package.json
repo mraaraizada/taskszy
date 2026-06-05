@@ -1,8 +1,9 @@
 {
-  "name": "my-app",
+  "name": "taskszy-app",
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "description": "Taskszy - Main Application (Task Management & Team Collaboration)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

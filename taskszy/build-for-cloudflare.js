@@ -6,7 +6,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🚀 Starting TasksZy build process...\n');
+console.log('🚀 Starting Taskszy Multi-Project Build...\n');
+console.log('📦 Building 3 projects:');
+console.log('   1. Root Website (Marketing/Landing)');
+console.log('   2. Main App (Task Management)');
+console.log('   3. Admin Dashboard (System Admin)\n');
 
 // Helper function to run commands
 function run(command, cwd = process.cwd()) {
@@ -38,17 +42,17 @@ function copyDir(src, dest) {
 
 try {
   // Step 1: Build root website
-  console.log('\n📦 Step 1: Building root website...');
+  console.log('\n📦 Step 1/3: Building Taskszy Website (Marketing/Landing)...');
   run('npm ci');
   run('npm run build');
   
   // Step 2: Build app
-  console.log('\n📦 Step 2: Building app...');
+  console.log('\n📦 Step 2/3: Building Taskszy App (Task Management)...');
   run('npm ci', './app');
   run('npm run build', './app');
   
   // Step 3: Build admin dashboard
-  console.log('\n📦 Step 3: Building admin dashboard...');
+  console.log('\n📦 Step 3/3: Building Taskszy Admin Dashboard (System Admin)...');
   run('npm ci', './adminzdashboard');
   run('npm run build', './adminzdashboard');
   
@@ -115,7 +119,13 @@ try {
   }
   
   if (allGood) {
-    console.log('\n🎉 Build successful! Ready to deploy to Cloudflare Pages.');
+    console.log('\n🎉 Taskszy Multi-Project Build Complete!');
+    console.log('\n📊 Build Summary:');
+    console.log('   ✅ Taskszy Website (Marketing/Landing)');
+    console.log('   ✅ Taskszy App (Task Management)');
+    console.log('   ✅ Taskszy Admin Dashboard (System Admin)');
+    console.log('   ✅ Functions Middleware (SPA Routing)');
+    console.log('\n🚀 Ready to deploy to Cloudflare Pages!');
     console.log('\n📝 Next steps:');
     console.log('   1. Run: npx wrangler pages deploy deploy --project-name=taskszy');
     console.log('   2. Or push to GitHub to trigger automatic deployment');

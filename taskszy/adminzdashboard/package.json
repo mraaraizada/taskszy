@@ -1,9 +1,9 @@
 {
-  "name": "project-dashboard",
+  "name": "taskszy-admin-dashboard",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Project Dashboard - Complete Taskzy Clone with Login & Dashboard",
+  "description": "Taskszy - Admin Dashboard (System Administration & Analytics)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
