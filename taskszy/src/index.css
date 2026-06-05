@@ -1,0 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import responsive utilities */
+@import './responsive.css';
+
+:root {
+  /* Taskzy Color System */
+  
+  /* Backgrounds */
+  --background: 0 0% 100%; /* Pure White #ffffff */
+  --background-elevated: 0 0% 100%; /* Pure White #ffffff */
+  
+  /* Foreground / Text */
+  --foreground: 220 30% 15%; /* Midnight Ink #1f2430 */
+  --foreground-muted: 220 15% 45%; /* Muted Slate #6b7285 */
+  
+  /* Primary - Lavender Blue */
+  --primary: 238 95% 67%; /* Lavender Blue Accent #5b5ff8 */
+  --primary-foreground: 0 0% 100%;
+  --primary-soft: 238 100% 95%;
+  
+  /* Secondary */
+  --secondary: 220 20% 94%;
+  --secondary-foreground: 220 30% 15%;
+  
+  /* Muted */
+  --muted: 220 20% 94%;
+  --muted-foreground: 220 15% 45%; /* Muted Slate #6b7285 */
+  
+  /* Accent - Soft Violet Glow */
+  --accent: 239 100% 77%; /* Soft Violet Glow #8b8fff */
+  --accent-soft: 239 100% 95%;
+  --accent-foreground: 0 0% 100%;
+  
+  /* Borders */
+  --border: 220 25% 91%; /* Mist Border #e7eaf3 */
+  --border-soft: 220 25% 93%;
+  
+  /* Glass overlay */
+  --glass: 0 0% 100%;
+  --glass-border: 220 25% 91%;
+  
+  /* Pale Text */
+  --pale-text: 220 20% 70%; /* Pale Text #a7afc3 */
+  
+  /* Status Colors */
+  --success: 142 71% 45%; /* Success Green #22c55e */
+  --warning: 32 100% 63%; /* Warning Amber #ff9f43 */
+  --error: 0 100% 70%; /* Error Coral #ff6b6b */
+  
+  --ring: 238 95% 67%;
+  --radius: 0.75rem;
+  --radius-lg: 0.75rem;
+  --radius-md: calc(0.75rem - 2px);
+  
+  /* Additional color variables for button component */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 220 25% 91%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 30% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 30% 15%;
+  
+  /* Typography System */
+  --font-display: 'Clash Display', sans-serif; /* For analytics highlights, hero metrics */
+  --font-body: 'Inter', sans-serif; /* For everything functional */
+  
+  /* Taskzy Spacing System - Premium Breathing Room */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-18: 72px;
+  
+  /* Section Rhythm */
+  --section-spacing: 48px; /* Between dashboard sections (min) */
+  --section-spacing-lg: 72px; /* Between dashboard sections (max) */
+  --card-gap: 20px; /* Between cards (min) */
+  --card-gap-lg: 24px; /* Between cards (max) */
+  --card-padding: 24px; /* Inside cards (min) */
+  --card-padding-lg: 32px; /* Inside cards (max) */
+  --sidebar-item-gap: 12px; /* Sidebar item spacing (min) */
+  --sidebar-item-gap-lg: 16px; /* Sidebar item spacing (max) */
+  --table-row-height: 72px; /* Table row height minimum */
+  
+  /* Shadows */
+  --shadow-glass: 0 1px 3px rgba(31, 36, 48, 0.04), 0 0 0 1px rgba(31, 36, 48, 0.06);
+  --shadow-elevated: 0 4px 16px rgba(31, 36, 48, 0.08), 0 0 0 1px rgba(31, 36, 48, 0.04);
+  --shadow-floating: 0 8px 32px rgba(31, 36, 48, 0.12), 0 0 0 1px rgba(31, 36, 48, 0.04);
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+/* Atmospheric gradient backgrounds */
+@layer base {
+  body {
+    background: transparent;
+    background-attachment: fixed;
+  }
+}
+
+/* Glass morphism utility */
+@layer utilities {
+  .glass {
+    background: hsla(var(--glass) / 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--glass-border));
+  }
+  
+  .glass-strong {
+    background: hsla(var(--glass) / 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--glass-border));
+  }
+  
+  .surface {
+    background: hsl(var(--background-elevated));
+    border: 1px solid hsl(var(--border-soft));
+  }
+  
+  .surface-elevated {
+    background: hsl(var(--background-elevated));
+    box-shadow: var(--shadow-elevated);
+  }
+  
+  /* Taskzy Spacing Utilities - Premium Breathing Room */
+  .section-spacing {
+    padding-top: var(--section-spacing);
+    padding-bottom: var(--section-spacing);
+  }
+  
+  .section-spacing-lg {
+    padding-top: var(--section-spacing-lg);
+    padding-bottom: var(--section-spacing-lg);
+  }
+  
+  .card-gap {
+    gap: var(--card-gap);
+  }
+  
+  .card-gap-lg {
+    gap: var(--card-gap-lg);
+  }
+  
+  .card-padding {
+    padding: var(--card-padding);
+  }
+  
+  .card-padding-lg {
+    padding: var(--card-padding-lg);
+  }
+  
+  /* Button spacing - never cramped */
+  button, .btn {
+    padding: var(--space-3) var(--space-6);
+    min-height: 40px;
+  }
+  
+  button.btn-lg, .btn-lg {
+    padding: var(--space-4) var(--space-8);
+    min-height: 48px;
+  }
+  
+  button.btn-sm, .btn-sm {
+    padding: var(--space-2) var(--space-5);
+    min-height: 36px;
+  }
+}
+
+/* Custom scrollbar - blue and white theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary));
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.8);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary)) hsl(var(--background));
+}
+
+body {
+  color: hsl(var(--foreground));
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 400; /* Inter 400 for body text */
+  letter-spacing: -0.01em;
+}
+
+/* Typography refinements */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  font-weight: 600; /* Clash Display 600 for headings */
+  line-height: 0.95; /* Tight line-height for display font */
+}
+
+/* UI Font weights for functional elements */
+button, 
+input, 
+select, 
+textarea,
+label,
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Inter weight system */
+.font-normal {
+  font-weight: 400; /* Body text */
+}
+
+.font-medium {
+  font-weight: 500; /* Navigation */
+}
+
+.font-semibold {
+  font-weight: 600; /* Emphasis */
+}
+
+.font-bold {
+  font-weight: 700; /* Section headers */
+}
+
+/* Display font usage - only for hero metrics and analytics */
+.font-display {
+  font-family: var(--font-display);
+  line-height: 0.95;
+  font-weight: 600;
+}
+
+.font-display-bold {
+  font-family: var(--font-display);
+  line-height: 0.95;
+  font-weight: 700;
+}
+
+/* Smooth transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

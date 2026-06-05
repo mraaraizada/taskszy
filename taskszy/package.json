@@ -1,0 +1,50 @@
+{
+  "name": "nexora-landing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "proxy": "node local-proxy.js",
+    "dev:app": "cd app && npm run dev",
+    "dev:admin": "cd adminzdashboard && npm run dev"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.5.0",
+    "@number-flow/react": "^0.6.0",
+    "@paper-design/shaders-react": "^0.0.76",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@rive-app/react-canvas": "^4.28.4",
+    "@splinetool/react-spline": "^4.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dicons": "^1.1.7",
+    "framer-motion": "^11.18.2",
+    "gsap": "^3.15.0",
+    "http-proxy": "^1.18.1",
+    "lottie-react": "^2.4.1",
+    "lucide-react": "^0.441.0",
+    "motion": "^12.38.0",
+    "ogl": "^1.0.11",
+    "postprocessing": "^6.39.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-use-measure": "^2.1.7",
+    "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.10",
+    "tailwindcss-animate": "^1.0.7",
+    "vite": "^5.4.2"
+  }
+}

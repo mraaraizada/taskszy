@@ -1,0 +1,118 @@
+/* CPU Architecture Animations */
+.cpu-architecture {
+  animation-duration: 3s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.cpu-line-1 {
+  animation-name: cpu-line-1-animation;
+  offset-path: path("M 5 15 h 84.5 q 5 0 5 5 v 35");
+}
+
+.cpu-line-2 {
+  animation-name: cpu-line-2-animation;
+  offset-path: path("M 185 5 h -74.7 q -5 0 -5 5 v 35");
+}
+
+.cpu-line-3 {
+  animation-name: cpu-line-3-animation;
+  offset-path: path("M 135 15 v 21.8 q 0 5 -5 5 h -15");
+}
+
+.cpu-line-4 {
+  animation-name: cpu-line-4-animation;
+  offset-path: path("M 175 85 v -21.8 q 0 -5 -5 -5 h -55");
+}
+
+.cpu-line-5 {
+  animation-name: cpu-line-5-animation;
+  offset-path: path("M 140 70 h 20 q 5 0 5 5 v 10 q 0 5 -5 5 h -44.8 q -5 0 -5 -5 v -25");
+}
+
+.cpu-line-6 {
+  animation-name: cpu-line-6-animation;
+  offset-path: path("M 94.8 95 v -36");
+}
+
+.cpu-line-7 {
+  animation-name: cpu-line-7-animation;
+  offset-path: path("M 83 88 v -15 q 0 -5 -5 -5 h -15 q -5 0 -5 -5 v -5 q 0 -5 5 -5 h 19");
+}
+
+.cpu-line-8 {
+  animation-name: cpu-line-8-animation;
+  offset-path: path("M 25 25 h 30 q 5 0 5 5 v 6.5 q 0 5 5 5 h 25");
+}
+
+@keyframes cpu-line-1-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-2-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-3-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-4-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-5-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-6-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-7-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes cpu-line-8-animation {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
