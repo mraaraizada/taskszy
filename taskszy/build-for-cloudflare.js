@@ -59,21 +59,21 @@ try {
   copyDir('./app/dist', './build/app');
   copyDir('./adminzdashboard/dist', './build/adminzdashboard');
   
-  // Step 6: Create _redirects file
-  console.log('\n📝 Step 6: Creating _redirects file...');
-  const redirectsContent = `/app/* /app/index.html 200!
-/adminzdashboard/* /adminzdashboard/index.html 200!
-/* /index.html 200
-`;
-  fs.writeFileSync('./build/_redirects', redirectsContent, 'utf8');
-  console.log('✅ _redirects file created');
+  // Step 6: Copy functions folder
+  console.log('\n📝 Step 6: Copying functions for SPA routing...');
+  if (fs.existsSync('./functions')) {
+    copyDir('./functions', './build/functions');
+    console.log('✅ Functions folder copied');
+  } else {
+    console.log('⚠️  No functions folder found');
+  }
   
   // Step 7: Verify
   console.log('\n✅ Build complete! Verifying structure...');
   console.log('📂 Build structure:');
   console.log('   build/');
   console.log('   ├── index.html (root website)');
-  console.log('   ├── _redirects (SPA routing)');
+  console.log('   ├── functions/_middleware.js (SPA routing)');
   console.log('   ├── app/');
   console.log('   │   └── index.html (main app)');
   console.log('   └── adminzdashboard/');
@@ -82,7 +82,7 @@ try {
   // Verify files exist
   const filesToCheck = [
     './build/index.html',
-    './build/_redirects',
+    './build/functions/_middleware.js',
     './build/app/index.html',
     './build/adminzdashboard/index.html'
   ];
