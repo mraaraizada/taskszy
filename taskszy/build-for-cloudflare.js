@@ -99,13 +99,22 @@ try {
   // Step 6: Copy functions folder
   console.log('\n📝 Step 6: Copying functions for SPA routing...');
   if (fs.existsSync('./functions')) {
-    copyDir('./functions', './deploy/functions');
+    const deployFunctionsPath = path.join('./deploy', 'functions');
+    copyDir('./functions', deployFunctionsPath);
     console.log('✅ Functions folder copied');
   } else {
     console.log('⚠️  No functions folder found');
   }
   
-  // Step 7: Verify
+  // Step 7: Remove _redirects files if they exist (we use functions instead)
+  console.log('\n🗑️  Step 7: Cleaning up conflicting redirect files...');
+  const redirectsPath = path.join('./deploy', '_redirects');
+  if (fs.existsSync(redirectsPath)) {
+    fs.unlinkSync(redirectsPath);
+    console.log('✅ Removed _redirects file (using functions middleware instead)');
+  }
+  
+  // Step 8: Verify
   console.log('\n✅ Build complete! Verifying structure...');
   console.log('📂 Deploy structure:');
   console.log('   deploy/');
