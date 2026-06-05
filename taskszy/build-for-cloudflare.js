@@ -65,20 +65,20 @@ try {
   
   // Step 1: Build root website
   console.log('\n📦 Step 1: Building root website...');
-  createEnvFile('.');
   run('npm ci');
+  createEnvFile('.');
   run('npm run build');
   
   // Step 2: Build app
   console.log('\n📦 Step 2: Building app...');
-  createEnvFile('./app');
   run('npm ci', './app');
+  createEnvFile('./app');
   run('npm run build', './app');
   
   // Step 3: Build admin dashboard
   console.log('\n📦 Step 3: Building admin dashboard...');
-  createEnvFile('./adminzdashboard');
   run('npm ci', './adminzdashboard');
+  createEnvFile('./adminzdashboard');
   run('npm run build', './adminzdashboard');
   
   // Step 4: Clean and create deploy directory
