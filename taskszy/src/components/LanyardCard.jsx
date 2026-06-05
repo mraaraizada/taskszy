@@ -5,16 +5,18 @@ import Lottie from 'lottie-react'
 // Encrypted Text Component
 const EncryptedText = () => {
   const [displayText, setDisplayText] = useState('wVISQaB96LVw2C')
-  const targetText = 'wVISQaB96LVw2C'
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const [isResolved, setIsResolved] = useState(false)
+  const targetText = 'TZY-A84291'
+  const initialText = 'wVISQaB96LVw2C'
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-'
 
   useEffect(() => {
     let iteration = 0
     const interval = setInterval(() => {
       setDisplayText(prev => 
-        prev.split('').map((char, index) => {
+        initialText.split('').map((char, index) => {
           if (index < iteration) {
-            return targetText[index]
+            return targetText[index] || ''
           }
           return chars[Math.floor(Math.random() * chars.length)]
         }).join('')
@@ -22,9 +24,8 @@ const EncryptedText = () => {
 
       if (iteration >= targetText.length) {
         clearInterval(interval)
-        setTimeout(() => {
-          iteration = 0
-        }, 2000)
+        setIsResolved(true)
+        setDisplayText(targetText)
       }
 
       iteration += 1 / 3
@@ -46,10 +47,10 @@ const EncryptedText = () => {
           key={index}
           initial={{ opacity: 0.5 }}
           animate={{ 
-            opacity: [0.5, 1, 0.5],
+            opacity: isResolved ? [0.7, 1, 0.7] : [0.5, 1, 0.5],
           }}
           transition={{
-            duration: 0.5,
+            duration: isResolved ? 1.5 : 0.5,
             repeat: Infinity,
             delay: index * 0.05,
           }}
@@ -331,11 +332,11 @@ const LanyardCard = ({ showLanyard }) => {
                 {/* Bottom Section - User Info */}
                 <div className="space-y-3">
                   <div>
-                    <h3 className="text-white font-bold text-xl tracking-tight">
-                      Koen Bok
+                    <h3 className="text-white font-bold text-xl tracking-wide">
+                      Ethan Carter
                     </h3>
                     <p className="text-zinc-400 text-sm font-medium mt-1">
-                      koen.bok@taskzy.io
+                      ethan.carter@taskzy.io
                     </p>
                   </div>
                   

@@ -30,11 +30,45 @@ export default function CompleteSuite() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 1.3 }}
-          className="grid grid-cols-4 gap-x-24 gap-y-6 mt-16 justify-center"
+          className="grid grid-cols-4 gap-x-36 gap-y-6 mt-16 justify-center"
           style={{ width: 'fit-content', margin: '4rem auto' }}
         >
-          {[...Array(16)].map((_, index) => (
-            <div key={index} style={{ width: '75px', height: '75px' }}>
+          {[...Array(16)].map((_, index) => {
+            const labels = [
+              'Dashboards',
+              'Analysis', 
+              'Reports',
+              'Progress',
+              'Stages',
+              'Events',
+              'Meetings',
+              'Updates',
+              'Chat',
+              'Notes',
+              'Excel',
+              'Import & Export',
+              'Payments',
+              'Roles',
+              'Permissions',
+              'Profile'
+            ];
+            
+            return (
+            <motion.div 
+              key={index} 
+              className="flex flex-col items-center gap-3 cursor-pointer"
+              whileHover={{ 
+                scale: 1.1,
+                y: -8,
+                transition: { 
+                  type: "spring", 
+                  stiffness: 400, 
+                  damping: 10 
+                }
+              }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <div style={{ width: '110px', height: '110px' }}>
               {/* 3D Glass Container */}
               <div 
                 className="relative rounded-[16px] flex items-center justify-center w-full h-full"
@@ -182,18 +216,21 @@ export default function CompleteSuite() {
                 />
                 
                 <img 
-                  src={index === 1 ? "/note_5406380.png" : index === 2 ? "/workflow_14662749.png" : index === 3 ? "/user_9977567.png" : index === 4 ? "/dashboard_10397277.png" : index === 5 ? "/support_18296255.png" : index === 7 ? "/analytics_17257787.png" : "/xls_8361442.png"}
-                  alt={index === 1 ? "Note icon" : index === 2 ? "Workflow icon" : index === 3 ? "User icon" : index === 4 ? "Dashboard icon" : index === 5 ? "Support icon" : index === 7 ? "Analytics icon" : "Excel icon"}
+                  src={index === 0 ? "/dashboard_10397277.png" : index === 1 ? "/3.png" : index === 2 ? "/analytics_17257787.png" : index === 3 ? "/13.png" : index === 4 ? "/workflow_14662749.png" : index === 5 ? "/10.png" : index === 6 ? "/8.png" : index === 7 ? "/1.png" : index === 8 ? "/support_18296255.png" : index === 9 ? "/note_5406380.png" : index === 11 ? "/15.png" : index === 12 ? "/2.png" : index === 13 ? "/user_9977567.png" : index === 14 ? "/14.png" : index === 15 ? "/16.png" : "/xls_8361442.png"}
+                  alt={index === 0 ? "Dashboard icon" : index === 1 ? "Icon 3" : index === 2 ? "Analytics icon" : index === 3 ? "Icon 13" : index === 4 ? "Workflow icon" : index === 5 ? "Icon 10" : index === 6 ? "Icon 8" : index === 7 ? "Icon 1" : index === 8 ? "Support icon" : index === 9 ? "Note icon" : index === 11 ? "Icon 15" : index === 12 ? "Icon 2" : index === 13 ? "User icon" : index === 14 ? "Icon 14" : index === 15 ? "Icon 16" : "Excel icon"}
                   className="object-contain relative z-10"
                   style={{
-                    width: '46px',
-                    height: '46px',
+                    width: '68px',
+                    height: '68px',
                     transform: 'translateZ(20px)',
                   }}
                 />
               </div>
-            </div>
-          ))}
+              </div>
+              <p className="text-gray-500 text-sm font-medium text-center">{labels[index]}</p>
+            </motion.div>
+            );
+          })}
         </motion.div>
       </div>
     </section>

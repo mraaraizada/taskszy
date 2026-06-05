@@ -56,14 +56,13 @@ const KeyIcon = () => (
   </svg>
 )
 
-const Pill = () => {
-  const [isExpanded, setIsExpanded] = useState(true) // Keep it expanded to prevent width changes
-
+const Pill = ({ unlocked }) => {
   return (
     <motion.div
       className="flex items-center justify-center overflow-hidden px-[10px] py-[18px] h-[38px] rounded-[20px]"
+      animate={{ width: unlocked ? 'auto' : '180px' }}
+      transition={{ duration: 0.5, ease: 'easeInOut' }}
       style={{ 
-        width: 'auto',
         minWidth: 'min-content',
         gap: '8px',
         background: 'linear-gradient(145deg, rgba(40, 45, 50, 0.95) 0%, rgba(25, 28, 32, 0.98) 50%, rgba(19, 20, 21, 1) 100%)',
@@ -83,35 +82,45 @@ const Pill = () => {
         textRendering: 'optimizeLegibility',
       }}
     >
-      {/* Connect section */}
+      {/* Workspace Security section */}
       <div className="flex items-center gap-2">
         <KeyIcon />
-        <span className="text-white text-sm font-medium select-none whitespace-pre">Connect</span>
+        <span className="text-white text-sm font-medium select-none whitespace-pre">Workspace Security</span>
       </div>
 
-      {/* 248k Active Users - always visible */}
+      {/* RBAC Enabled - visible when expanded */}
       <motion.span
         className="text-[rgb(155,161,165)] text-sm font-medium whitespace-pre"
+        animate={{ 
+          opacity: unlocked ? 1 : 0,
+          width: unlocked ? 'auto' : 0,
+        }}
+        transition={{ duration: 0.3 }}
       >
-        · 248k Active Users
+        · RBAC Enabled
       </motion.span>
 
-      {/* Info button - always visible */}
+      {/* Info button - visible when expanded */}
       <motion.div
         className="px-3 py-1 rounded-full text-[rgb(102,102,255)] text-xs font-medium"
-            style={{
-              background: 'linear-gradient(145deg, rgba(45, 50, 60, 0.95) 0%, rgba(30, 35, 40, 1) 100%)',
-              border: '1px solid rgba(102, 102, 255, 0.4)',
-              boxShadow: `
-                0 4px 12px rgba(0, 0, 0, 0.4),
-                0 0 16px rgba(102, 102, 255, 0.3),
-                inset 0 2px 3px rgba(102, 102, 255, 0.2),
-                inset 0 -2px 3px rgba(0, 0, 0, 0.5)
-              `,
-            }}
-          >
-            Info
-          </motion.div>
+        animate={{ 
+          opacity: unlocked ? 1 : 0,
+          width: unlocked ? 'auto' : 0,
+        }}
+        transition={{ duration: 0.3 }}
+        style={{
+          background: 'linear-gradient(145deg, rgba(45, 50, 60, 0.95) 0%, rgba(30, 35, 40, 1) 100%)',
+          border: '1px solid rgba(102, 102, 255, 0.4)',
+          boxShadow: `
+            0 4px 12px rgba(0, 0, 0, 0.4),
+            0 0 16px rgba(102, 102, 255, 0.3),
+            inset 0 2px 3px rgba(102, 102, 255, 0.2),
+            inset 0 -2px 3px rgba(0, 0, 0, 0.5)
+          `,
+        }}
+      >
+        Info
+      </motion.div>
     </motion.div>
   )
 }
@@ -313,7 +322,7 @@ const NotificationWidget = ({ isInView }) => {
                   fontWeight: 600,
                   letterSpacing: '-0.01em',
                 }}>
-                  Orders Import failed
+                  Budget Threshold
                 </h3>
                 <div className="flex items-center justify-center rounded-full" style={{ 
                   width: '28px', 
@@ -332,7 +341,7 @@ const NotificationWidget = ({ isInView }) => {
                 MozOsxFontSmoothing: 'grayscale',
                 fontWeight: 500,
               }}>
-                42s · TimeoutError at Step 2
+                $18,400 Spent · 91% Utilized
               </p>
             </motion.div>
 
@@ -365,7 +374,7 @@ const NotificationWidget = ({ isInView }) => {
                 fontWeight: 600,
                 letterSpacing: '-0.01em',
               }}>
-                SLA breach
+                Expense Logged
               </h3>
               <p className="text-[rgb(100,100,100)] text-[13px] font-normal" style={{ 
                 fontFamily: 'Inter, sans-serif',
@@ -373,7 +382,7 @@ const NotificationWidget = ({ isInView }) => {
                 MozOsxFontSmoothing: 'grayscale',
                 fontWeight: 500,
               }}>
-                2m 11s · Data enrichment
+                Design Sprint · $2,150 Added
               </p>
             </motion.div>
 
@@ -406,7 +415,7 @@ const NotificationWidget = ({ isInView }) => {
                 fontWeight: 600,
                 letterSpacing: '-0.01em',
               }}>
-                Orders Import failed
+                Allocation Approved
               </h3>
               <p className="text-[rgb(100,100,100)] text-[13px] font-normal" style={{ 
                 fontFamily: 'Inter, sans-serif',
@@ -414,7 +423,7 @@ const NotificationWidget = ({ isInView }) => {
                 MozOsxFontSmoothing: 'grayscale',
                 fontWeight: 500,
               }}>
-                5m · 404 on GET /products
+                Development Team · $8,000
               </p>
             </motion.div>
           </div>
@@ -464,7 +473,7 @@ const NotificationWidget = ({ isInView }) => {
                   fontFamily: 'Inter, sans-serif',
                   letterSpacing: '-0.04em',
                 }}>
-                  View all
+                  Budget updates
                 </span>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgb(40, 40, 40)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 15V6M18 6H9M18 6L6.25 17.75"/>
@@ -1069,7 +1078,7 @@ const SecurityCard = () => {
           >
             {/* Pill at the top */}
             <div className="w-full max-w-[400px] flex justify-center">
-              <Pill />
+              <Pill unlocked={unlocked} />
             </div>
             
             {/* Security Card */}
@@ -1149,9 +1158,10 @@ const SecurityCard = () => {
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
                       <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-[0.2em] drop-shadow-lg">
-                        Security Level
+                        Role Access
                       </h3>
-                      <p className="text-white font-bold text-xl drop-shadow-[0_2px_8px_rgba(255,255,255,0.3)]">Class A</p>
+                      <p className="text-white font-bold text-xl drop-shadow-[0_2px_8px_rgba(255,255,255,0.3)]">Admin</p>
+                      <p className="text-zinc-400 text-sm font-medium drop-shadow-lg">Full Control</p>
                     </div>
                     <div
                       className={`p-2 rounded-full border transition-all duration-500 backdrop-blur-sm shadow-lg ${
@@ -1192,9 +1202,9 @@ const SecurityCard = () => {
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-white/20 to-transparent shadow-[0_1px_2px_rgba(255,255,255,0.1)]" />
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-zinc-500 text-xs drop-shadow-md">Biometric Scan</p>
+                        <p className="text-zinc-500 text-xs drop-shadow-md">Permission Verification</p>
                         <p className="text-zinc-300 text-sm font-medium mt-0.5 drop-shadow-[0_2px_4px_rgba(255,255,255,0.2)]">
-                          {unlocked ? "Access Granted" : "Touch to Authorize"}
+                          {unlocked ? "Access Granted" : "Role Verification Active"}
                         </p>
                       </div>
                       <div 
@@ -1263,7 +1273,7 @@ const NotificationCards = () => {
       iconColor: 'text-blue-200',
       progressColor: 'bg-blue-500',
       title: 'New Message',
-      description: 'You have received a new direct message',
+      description: 'Sarah commented on Website Redesign · 2 sec ago',
       hasClose: true,
       icon: (
         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -1275,8 +1285,8 @@ const NotificationCards = () => {
       iconBg: 'bg-emerald-600',
       iconColor: 'text-emerald-200',
       progressColor: 'bg-emerald-500',
-      title: 'Changes Saved',
-      description: 'Your profile has been updated successfully',
+      title: 'Task Completed',
+      description: 'Landing Page Approved · Just now',
       hasClose: true,
       icon: (
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -1288,8 +1298,8 @@ const NotificationCards = () => {
       iconBg: 'bg-amber-600',
       iconColor: 'text-amber-200',
       progressColor: 'bg-amber-500',
-      title: 'Storage Low',
-      description: "You've used 90% of your space",
+      title: 'Review Required',
+      description: 'Homepage awaiting Review · 1 min ago',
       hasClose: true,
       icon: (
         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -1301,8 +1311,8 @@ const NotificationCards = () => {
       iconBg: 'bg-rose-600',
       iconColor: 'text-rose-200',
       progressColor: 'bg-rose-500',
-      title: 'Upload Failed',
-      description: 'Please check your connection',
+      title: 'File Updated',
+      description: 'DesignSystem.fig updated · 3 min ago',
       hasClose: true,
       icon: (
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -1501,30 +1511,54 @@ export default function Features() {
           {/* Right Side - Animated widget transitions */}
           <div ref={widgetRef} className="relative flex items-center justify-center" style={{ height: '500px', minHeight: '500px' }}>
             <AnimatePresence mode="wait">
-              <motion.div
-                key={activeIndex}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                {features[activeIndex].type === 'notifications' ? (
-                  <NotificationCards />
-                ) : features[activeIndex].type === 'security' ? (
-                  <SecurityCard />
-                ) : features[activeIndex].type === 'orbit' ? (
+              {activeIndex === 0 && (
+                <motion.div
+                  key="orbit-0"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
                   <OrbitAnimation />
-                ) : features[activeIndex].type === 'settlement' ? (
+                </motion.div>
+              )}
+              {activeIndex === 1 && (
+                <motion.div
+                  key="notifications-1"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <NotificationCards />
+                </motion.div>
+              )}
+              {activeIndex === 2 && (
+                <motion.div
+                  key="security-2"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <SecurityCard />
+                </motion.div>
+              )}
+              {activeIndex === 3 && (
+                <motion.div
+                  key="settlement-3"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
                   <NotificationWidget isInView={isInView} />
-                ) : (
-                  <img
-                    src={features[activeIndex].image}
-                    alt={features[activeIndex].title}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                )}
-              </motion.div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
         </div>

@@ -143,6 +143,10 @@ export default function Navbar() {
           {/* Login/Signup Button with arrow */}
           <a
             href="/app"
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.href = '/app';
+            }}
             className="relative px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium overflow-hidden group transition-all cursor-pointer uppercase tracking-wider border border-primary group-hover:border-primary flex items-center gap-1"
           >
             <span className="relative z-10 transition-colors duration-300 group-hover:text-primary">

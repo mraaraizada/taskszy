@@ -611,16 +611,8 @@ export default function PricingSection() {
                   </div>
 
                   {/* CTA */}
-                  <a
-                    href="/app"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handlePlanClick({ id, name, tagline, monthly, yearly: yearlyPrice, features, isCustom }, i);
-                      // Navigate after showing receipt
-                      setTimeout(() => {
-                        window.location.href = '/app';
-                      }, 7500);
-                    }}
+                  <button
+                    onClick={() => handlePlanClick({ id, name, tagline, monthly, yearly: yearlyPrice, features, isCustom }, i)}
                     className={`w-full rounded-full py-3.5 text-sm font-semibold font-body transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 ${
                       selectedCard === i
                         ? 'bg-primary text-primary-foreground shadow-floating'
@@ -628,7 +620,7 @@ export default function PricingSection() {
                     }`}
                   >
                     {cta}
-                  </a>
+                  </button>
 
                   {/* Price Guarantee Box - Only for non-custom plans */}
                   {!isCustom && (
