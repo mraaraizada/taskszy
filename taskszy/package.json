@@ -11,7 +11,8 @@
     "dev:app": "cd app && npm run dev",
     "dev:admin": "cd adminzdashboard && npm run dev",
     "build:all": "npm run build && cd app && npm install && npm run build && cd ../adminzdashboard && npm install && npm run build",
-    "deploy:merge": "mkdir -p build && cp -r dist/* build/ && mkdir -p build/app && cp -r app/dist/* build/app/ && mkdir -p build/adminzdashboard && cp -r adminzdashboard/dist/* build/adminzdashboard/"
+    "deploy:merge": "mkdir -p build && cp -r dist/* build/ && mkdir -p build/app && cp -r app/dist/* build/app/ && mkdir -p build/adminzdashboard && cp -r adminzdashboard/dist/* build/adminzdashboard/",
+    "build:cloudflare": "node build-for-cloudflare.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
