@@ -61,8 +61,8 @@ try {
   
   // Step 6: Create _redirects file
   console.log('\n📝 Step 6: Creating _redirects file...');
-  const redirectsContent = `/app/* /app/index.html 200
-/adminzdashboard/* /adminzdashboard/index.html 200
+  const redirectsContent = `/app/* /app/index.html 200!
+/adminzdashboard/* /adminzdashboard/index.html 200!
 /* /index.html 200
 `;
   fs.writeFileSync('./build/_redirects', redirectsContent, 'utf8');
