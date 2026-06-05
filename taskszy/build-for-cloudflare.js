@@ -37,18 +37,47 @@ function copyDir(src, dest) {
 }
 
 try {
+  // Helper to create .env file with Cloudflare env vars
+  function createEnvFile(dir) {
+    const envVars = [
+      'VITE_FIREBASE_API_KEY',
+      'VITE_FIREBASE_AUTH_DOMAIN',
+      'VITE_FIREBASE_PROJECT_ID',
+      'VITE_FIREBASE_STORAGE_BUCKET',
+      'VITE_FIREBASE_MESSAGING_SENDER_ID',
+      'VITE_FIREBASE_APP_ID',
+      'VITE_FIREBASE_MEASUREMENT_ID',
+      'VITE_RAZORPAY_KEY_ID',
+      'VITE_TURNSTILE_SITE_KEY'
+    ];
+    
+    const envContent = envVars
+      .filter(key => process.env[key])
+      .map(key => `${key}=${process.env[key]}`)
+      .join('\n');
+    
+    if (envContent) {
+      const envPath = path.join(dir, '.env');
+      fs.writeFileSync(envPath, envContent);
+      console.log(`✅ Created ${envPath} with ${envVars.filter(k => process.env[k]).length} variables`);
+    }
+  }
+  
   // Step 1: Build root website
   console.log('\n📦 Step 1: Building root website...');
+  createEnvFile('.');
   run('npm ci');
   run('npm run build');
   
   // Step 2: Build app
   console.log('\n📦 Step 2: Building app...');
+  createEnvFile('./app');
   run('npm ci', './app');
   run('npm run build', './app');
   
   // Step 3: Build admin dashboard
   console.log('\n📦 Step 3: Building admin dashboard...');
+  createEnvFile('./adminzdashboard');
   run('npm ci', './adminzdashboard');
   run('npm run build', './adminzdashboard');
   
