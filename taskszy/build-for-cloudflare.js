@@ -11,7 +11,11 @@ console.log('🚀 Starting TasksZy build process...\n');
 // Helper function to run commands
 function run(command, cwd = process.cwd()) {
   console.log(`📦 Running: ${command}`);
-  execSync(command, { stdio: 'inherit', cwd });
+  execSync(command, { 
+    stdio: 'inherit', 
+    cwd,
+    env: process.env // Pass all environment variables to child processes
+  });
 }
 
 // Helper function to copy directory recursively
