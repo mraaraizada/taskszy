@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/app/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TasksZy I Organize Better, Scale Faster</title>
+    
+    <!-- Aggressive console suppression for third-party scripts -->
+    <script>
+      (function() {
+        // Store original console methods
+        const _warn = console.warn;
+        const _error = console.error;
+        const _log = console.log;
+        const _info = console.info;
+        
+        // List of patterns to suppress
+        const suppressPatterns = [
+          'Permissions policy',
+          'devicemotion',
+          'deviceorientation',
+          'Mixed Content',
+          'Refused to get unsafe header',
+          'x-rtb-fingerprint-id',
+          'request-id',
+          'accelerometer is not allowed',
+          'Violation',
+          'local network request',
+          'preloaded using link preload',
+          'not used within a few seconds'
+        ];
+        
+        // Helper to check if message should be suppressed
+        function shouldSuppress(args) {
+          const message = String(args[0] || '');
+          return suppressPatterns.some(pattern => message.toLowerCase().includes(pattern.toLowerCase()));
+        }
+        
+        // Override all console methods
+        console.warn = function(...args) {
+          if (!shouldSuppress(args)) _warn.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+          if (!shouldSuppress(args)) _error.apply(console, args);
+        };
+        
+        console.log = function(...args) {
+          if (!shouldSuppress(args)) _log.apply(console, args);
+        };
+        
+        console.info = function(...args) {
+          if (!shouldSuppress(args)) _info.apply(console, args);
+        };
+        
+        // Intercept window.onerror for global errors
+        const _onerror = window.onerror;
+        window.onerror = function(message, source, lineno, colno, error) {
+          const msg = String(message || '');
+          if (shouldSuppress([msg])) return true;
+          if (_onerror) return _onerror.apply(window, arguments);
+          return false;
+        };
+        
+        // Prevent any script from restoring original console
+        try {
+          Object.defineProperty(window, 'console', {
+            value: console,
+            writable: false,
+            configurable: false
+          });
+        } catch (e) {
+          // Ignore if already defined
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/app/assets/index-HB8SYyVO.js"></script>
+    <link rel="modulepreload" crossorigin href="/app/assets/rolldown-runtime-COnpUsM8.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/preload-helper-DaWUHKFn.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-firebase-sy_i3H3Q.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-charts-CyS2FZJD.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-motion-B2cU1MLt.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-lottie-DLjCLzC7.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-ui-DyBC6yPe.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-react-DkMKPem6.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/firebase-BPG5xRTr.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/userProfileService-BJJlpXkW.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/AppContext-FZj_MWFm.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/useAdminPassword-DxJ0LRqz.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/paginationService-BS0bcBx1.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/Avatar-DqB42EXh.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/DataLoadError-ANJA_bIt.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/imageCompression-BaZCNoMe.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/storageService-CViIy_4X.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/TaskChatPanel-NrJ-ivMY.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/TasksPage-Bau9ZERz.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/authService-BlKxVABU.js">
+    <link rel="stylesheet" crossorigin href="/app/assets/index-Cm8QvW-r.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

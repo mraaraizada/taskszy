@@ -1,0 +1,83 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Cloudflare Pages
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install root dependencies
+        run: npm install
+      
+      - name: Build root website
+        run: npm run build
+      
+      - name: Install app dependencies
+        working-directory: ./app
+        run: npm install
+      
+      - name: Build app
+        working-directory: ./app
+        run: npm run build
+      
+      - name: Install admin dependencies
+        working-directory: ./adminzdashboard
+        run: npm install
+      
+      - name: Build admin dashboard
+        working-directory: ./adminzdashboard
+        run: npm run build
+      
+      - name: Merge build outputs
+        run: |
+          mkdir -p build
+          echo "Copying root website..."
+          cp -r dist/* build/
+          echo "Copying app..."
+          mkdir -p build/app
+          cp -r app/dist/* build/app/
+          echo "Copying admin dashboard..."
+          mkdir -p build/adminzdashboard
+          cp -r adminzdashboard/dist/* build/adminzdashboard/
+          echo "Merge complete!"
+      
+      - name: Create SPA redirects
+        run: |
+          echo "/app/* /app/index.html 200" > build/_redirects
+          echo "/adminzdashboard/* /adminzdashboard/index.html 200" >> build/_redirects
+          echo "/* /index.html 200" >> build/_redirects
+          echo "_redirects file created:"
+          cat build/_redirects
+      
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: taskszy
+          directory: build
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+      
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment complete!"
+          echo "🌐 Your site will be available at:"
+          echo "   - https://taskszy.pages.dev"
+          echo "   - https://taskszy.pages.dev/app"
+          echo "   - https://taskszy.pages.dev/adminzdashboard"
