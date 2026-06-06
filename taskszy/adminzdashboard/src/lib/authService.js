@@ -60,7 +60,11 @@ export function mapAuthError(code) {
  * Send a password reset email (dashboard admins can reset their own password).
  */
 export async function sendPasswordReset(email) {
-  return sendPasswordResetEmail(auth, email);
+  const actionCodeSettings = {
+    url: 'https://taskszy.com/adminzdashboard',
+    handleCodeInApp: false,
+  };
+  return sendPasswordResetEmail(auth, email, actionCodeSettings);
 }
 
 /**

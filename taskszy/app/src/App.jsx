@@ -267,7 +267,7 @@ function MgmtPasswordPrompt({ onComplete }) {
 // ── Main shell ────────────────────────────────────────────────────────────────
 function AppShell() {
   const [auth, setAuth]               = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [activeItem, setActiveItem]   = useState('dashboard');
   const [dashVisible, setDashVisible] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);

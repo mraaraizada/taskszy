@@ -42,11 +42,11 @@ export async function signOutUser() {
 
 /**
  * Send a password reset email using Firebase's built-in email service.
- * The email will contain a link that opens in your app at taskzy.com.
+ * The email will contain a link that opens in your app at taskszy.com.
  */
 export async function sendPasswordReset(email) {
   const actionCodeSettings = {
-    url: 'https://taskzy.com/app',
+    url: 'https://taskszy.com/app',
     handleCodeInApp: false,
   };
   return sendPasswordResetEmail(auth, email, actionCodeSettings);
@@ -59,7 +59,7 @@ export async function sendPasswordReset(email) {
 export async function sendVerificationEmail(user) {
   const actionCodeSettings = {
     // URL to redirect to after the user clicks the email link
-    url: 'https://taskzy.com/app',
+    url: 'https://taskszy.com/app',
     handleCodeInApp: true,
   };
   return sendEmailVerification(user, actionCodeSettings);
