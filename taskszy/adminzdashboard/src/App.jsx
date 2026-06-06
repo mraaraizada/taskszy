@@ -12,7 +12,7 @@ import {
 } from './components/Skeleton';
 
 // ── Lazy-loaded pages ─────────────────────────────────────────────────────────
-const LoginPage                = lazy(() => import('./pages/LoginPage'));
+import LoginPage from './pages/LoginPage';  // Not lazy - load immediately
 const AdminProjectDashboardPage = lazy(() => import('./pages/AdminProjectDashboardPage'));
 const TeamPage                 = lazy(() => import('./pages/TeamPage'));
 const FeedbackPage             = lazy(() => import('./pages/FeedbackPage'));

@@ -13,7 +13,14 @@
 export async function onRequest(context) {
   const { request, env, next } = context;
   const url = new URL(request.url);
-  const { pathname } = url;
+  const { pathname, hostname } = url;
+
+  // Redirect www to non-www
+  if (hostname === 'www.taskszy.com') {
+    const newUrl = new URL(request.url);
+    newUrl.hostname = 'taskszy.com';
+    return Response.redirect(newUrl.toString(), 301);
+  }
 
   // Skip middleware for static assets (files with extensions)
   // Examples: .js, .css, .png, .json, .svg, etc.

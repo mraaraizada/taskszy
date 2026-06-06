@@ -47,7 +47,7 @@ function useProfileUserCardAnimation() {
 }
 
 // ── Lazy-loaded pages (each becomes its own chunk) ────────────────────────────
-const LoginPage      = lazy(() => import('./pages/LoginPage'));
+import LoginPage from './pages/LoginPage';  // Not lazy - load immediately
 const AuthActionPage = lazy(() => import('./pages/AuthActionPage'));
 const TasksPage      = lazy(() => import('./pages/TasksPage'));
 const TeamPage       = lazy(() => import('./pages/TeamPage'));
