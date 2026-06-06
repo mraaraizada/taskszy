@@ -109,7 +109,7 @@ async function calculateFinalAmount(plan, billingCycle, couponCode, quantity = 1
 
 exports.createRazorpayOrder = onCall({
   enforceAppCheck: false,
-  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com'],
+  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com', 'https://taskszy.com', 'https://www.taskszy.com'],
   region: 'us-central1',
 }, async (request) => {
   try {
@@ -315,7 +315,7 @@ exports.createRazorpayOrder = onCall({
 
 exports.verifyRazorpayPayment = onCall({
   enforceAppCheck: false,
-  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com'],
+  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com', 'https://taskszy.com', 'https://www.taskszy.com'],
   region: 'us-central1',
 }, async (request) => {
   // ══════════════════════════════════════════════════════════════════════
@@ -488,7 +488,7 @@ exports.verifyRazorpayPayment = onCall({
 
 exports.activateFreePlan = onCall({
   enforceAppCheck: false,
-  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com'],
+  cors: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://taskzy-9c2e5.web.app', 'https://taskzy-9c2e5.firebaseapp.com', 'https://taskszy.com', 'https://www.taskszy.com'],
   region: 'us-central1',
 }, async (request) => {
   // ══════════════════════════════════════════════════════════════════════
