@@ -785,7 +785,7 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
       
       script.onload = () => {
         const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_SwQkTJ7VdTAUhE',
+          key: (import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_SwQkTJ7VdTAUhE').trim(),
           order_id: orderId,
           amount: pricing.total * 100,
           currency: 'INR',

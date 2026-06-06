@@ -79,8 +79,14 @@ export async function sendVerificationEmail(user) {
  * @returns {Promise<import('firebase/auth').UserCredential>}
  */
 export async function signInWithGoogle() {
-  const provider = new GoogleAuthProvider();
-  return signInWithPopup(auth, provider);
+  try {
+    const provider = new GoogleAuthProvider();
+    return await signInWithPopup(auth, provider);
+  } catch (error) {
+    // Log the full error for debugging
+    console.error('Google Sign-In Error:', error.code, error.message);
+    throw error; // Re-throw so the UI can handle it
+  }
 }
 
 /**
@@ -99,6 +105,12 @@ export function onAuthChanged(callback) {
  * @returns {string}
  */
 export function mapAuthError(code) {
+  // Handle cases where code might be undefined or null
+  if (!code) {
+    console.error('mapAuthError called with no code');
+    return 'An unexpected error occurred. Please try again.';
+  }
+
   switch (code) {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
@@ -115,8 +127,26 @@ export function mapAuthError(code) {
       return 'This account has been disabled. Please contact support.';
     case 'auth/network-request-failed':
       return 'Network error. Please check your connection and try again.';
+    case 'auth/popup-blocked':
+      return 'Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for Google sign-in. Please contact support.';
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled. Please contact support.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with the same email but different sign-in method.';
+    case 'auth/auth-domain-config-required':
+      return 'Authentication configuration is incomplete. Please contact support.';
+    case 'auth/cancelled-popup-request':
+      return ''; // Silent error - user cancelled
+    case 'auth/popup-closed-by-user':
+      return ''; // Silent error - user closed popup
+    case 'auth/internal-error':
+      return 'An internal authentication error occurred. Please try again or contact support.';
+    case 'unknown':
+      return 'Unable to complete sign-in. Please check your internet connection and try again.';
     default:
-
+      console.error('Unmapped auth error:', code);
       return 'An unexpected error occurred. Please try again.';
   }
 }

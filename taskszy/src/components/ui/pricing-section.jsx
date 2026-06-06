@@ -260,11 +260,26 @@ const BillingReceipt = ({ isOpen, onClose, planData }) => {
                   Thank you for choosing Taskzy.
                 </div>
                 <div className="text-[10px] leading-snug px-2">
-                  Once your plan is activated, you will be<br />
-                  redirected to your dashboard to start<br />
-                  managing your workspace.
+                  Sign up now to activate your plan<br />
+                  and start managing your workspace.
                 </div>
               </div>
+
+              {/* Continue Button - appears after animation */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 7.2, duration: 0.3 }}
+                className="mb-3"
+              >
+                <a
+                  href="/app"
+                  className="block w-full py-2.5 text-center text-[12px] font-bold bg-[#3B5BFC] text-white rounded hover:bg-[#2a4adc] transition-colors no-underline"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Continue to App →
+                </a>
+              </motion.div>
 
               {/* Divider Line */}
               <div className="my-3" style={{ 

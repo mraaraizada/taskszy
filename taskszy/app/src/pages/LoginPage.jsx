@@ -739,8 +739,12 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       }
     } catch (err) {
       setLoading(false);
+      console.error('Google Sign-In Error in LoginPage:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
-      setError(mapAuthError(err.code));
+      const errorMessage = mapAuthError(err.code || 'unknown');
+      if (errorMessage) {
+        setError(errorMessage);
+      }
     }
   };
 
