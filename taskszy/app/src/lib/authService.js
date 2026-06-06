@@ -41,15 +41,13 @@ export async function signOutUser() {
 }
 
 /**
- * Send a password reset email with custom domain link.
- * The email will contain a link that opens in your app at taskzy.com.
+ * Send a branded password reset email using custom Cloud Function.
+ * The email will contain TasksZy branding with logo and custom template.
  */
 export async function sendPasswordReset(email) {
-  const actionCodeSettings = {
-    url: 'https://taskzy.com/app',
-    handleCodeInApp: false,
-  };
-  return sendPasswordResetEmail(auth, email, actionCodeSettings);
+  const generatePasswordResetLink = httpsCallable(functions, 'generatePasswordResetLink');
+  const result = await generatePasswordResetLink({ email });
+  return result.data;
 }
 
 /**
@@ -59,7 +57,7 @@ export async function sendPasswordReset(email) {
 export async function sendVerificationEmail(user) {
   const actionCodeSettings = {
     // URL to redirect to after the user clicks the email link
-    url: 'https://www.taskszy.com/app',
+    url: 'https://taskzy.com/app',
     handleCodeInApp: true,
   };
   return sendEmailVerification(user, actionCodeSettings);

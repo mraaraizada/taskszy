@@ -473,7 +473,7 @@ exports.generatePasswordResetLink = onCall({
 
     // Generate password reset link (expires in 1 hour)
     const resetLink = await auth.generatePasswordResetLink(email, {
-      url: 'https://www.taskszy.com/app',
+      url: 'https://taskzy.com/app',
       handleCodeInApp: false,
     });
 
