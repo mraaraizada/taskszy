@@ -42,27 +42,36 @@ export async function signOutUser() {
 
 /**
  * Send a password reset email using Firebase's built-in email service.
- * The email will contain a link that opens in your app at taskszy.com.
+ * Uses Firebase default URL until taskszy.com is added to authorized domains.
  */
 export async function sendPasswordReset(email) {
-  const actionCodeSettings = {
-    url: 'https://taskszy.com/app',
-    handleCodeInApp: false,
-  };
-  return sendPasswordResetEmail(auth, email, actionCodeSettings);
+  // Temporarily removed actionCodeSettings to avoid 400 error
+  // Add taskszy.com to Firebase Console → Authentication → Authorized domains
+  // Then uncomment the code below:
+  // const actionCodeSettings = {
+  //   url: 'https://taskszy.com/app',
+  //   handleCodeInApp: false,
+  // };
+  // return sendPasswordResetEmail(auth, email, actionCodeSettings);
+  
+  return sendPasswordResetEmail(auth, email);
 }
 
 /**
  * Send an email verification to the given Firebase user.
- * The email will contain a link that opens in your app (not Firebase's default page).
+ * Uses Firebase default URL until taskszy.com is added to authorized domains.
  */
 export async function sendVerificationEmail(user) {
-  const actionCodeSettings = {
-    // URL to redirect to after the user clicks the email link
-    url: 'https://taskszy.com/app',
-    handleCodeInApp: true,
-  };
-  return sendEmailVerification(user, actionCodeSettings);
+  // Temporarily removed actionCodeSettings to avoid 400 error
+  // Add taskszy.com to Firebase Console → Authentication → Authorized domains
+  // Then uncomment the code below:
+  // const actionCodeSettings = {
+  //   url: 'https://taskszy.com/app',
+  //   handleCodeInApp: true,
+  // };
+  // return sendEmailVerification(user, actionCodeSettings);
+  
+  return sendEmailVerification(user);
 }
 
 /**

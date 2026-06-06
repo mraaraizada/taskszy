@@ -58,13 +58,12 @@ export function mapAuthError(code) {
 
 /**
  * Send a password reset email (dashboard admins can reset their own password).
+ * Uses Firebase default URL until taskszy.com is added to authorized domains.
  */
 export async function sendPasswordReset(email) {
-  const actionCodeSettings = {
-    url: 'https://taskszy.com/adminzdashboard',
-    handleCodeInApp: false,
-  };
-  return sendPasswordResetEmail(auth, email, actionCodeSettings);
+  // Temporarily removed actionCodeSettings to avoid 400 error
+  // Add taskszy.com to Firebase Console → Authentication → Authorized domains
+  return sendPasswordResetEmail(auth, email);
 }
 
 /**
