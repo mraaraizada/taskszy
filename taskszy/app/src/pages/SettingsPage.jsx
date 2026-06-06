@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { notify } from '../lib/notify';
 import { Save, Mail, Phone, MapPin, Building, Calendar, KeyRound, Eye, EyeOff, ShieldCheck, User, Lock, Shield, Camera, Edit2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';

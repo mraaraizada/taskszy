@@ -3,7 +3,7 @@
  * Displays task change history from Firestore timeline subcollection
  */
 
-import { useState, useRef, useEffect, useMemo, memo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { X, Clock, Edit, Users, DollarSign, CheckCircle, Circle } from 'lucide-react';
 import {
   collection, onSnapshot, query, orderBy,

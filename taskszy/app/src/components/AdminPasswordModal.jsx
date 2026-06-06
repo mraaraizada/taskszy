@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Shield, X, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Download } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,

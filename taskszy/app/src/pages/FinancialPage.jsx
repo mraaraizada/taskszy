@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { notify } from '../lib/notify';
 import { Clock, CheckCircle, TrendingUp, ArrowUpRight, Wallet, Download, X, DollarSign, Calendar, Plus, User, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ArrowLeft, ArrowRight, ReceiptIndianRupee } from 'lucide-react';
 import { useApp } from '../context/AppContext';

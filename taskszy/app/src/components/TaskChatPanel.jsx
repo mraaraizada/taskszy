@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Lock, Image, Loader } from 'lucide-react';
 import {
   collection, addDoc, onSnapshot, query,

@@ -117,9 +117,7 @@ function AppShell() {
 
   if (!auth) {
     return (
-      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
-        <LoginPage onLogin={handleLogin} />
-      </Suspense>
+      <LoginPage onLogin={handleLogin} />
     );
   }
 

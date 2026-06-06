@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, CheckCircle, Clock, RotateCcw, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 

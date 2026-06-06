@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Eye, EyeOff, CheckCircle, AlertCircle, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import PlanSelection from '../components/PlanSelection';
@@ -889,26 +889,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           
           {!showPlanSelection ? (
             <>
-          {/* Top nav — absolute so it doesn't affect centering */}
-          <div className="flex items-center" style={{ position: 'absolute', top: 32, left: 56, right: 56, zIndex: 12 }}>
-            <div className="flex items-center gap-2">
-              <div style={{
-                width: 30, height: 30, borderRadius: 8,
-                background: 'linear-gradient(135deg, #3B5BFC, #7C3AED)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(59,91,252,0.35)',
-              }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8L7 4L11 8L7 12L3 8Z" fill="white" opacity="0.7"/>
-                  <path d="M7 4L11 8L13 6L9 2L7 4Z" fill="white"/>
-                </svg>
-              </div>
-              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1D2E', letterSpacing: '-0.3px' }}>
-                TasksZy
-              </span>
-            </div>
-          </div>
-
           {/* Form section — centered */}
           <div key={formKey} className={`login-form-card ${formDir === 'right' ? 'form-enter' : 'form-enter-left'}`} style={{
             maxWidth: 520, width: '100%', margin: '0 auto',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { onAuthChanged, signOutUser } from './lib/authService';
 import { getProfile, stampLogin, clearSession } from './lib/userProfileService';
@@ -917,9 +917,7 @@ function AppShell() {
   // ── Not logged in ──
   if (!auth) {
     return (
-      <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
-        <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} />
-      </Suspense>
+      <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} />
     );
   }
 

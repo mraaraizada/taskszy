@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FileText } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 

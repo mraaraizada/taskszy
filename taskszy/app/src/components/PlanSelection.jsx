@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLottie } from 'lottie-react';
 import { Check, Mail, ArrowLeft, Tag, Lock, User, Phone, AtSign, Plus, X, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';

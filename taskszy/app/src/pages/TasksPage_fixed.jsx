@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { notify } from '../lib/notify';
 import { Plus, X, RefreshCw, Wallet, Trash2, CheckCircle, CheckSquare, AlertCircle, Clock, Shield, UserCheck, Calendar, ChevronDown, ClipboardCheck, Edit2, ChevronLeft, ChevronRight, Hourglass, MessageSquare, Send } from 'lucide-react';
 import { useApp } from '../context/AppContext';

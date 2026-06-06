@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Trash2, RotateCcw, X, FileText, StickyNote, Tag, Clock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 

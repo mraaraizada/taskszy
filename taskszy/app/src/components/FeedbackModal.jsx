@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, MessageSquare, Send, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import { submitFeedback } from '../lib/feedbackService';
 import { dismissFeedbackRequest, hasDismissedFeedback } from '../lib/feedbackBroadcastService';

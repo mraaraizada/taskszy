@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Plus, Shield, ChevronDown, Check, X, Tag, FolderOpen, Lock, Edit2, Copy, FileImage, Users, Settings2, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';

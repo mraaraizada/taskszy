@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TrendingUp, Calendar, Wallet, CheckCircle, Clock, Users, AlertCircle, BarChart2, ChevronDown, X } from 'lucide-react';
 import CustomerGrowth from '../components/CustomerGrowth';
 import CustomerHabitsChart from '../components/BarChart';

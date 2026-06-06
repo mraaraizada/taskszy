@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Upload, ArrowRight, Eye, EyeOff, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
