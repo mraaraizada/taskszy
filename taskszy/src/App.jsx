@@ -1,44 +1,19 @@
-import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import Services from './components/Services'
-import IntegrationArchitecture from './components/IntegrationArchitecture'
-import BentoFeatures from './components/BentoFeatures'
-import TaskzyArchitecture from './components/TaskzyArchitecture'
-import Features from './components/Features'
-import FeatureCardAbout from './components/FeatureCardAbout'
-import MetalPinShowcase from './components/MetalPinShowcase'
-import CompleteSuite from './components/CompleteSuite'
-import WhyChooseUs from './components/WhyChooseUs'
-import Testimonials from './components/Testimonials'
-import FAQ from './components/FAQ'
-import Pricing from './components/Pricing'
-import Footer from './components/Footer'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HelmetProvider } from 'react-helmet-async'
+import HomePage from './pages/HomePage'
+import BlogPage from './pages/BlogPage'
+import BlogPostPage from './pages/BlogPostPage'
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      {/* Navbar - sticky across all pages */}
-      <Navbar />
-
-      {/* Hero — full viewport height */}
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Hero />
-      </div>
-
-      {/* Scrollable sections below */}
-      {/* <Services /> */}
-      {/* <TaskzyArchitecture /> */}
-      <IntegrationArchitecture />
-      {/* <BentoFeatures /> */}
-      <Features />
-      {/* <FeatureCardAbout /> */}
-      {/* <MetalPinShowcase /> */}
-      <CompleteSuite />
-      {/* <WhyChooseUs /> */}
-      <Testimonials />
-      <Pricing />
-      <FAQ />
-      <Footer />
-    </div>
+    <HelmetProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
+        </Routes>
+      </BrowserRouter>
+    </HelmetProvider>
   )
 }
