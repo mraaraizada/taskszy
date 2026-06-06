@@ -486,10 +486,10 @@ function AppShell() {
             }
           }
 
-          // If admin without completed setup, don't auto-login (force them through setup)
+          // If admin without completed setup OR without a plan, don't auto-login (force them through setup/plan selection)
           // EXCEPTION: If this is a session re-login (user was already logged in before), always let them through
           const isRelogin = expiredLogoutRef.current || sessionExpired;
-          if (userRole === 'admin' && !completedSetup && !isRelogin) {
+          if (userRole === 'admin' && (!completedSetup || !hasPlan) && !isRelogin) {
 
             setAuthLoading(false);
             return;
