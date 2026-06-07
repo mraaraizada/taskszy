@@ -187,7 +187,7 @@ export function AppProvider({ children }) {
           // Sign out and reload
           const { signOutUser } = await import('../lib/authService');
           await signOutUser();
-          window.location.href = '/login?reason=another-device';
+          window.location.href = '/app/?reason=another-device';
           return;
         }
       }
@@ -203,7 +203,7 @@ export function AppProvider({ children }) {
         // Sign out and reload
         const { signOutUser } = await import('../lib/authService');
         await signOutUser();
-        window.location.href = '/login?reason=deactivated';
+        window.location.href = '/app/?reason=deactivated';
         return;
       }
       

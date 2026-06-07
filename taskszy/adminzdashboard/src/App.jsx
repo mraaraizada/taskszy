@@ -44,7 +44,14 @@ function renderPage(activeItem) {
 function AppShell() {
   const [auth, setAuth]               = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [activeItem, setActiveItem]   = useState('dashboard');
+  const [activeItem, setActiveItem]   = useState(() => {
+    // Restore last active page from localStorage on refresh
+    try {
+      return localStorage.getItem('lastActivePageAdmin') || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [dashVisible, setDashVisible] = useState(false);
   const [visitedPages, setVisitedPages] = useState({});
   const [loadingPage, setLoadingPage] = useState(null);
@@ -80,6 +87,7 @@ function AppShell() {
   const handleLogout = async () => {
     try { await signOutUser(); } catch (err) {  }
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('lastActivePageAdmin'); // Clear saved page on logout
     setAuth(null);
     setDashVisible(false);
     setActiveItem('dashboard');
@@ -90,6 +98,10 @@ function AppShell() {
   const handleNav = (item) => {
     if (item === activeItem) { refreshData(); return; }
     setActiveItem(item);
+    // Persist active page to localStorage for refresh restoration
+    try {
+      localStorage.setItem('lastActivePageAdmin', item);
+    } catch {}
     if (!visitedPages[item]) {
       setLoadingPage(item);
       setTimeout(() => {

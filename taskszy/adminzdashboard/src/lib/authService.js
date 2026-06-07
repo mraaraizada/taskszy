@@ -4,7 +4,8 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from './firebase';
 
 /**
  * Sign in with email and password.
@@ -57,13 +58,20 @@ export function mapAuthError(code) {
 // NOT exported — dashboard accounts are provisioned via Firebase Console only.
 
 /**
- * Send a password reset email (dashboard admins can reset their own password).
- * Uses Firebase default URL until taskszy.com is added to authorized domains.
+ * Send a password reset email using custom branded email template.
+ * This disables Firebase's default email and uses only our custom template.
  */
 export async function sendPasswordReset(email) {
-  // Temporarily removed actionCodeSettings to avoid 400 error
-  // Add taskszy.com to Firebase Console → Authentication → Authorized domains
-  return sendPasswordResetEmail(auth, email);
+  try {
+    // Call our custom function that will generate the link and send branded email
+    const sendCustomResetEmail = httpsCallable(functions, 'sendBrandedPasswordResetEmail');
+    const result = await sendCustomResetEmail({ email });
+    
+    return result.data;
+  } catch (error) {
+    console.error('Password reset error:', error);
+    throw error;
+  }
 }
 
 /**

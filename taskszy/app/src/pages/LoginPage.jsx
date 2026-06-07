@@ -143,7 +143,7 @@ function LoginLottie() {
   return View;
 }
 
-export default function LoginPage({ onLogin, sessionExpired = false, onClearExpired }) {
+export default function LoginPage({ onLogin, sessionExpired = false, onClearExpired, checkPlanOnMount = false }) {
   const { setCurrentPlan, setPlanExpiryDate } = useApp();
   const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState('');
@@ -183,6 +183,88 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [showResetNewPassword, setShowResetNewPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+
+  // Check if current authenticated user needs to complete plan selection
+  useEffect(() => {
+    // Only run this check if explicitly requested via prop OR if user is already authenticated
+    if (!checkPlanOnMount) return;
+    
+    let unsubscribe = () => {};
+    
+    const checkUserPlan = async () => {
+      try {
+        // Import Firebase auth dynamically
+        const { getAuth, onAuthStateChanged: onAuthChanged } = await import('firebase/auth');
+        const auth = getAuth();
+        
+        // Use onAuthStateChanged to wait for auth to be ready
+        unsubscribe = onAuthChanged(auth, async (currentUser) => {
+          // Only check if user is authenticated and we're not already showing plan selection
+          if (currentUser && !showPlanSelection) {
+            try {
+              const profile = await getProfile(currentUser.uid);
+              
+              // Only check for admin users
+              if (profile && profile.role === 'admin' && profile.workspaceId) {
+                const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
+                
+                if (workspaceSnap.exists()) {
+                  const wsData = workspaceSnap.data();
+                  const hasPlan = wsData?.plan?.id != null;
+                  
+                  // If no plan, show plan selection
+                  if (!hasPlan) {
+                    const completedSetup = wsData?.settings?.hasCompletedSetup === true;
+                    console.log('[LoginPage] Admin has no plan - showing plan selection');
+                    setEmail(currentUser.email || ''); // Set email state for PlanSelection component
+                    setAuthenticatedUser({ 
+                      email: currentUser.email, 
+                      role: 'admin', 
+                      memberId: null, 
+                      workspaceId: profile.workspaceId,
+                      completedSetup: completedSetup,
+                      isNewSignup: false 
+                    });
+                    setShowPlanSelection(true);
+                    
+                    // Unsubscribe immediately after detecting and setting state
+                    unsubscribe();
+                  }
+                } else {
+                  // Workspace doesn't exist - new signup, show plan selection
+                  console.log('[LoginPage] Workspace does not exist - showing plan selection');
+                  setEmail(currentUser.email || ''); // Set email state for PlanSelection component
+                  setAuthenticatedUser({ 
+                    email: currentUser.email, 
+                    role: 'admin', 
+                    memberId: null, 
+                    workspaceId: profile.workspaceId,
+                    completedSetup: false,
+                    isNewSignup: false 
+                  });
+                  setShowPlanSelection(true);
+                  
+                  // Unsubscribe immediately after detecting and setting state
+                  unsubscribe();
+                }
+              }
+            } catch (err) {
+              console.error('[LoginPage] Failed to check user plan:', err);
+            }
+          }
+        });
+      } catch (err) {
+        console.error('[LoginPage] Failed to setup auth listener:', err);
+      }
+    };
+    
+    checkUserPlan();
+    
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [checkPlanOnMount]); // Re-run when prop changes
 
   // Check for auth action URL parameters on mount
   useEffect(() => {
@@ -331,7 +413,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
     
     // Clear the URL parameter
     if (reason) {
-      window.history.replaceState({}, '', '/login');
+      window.history.replaceState({}, '', '/app/');
     }
   }, []);
 
@@ -464,6 +546,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       
       // Check if user has completed workspace setup
       let completedSetup = profile.hasCompletedSetup === true; // Check user's own setup status
+      let hasPlan = true; // Default assume plan exists
 
       // Load workspace data for admin and management users to check setup status
       if ((profile.role === 'admin' || profile.role === 'management') && profile.workspaceId) {
@@ -471,6 +554,11 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           const workspaceSnap = await getDoc(doc(db, 'workspaces', profile.workspaceId));
           if (workspaceSnap.exists()) {
             const wsData = workspaceSnap.data();
+            
+            // Check if plan is selected (for admin only)
+            if (profile.role === 'admin') {
+              hasPlan = wsData?.plan?.id != null;
+            }
             
             // Check workspace setup status (for admin/management)
             const workspaceSetupComplete = wsData?.settings?.hasCompletedSetup === true;
@@ -490,20 +578,39 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
               };
 
             }
+          } else {
+            // Workspace doesn't exist - needs plan and setup
+            if (profile.role === 'admin') {
+              hasPlan = false;
+            }
+            completedSetup = false;
           }
         } catch (err) {
 
           // If this is a session re-login, assume setup is complete to avoid blocking
           if (sessionExpired) {
-
             completedSetup = true;
           }
         }
       }
       
-      // Always proceed to dashboard for authenticated users with workspace
-      // Plan selection is handled separately in the dashboard if needed
-
+      // If admin without plan, show plan selection BEFORE proceeding to dashboard/workspace setup
+      if (profile.role === 'admin' && !hasPlan) {
+        console.log('[LoginPage handleLogin] Admin has no plan - showing plan selection');
+        setLoading(false);
+        setAuthenticatedUser({ 
+          email: user.email, 
+          role: 'admin', 
+          memberId: null, 
+          workspaceId: profile.workspaceId,
+          completedSetup: completedSetup,
+          isNewSignup: false 
+        });
+        setShowPlanSelection(true);
+        return;
+      }
+      
+      // Plan exists (or user is not admin) - proceed to workspace setup or dashboard
       onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
     } catch (err) {
       setLoading(false);
@@ -548,12 +655,15 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
             updatedAt:       new Date(),
           },
         }, { merge: true });
+        
+        // Wait longer to ensure Firebase propagates the write
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch { /* non-fatal */ }
     }
 
     setTimeout(() => {
-      onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email, authenticatedUser.workspaceId || null, authenticatedUser.completedSetup ?? null, authenticatedUser.isNewSignup === true);
-    }, 300);
+      onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email, authenticatedUser.workspaceId || null, authenticatedUser.completedSetup ?? false, authenticatedUser.isNewSignup === true);
+    }, 200);
   };
 
   const handleBackToLogin = () => {
@@ -650,27 +760,33 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
               if (workspaceSnap.exists()) {
                 const wsData = workspaceSnap.data();
                 hasPlan = wsData?.plan?.id != null;
+                // Also check workspace setup status
+                completedSetup = wsData?.settings?.hasCompletedSetup === true;
               } else {
                 hasPlan = false;
+                completedSetup = false;
               }
             } catch {
               hasPlan = false;
+              completedSetup = false;
             }
           }
           
-          // If no plan selected, show plan selection panel
+          // If no plan selected, show plan selection panel (setup comes after)
           if (profile.role === 'admin' && !hasPlan) {
             setAuthenticatedUser({ 
               email: user.email, 
               role: 'admin', 
               memberId: null, 
               workspaceId: profile.workspaceId,
+              completedSetup: completedSetup, // Pass this for later
               isNewSignup: false 
             });
             setShowPlanSelection(true);
             return;
           }
           
+          // If has plan but setup not complete, proceed to App.jsx for WorkspaceSetup
           onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
         }
       } else {
@@ -713,15 +829,19 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
             if (workspaceSnap.exists()) {
               const wsData = workspaceSnap.data();
               hasPlan = wsData?.plan?.id != null;
+              // Also check workspace setup status
+              completedSetup = wsData?.settings?.hasCompletedSetup === true;
             } else {
               hasPlan = false;
+              completedSetup = false;
             }
           } catch {
             hasPlan = false;
+            completedSetup = false;
           }
         }
         
-        // If no plan selected, show plan selection panel
+        // If no plan selected, show plan selection panel (setup comes after)
         if (profile.role === 'admin' && !hasPlan) {
           setLoading(false);
           setAuthenticatedUser({ 
@@ -729,12 +849,14 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
             role: 'admin', 
             memberId: null, 
             workspaceId: profile.workspaceId,
+            completedSetup: completedSetup, // Pass this for later
             isNewSignup: false 
           });
           setShowPlanSelection(true);
           return;
         }
         
+        // If has plan but setup not complete, proceed to App.jsx for WorkspaceSetup
         onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
       }
     } catch (err) {

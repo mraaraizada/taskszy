@@ -268,7 +268,14 @@ function MgmtPasswordPrompt({ onComplete }) {
 function AppShell() {
   const [auth, setAuth]               = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
-  const [activeItem, setActiveItem]   = useState('dashboard');
+  const [activeItem, setActiveItem]   = useState(() => {
+    // Restore last active page from localStorage on refresh
+    try {
+      return localStorage.getItem('lastActivePage') || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [dashVisible, setDashVisible] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
@@ -282,6 +289,8 @@ function AppShell() {
   const [showMgmtPwdPrompt, setShowMgmtPwdPrompt] = useState(false);
   const [triggerMgmtAnimation, setTriggerMgmtAnimation] = useState(false); // Trigger management animations after setup
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [needsPlanCheck, setNeedsPlanCheck] = useState(false); // Force LoginPage to check for plan
+  const [isPlanSelectionActive, setIsPlanSelectionActive] = useState(false); // Track if plan selection is showing
   const [pageExtraProps, setPageExtraProps] = useState({}); // Store extra props for pages (like prefilledTaskId)
   const [selectedScribeId, setSelectedScribeId] = useState(null); // Track scribe to open in NotesPage
   const [pageFilteredData, setPageFilteredData] = useState({}); // Store filtered/paginated data from each page for search
@@ -290,6 +299,10 @@ function AppShell() {
   // Track page navigation
   useEffect(() => {
     monitor.trackPageLoad(`admin_${activeItem}`);
+    // Persist active page to localStorage for refresh restoration
+    try {
+      localStorage.setItem('lastActivePage', activeItem);
+    } catch {}
   }, [activeItem]);
   // Track first-ever setup locally so the welcome animation isn't skipped
   const isFirstSetupRef = useRef(false);
@@ -486,12 +499,21 @@ function AppShell() {
             }
           }
 
-          // If admin without completed setup OR without a plan, don't auto-login (force them through setup/plan selection)
+          // If admin without completed setup OR without a plan, don't auto-login via onAuthStateChanged
+          // Instead, show LoginPage which will handle plan selection if needed
           // EXCEPTION: If this is a session re-login (user was already logged in before), always let them through
           const isRelogin = expiredLogoutRef.current || sessionExpired;
+          
+          // For admins without plan or setup, we need to show LoginPage so they can complete the flow
+          // But we should NOT block them if they're in the middle of the flow (loginInProgressRef)
           if (userRole === 'admin' && (!completedSetup || !hasPlan) && !isRelogin) {
-
+            // Don't call handleLogin - let LoginPage handle it
+            // LoginPage will show plan selection if needed
+            console.log('[App.jsx onAuthStateChanged] Admin needs plan/setup - showing LoginPage with plan check');
+            setIsPlanSelectionActive(true); // Mark that plan selection is active
+            setNeedsPlanCheck(true); // Tell LoginPage to check for plan
             setAuthLoading(false);
+            setAuth(null); // Clear auth to show LoginPage
             return;
           }
           
@@ -517,14 +539,18 @@ function AppShell() {
           // loginHandledRef is set to true after LoginPage completes login
           // On reload, loginHandledRef is false, so handleLogin will be called
           // CRITICAL: Also check loginInProgressRef to prevent race condition during login
-          if (!loginHandledRef.current && !loginInProgressRef.current) {
+          // ALSO: Don't call handleLogin if plan selection is currently active
+          if (!loginHandledRef.current && !loginInProgressRef.current && !isPlanSelectionActive) {
 
             handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false);
           } else {
-            // LoginPage already handled login OR login is in progress
+            // LoginPage already handled login OR login is in progress OR plan selection is active
 
             if (loginInProgressRef.current) {
 
+            }
+            if (isPlanSelectionActive) {
+              console.log('[App.jsx onAuthStateChanged] Skipping handleLogin - plan selection is active');
             }
             // Ensure workspace is set even if we skip handleLogin
             if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
@@ -552,12 +578,14 @@ function AppShell() {
     if (!currentUid) return;
     let lastWrite = 0;
     const updateActivity = () => {
+      // Double-check currentUid is still valid before writing
+      if (!currentUid) return;
       const now = Date.now();
       if (now - lastWrite < ACTIVITY_THROTTLE) return;
       lastWrite = now;
       updateDoc(doc(db, 'users', currentUid), {
         lastActivityTime: serverTimestamp(),
-      }).catch(() => {});
+      }).catch(() => {}); // Silently fail if Firestore is in invalid state
     };
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     events.forEach(e => window.addEventListener(e, updateActivity, { passive: true }));
@@ -572,6 +600,9 @@ function AppShell() {
 
       return;
     }
+    
+    // Clear plan selection active flag - user is now logging in
+    setIsPlanSelectionActive(false);
     
     // Mark that login is in progress
     loginInProgressRef.current = true;
@@ -683,6 +714,9 @@ function AppShell() {
     setTimeout(() => {
       setDashVisible(true);
       if (role === 'admin') {
+        // Note: LoginPage already validates that admin has selected a plan
+        // No need to check again here - trust LoginPage's validation
+        
         // Show workspace setup if:
         // 1. isNewSignup === true (brand new admin, first time setup)
         // 2. completedSetup === false (workspace not set up yet)
@@ -797,6 +831,11 @@ function AppShell() {
     setShowWorkspaceSetup(false);
     setWorkspace(null);
     setShowMgmtPwdPrompt(false);
+    
+    // Clear saved page from localStorage on logout
+    try {
+      localStorage.removeItem('lastActivePage');
+    } catch {}
 
   };
 
@@ -917,7 +956,7 @@ function AppShell() {
   // ── Not logged in ──
   if (!auth) {
     return (
-      <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} />
+      <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />
     );
   }
 

@@ -88,7 +88,14 @@ function ProfileUserCardOverlay({ onDone }) {
 }
 
 export default function MemberApp({ memberId, onLogout, visible }) {
-  const [activePage, setActivePage] = useState('home');
+  const [activePage, setActivePage] = useState(() => {
+    // Restore last active page from localStorage on refresh
+    try {
+      return localStorage.getItem('lastActivePageMember') || 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [pageLoading, setPageLoading] = useState(false);
   const [pageKey, setPageKey] = useState(0);
   const [visitedPages, setVisitedPages] = useState(new Set(['home']));
@@ -130,6 +137,10 @@ export default function MemberApp({ memberId, onLogout, visible }) {
   // Track page navigation
   useEffect(() => {
     monitor.trackPageLoad(`member_${activePage}`);
+    // Persist active page to localStorage for refresh restoration
+    try {
+      localStorage.setItem('lastActivePageMember', activePage);
+    } catch {}
   }, [activePage]);
   
   // Try both number and string comparison since Firestore might convert types

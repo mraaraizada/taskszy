@@ -101,7 +101,14 @@ function ProfileUserCardOverlay({ onDone }) {
 }
 
 export default function ManagementApp({ memberId, onLogout, visible, triggerWelcomeAnimation = false }) {
-  const [activePage, setActivePage] = useState('home');
+  const [activePage, setActivePage] = useState(() => {
+    // Restore last active page from localStorage on refresh
+    try {
+      return localStorage.getItem('lastActivePageMgmt') || 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [pageLoading, setPageLoading] = useState(false);
   const [pageKey, setPageKey] = useState(0);
   const [visitedPages, setVisitedPages] = useState(new Set(['home']));
@@ -145,6 +152,10 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   // Track page navigation
   useEffect(() => {
     monitor.trackPageLoad(`management_${activePage}`);
+    // Persist active page to localStorage for refresh restoration
+    try {
+      localStorage.setItem('lastActivePageMgmt', activePage);
+    } catch {}
   }, [activePage]);
 
   // Use stable displayMember with caching to prevent flickering
