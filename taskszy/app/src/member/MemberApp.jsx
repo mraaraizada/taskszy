@@ -115,6 +115,37 @@ export default function MemberApp({ memberId, onLogout, visible }) {
   
   const { team, dataLoaded, refreshData, setShowDonutWelcome, hasSeenDonutWelcome, workspaceId, currentUser, setCurrentUser, currentUid, workspaceName, dataLoadError } = useApp();
   
+  // Track page navigation and persist to localStorage
+  useEffect(() => {
+    monitor.trackPageLoad(`member_${activePage}`);
+    try {
+      localStorage.setItem('lastActivePageMember', activePage);
+    } catch {}
+  }, [activePage]);
+  
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page && event.state.app === 'member') {
+        setActivePage(event.state.page);
+      } else {
+        const hash = window.location.hash.replace('#', '');
+        if (hash && hash !== activePage) {
+          setActivePage(hash);
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set initial history state
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.replaceState({ page: activePage, app: 'member' }, '', `${basePath}#${activePage}`);
+    
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  
   // ── Listen for feedback requests from admin ──
   useEffect(() => {
     // Always use workspaceId if available, otherwise use 'ALL' to catch broadcasts to all organizations
@@ -391,6 +422,11 @@ export default function MemberApp({ memberId, onLogout, visible }) {
       refreshData();
       return;
     }
+
+    // Update browser history for back button support
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.pushState({ page: p, app: 'member' }, '', `${basePath}#${p}`);
 
     // Clear page extra props when navigating to a different page
     setPageExtraProps({});

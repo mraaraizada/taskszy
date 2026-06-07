@@ -128,6 +128,37 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
   const autoFixAttemptedRef = useRef(false); // Prevent duplicate auto-fix attempts
   
   const { team, dataLoaded, refreshData, setShowDonutWelcome, hasSeenDonutWelcome, currentUser, setCurrentUser, saveMember, workspaceId, currentUid, workspaceName, dataLoadError } = useApp();
+
+  // Track page navigation and persist to localStorage
+  useEffect(() => {
+    monitor.trackPageLoad(`management_${activePage}`);
+    try {
+      localStorage.setItem('lastActivePageMgmt', activePage);
+    } catch {}
+  }, [activePage]);
+  
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page && event.state.app === 'management') {
+        setActivePage(event.state.page);
+      } else {
+        const hash = window.location.hash.replace('#', '');
+        if (hash && hash !== activePage) {
+          setActivePage(hash);
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set initial history state
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.replaceState({ page: activePage, app: 'management' }, '', `${basePath}#${activePage}`);
+    
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const member = team.find(m => m.id === memberId || m.id === String(memberId) || String(m.id) === String(memberId));
 
   // ── Listen for feedback requests from admin ──
@@ -327,6 +358,11 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
       refreshData();
       return;
     }
+
+    // Update browser history for back button support
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.pushState({ page: p, app: 'management' }, '', `${basePath}#${p}`);
 
     // Clear page extra props when navigating to a different page
     setPageExtraProps({});

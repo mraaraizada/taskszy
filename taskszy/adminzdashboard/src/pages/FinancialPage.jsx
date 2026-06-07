@@ -1844,8 +1844,23 @@ export default function FinancialPage() {
                   </div>
 
                   {/* Payment ID */}
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, wordWrap: 'break-word', lineHeight: '1.4', whiteSpace: 'normal', wordBreak: 'break-all' }}>
-                    {row.isSubscription ? (row.paymentId || row.id) : `#${row.id}`}
+                  <div>
+                    <span 
+                      onClick={(e) => { e.stopPropagation(); setSelectedPayment(row); }}
+                      style={{ 
+                        fontSize: 12, 
+                        color: '#3B5BFC', 
+                        fontWeight: 700, 
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textDecorationColor: 'transparent',
+                        transition: 'text-decoration-color 0.15s',
+                      }}
+                      onMouseEnter={(e) => e.target.style.textDecorationColor = '#3B5BFC'}
+                      onMouseLeave={(e) => e.target.style.textDecorationColor = 'transparent'}
+                    >
+                      {row.isSubscription ? (row.paymentId || row.id) : `#${row.id}`}
+                    </span>
                   </div>
 
                   {/* Date & Time */}

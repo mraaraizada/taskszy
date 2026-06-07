@@ -267,7 +267,7 @@ function MgmtPasswordPrompt({ onComplete }) {
 // ── Main shell ────────────────────────────────────────────────────────────────
 function AppShell() {
   const [auth, setAuth]               = useState(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true); // Start as true - checking auth
   const [activeItem, setActiveItem]   = useState(() => {
     // Restore last active page from localStorage on refresh
     try {
@@ -304,6 +304,31 @@ function AppShell() {
       localStorage.setItem('lastActivePage', activeItem);
     } catch {}
   }, [activeItem]);
+  
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page) {
+        setActiveItem(event.state.page);
+      } else {
+        // Check URL hash for page
+        const hash = window.location.hash.replace('#', '');
+        if (hash && hash !== activeItem) {
+          setActiveItem(hash);
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set initial history state
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.replaceState({ page: activeItem }, '', `${basePath}#${activeItem}`);
+    
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  
   // Track first-ever setup locally so the welcome animation isn't skipped
   const isFirstSetupRef = useRef(false);
   const mgmtAnimationTriggeredRef = useRef(false); // Prevent duplicate management animation triggers
@@ -842,6 +867,11 @@ function AppShell() {
   const handleNav = (item, extraProps = {}) => {
     if (item === activeItem) { refreshData(); return; }
     
+    // Update browser history for back button support
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.includes('/app') ? '/app' : '';
+    window.history.pushState({ page: item }, '', `${basePath}#${item}`);
+    
     // Store extra props for the target page (empty object clears previous props)
     setPageExtraProps(extraProps);
     
@@ -954,6 +984,34 @@ function AppShell() {
   }
 
   // ── Not logged in ──
+  if (authLoading) {
+    // Show loading screen while checking authentication (prevents login flash)
+    return (
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            border: '4px solid rgba(255,255,255,0.3)',
+            borderTop: '4px solid white',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px',
+          }} />
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+          <p style={{ color: 'white', fontSize: 14, fontWeight: 500 }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!auth) {
     return (
       <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />

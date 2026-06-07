@@ -24,14 +24,22 @@ const BillingReceipt = ({ isOpen, onClose, planData }) => {
       audioRef.current.play().catch(err => console.log('Audio play failed:', err));
       
       // Stop audio after 7 seconds (when animation completes)
-      const timer = setTimeout(() => {
+      const audioTimer = setTimeout(() => {
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
         }
       }, 7000);
+
+      // Auto-redirect to app after 8 seconds (1 second after button appears)
+      const redirectTimer = setTimeout(() => {
+        window.location.href = '/app';
+      }, 8000);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(audioTimer);
+        clearTimeout(redirectTimer);
+      };
     }
   }, [isOpen]);
 
