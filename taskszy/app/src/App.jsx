@@ -269,8 +269,12 @@ function AppShell() {
   const [auth, setAuth]               = useState(null);
   const [authLoading, setAuthLoading] = useState(true); // Start as true - checking auth
   const [activeItem, setActiveItem]   = useState(() => {
-    // Restore last active page from localStorage on refresh
+    // Restore page from URL hash first, then localStorage on refresh
     try {
+      const hash = window.location.hash.replace('#', '');
+      if (hash && ['dashboard', 'tasks', 'team', 'financial', 'roles', 'performance', 'reports', 'notes', 'sheet', 'help', 'settings', 'trash'].includes(hash)) {
+        return hash;
+      }
       return localStorage.getItem('lastActivePage') || 'dashboard';
     } catch {
       return 'dashboard';

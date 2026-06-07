@@ -45,14 +45,18 @@ function AppShell() {
   const [auth, setAuth]               = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeItem, setActiveItem]   = useState(() => {
-    // Restore last active page from localStorage on refresh
+    // Restore last active page from localStorage on refresh or URL hash
     try {
+      const hash = window.location.hash.replace('#', '');
+      if (hash && ['dashboard', 'team', 'feedback', 'financial'].includes(hash)) {
+        return hash;
+      }
       return localStorage.getItem('lastActivePageAdmin') || 'dashboard';
     } catch {
       return 'dashboard';
     }
   });
-  const [dashVisible, setDashVisible] = useState(false);
+  const [dashVisible, setDashVisible] = useState(true); // Always visible by default
   const [visitedPages, setVisitedPages] = useState({});
   const [loadingPage, setLoadingPage] = useState(null);
   const { refreshData, navigationRequest, setNavigationRequest } = useApp();
@@ -65,9 +69,12 @@ function AppShell() {
         if (profile) {
           // dashboardRole maps to "admin" for both superadmin and viewer
           handleLogin('admin', null, profile.email);
+        } else {
+          setAuthLoading(false);
         }
+      } else {
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
     return unsubscribe;
   }, []);
@@ -75,13 +82,10 @@ function AppShell() {
   const handleLogin = (role, memberId, email) => {
     if (email) localStorage.setItem('userEmail', email);
     setAuth({ role, memberId });
-    setVisitedPages({});
-    setLoadingPage('dashboard');
-    setTimeout(() => setDashVisible(true), 50);
-    setTimeout(() => {
-      setLoadingPage(null);
-      setVisitedPages({ dashboard: true });
-    }, 900);
+    setAuthLoading(false); // Ensure auth loading is set to false
+    setDashVisible(true); // Ensure dashboard is visible
+    setVisitedPages({ dashboard: true }); // Mark dashboard as visited immediately
+    setLoadingPage(null); // No loading state needed
   };
 
   const handleLogout = async () => {
@@ -98,6 +102,8 @@ function AppShell() {
   const handleNav = (item) => {
     if (item === activeItem) { refreshData(); return; }
     setActiveItem(item);
+    // Update URL hash for browser history
+    window.history.pushState({ page: item }, '', `#${item}`);
     // Persist active page to localStorage for refresh restoration
     try {
       localStorage.setItem('lastActivePageAdmin', item);
@@ -110,6 +116,30 @@ function AppShell() {
       }, 800);
     }
   };
+
+  // Handle browser back/forward button
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash && ['dashboard', 'team', 'feedback', 'financial'].includes(hash)) {
+        setActiveItem(hash);
+        try {
+          localStorage.setItem('lastActivePageAdmin', hash);
+        } catch {}
+      } else {
+        setActiveItem('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    // Set initial URL hash if not present
+    if (!window.location.hash) {
+      window.history.replaceState({ page: activeItem }, '', `#${activeItem}`);
+    }
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeItem]);
 
   // Listen for navigation requests from child components
   useEffect(() => {
@@ -124,7 +154,44 @@ function AppShell() {
 
   // ── Auth loading (waiting for onAuthStateChanged on mount) ──
   if (authLoading) {
-    return <FullDashboardSkeleton />;
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100vw',
+        height: '100vh',
+        background: 'var(--bg-main)',
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px',
+        }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid var(--border-light)',
+            borderTopColor: '#3B5BFC',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          <div style={{
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+          }}>
+            Loading...
+          </div>
+        </div>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
   }
 
   if (!auth) {

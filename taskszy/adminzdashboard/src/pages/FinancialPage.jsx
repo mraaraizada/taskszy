@@ -978,11 +978,8 @@ export default function FinancialPage() {
   // Use real data from Firebase
   const [useMockData] = useState(false);
 
-  // Check if page has been visited before
-  const [initialLoading, setInitialLoading] = useState(() => {
-    const visited = sessionStorage.getItem('visited_financial');
-    return !visited;
-  });
+  // Check if page has been visited before - disabled to prevent blank page
+  const [initialLoading, setInitialLoading] = useState(false);
 
   // Load subscription payments with optimized pagination
   // Load subscription payments with optimized pagination
@@ -1060,17 +1057,8 @@ export default function FinancialPage() {
     loadPendingCount();
   }, []);
 
-  // Initial loading effect
-  useEffect(() => {
-    if (initialLoading) {
-      const timer = setTimeout(() => {
-        setInitialLoading(false);
-        sessionStorage.setItem('visited_financial', 'true');
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [initialLoading]);
+  // Initial loading effect - disabled
+  // Payment data loads asynchronously in useEffect above
 
   const handlePageChange = (newPage) => {
     setPageLoading(true);

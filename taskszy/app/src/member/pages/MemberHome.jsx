@@ -607,7 +607,7 @@ function MemberTaskDonut({ tasks, member }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1D2E' }}>Task Overview</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed � Active � Pending</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF' }}>Completed • Active • Pending</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 600, color: '#6B7280', background: '#F0F2F8', padding: '3px 9px', borderRadius: 6, border: '1px solid #E8EAEF' }}>All Tasks</span>
       </div>
@@ -639,7 +639,7 @@ function MemberTaskDonut({ tasks, member }) {
         </div>
       </div>
 
-      {/* Welcome lottie overlay � covers full card */}
+      {/* Welcome lottie overlay - covers full card */}
       {showDonutWelcome && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none', opacity: donutFading ? 0 : 1, transition: 'opacity 0.5s ease', borderRadius: 18, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <DonutLottie />
@@ -899,7 +899,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
         {/* LEFT: Upcoming Tasks (fixed) + My Tasks (fills rest, scrollable) */}
         <div style={{ flex: 3, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0 }}>
 
-          {/* Upcoming Tasks � wrapped in one card with heading */}
+          {/* Upcoming Tasks - wrapped in one card with heading */}
           <div style={{ background: '#fff', borderRadius: 18, border: '1.5px solid #E8EAEF', overflow: 'hidden', flexShrink: 0 }}>
             {/* Heading */}
             <div style={{ padding: '14px 18px', borderBottom: '1.5px solid #F0F2F8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -965,7 +965,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
             </div>
           </div>
 
-          {/* My Tasks � fills remaining height, scrollable inside */}
+          {/* My Tasks - fills remaining height, scrollable inside */}
           <div style={{ flex: 1, background: '#fff', borderRadius: 18, border: '1.5px solid #E8EAEF', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
             {/* Header */}
@@ -1188,7 +1188,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
             <MemberTaskDonut tasks={tasks} member={member} />
 
-            {/* Updates card � always visible */}
+            {/* Updates card - always visible */}
             <div
               onClick={() => setShowUpdates(true)}
               style={{ flex: 1, background: '#fff', borderRadius: 18, padding: '18px 22px', border: `1.5px solid ${showUpdates ? '#3B5BFC' : '#E8EAEF'}`, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', cursor: showUpdates ? 'default' : 'pointer', transition: 'box-shadow 0.2s, border-color 0.2s' }}
@@ -1614,7 +1614,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                 <button onClick={() => setModalTask(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F2F8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#6B7280' }}>?</button>
               </div>
 
-              {/* Modal body � scrollable */}
+              {/* Modal body - scrollable */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                 {/* Overview */}
@@ -1845,7 +1845,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                       </select>
                       <button disabled={!stageSelect[t.id] || stageSelect[t.id] === currentStage || updating === t.id} onClick={() => handleStageUpdate(t)}
                         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 20px', borderRadius: 10, border: 'none', background: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : '#F0F2F8', color: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700, cursor: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'pointer' : 'default', boxShadow: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '0 4px 12px rgba(59,91,252,0.3)' : 'none', transition: 'all 0.15s' }}>
-                        {updating === t.id ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving�</> : 'Update Stage'}
+                        {updating === t.id ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving...</> : 'Update Stage'}
                       </button>
                     </div>
                     
@@ -1899,7 +1899,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#F0FDF4', borderRadius: 12, border: '1.5px solid #BBF7D0' }}>
                     <CheckCircle size={20} color="#12C479" strokeWidth={2.5} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed � great work!</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#12C479' }}>Task completed - great work!</div>
                     </div>
                   </div>
                 )}
