@@ -4,11 +4,11 @@ import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
-// Suppress all console output in production
+// Temporarily enable console.error in production to debug payment page issue
 if (import.meta.env.PROD) {
   console.log = () => {};
   console.warn = () => {};
-  console.error = () => {};
+  // console.error = () => {}; // TEMPORARILY COMMENTED to see production errors
   console.info = () => {};
   console.debug = () => {};
 }
