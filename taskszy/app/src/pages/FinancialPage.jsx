@@ -1675,8 +1675,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // ⭐ Workspace path for Firebase operations
   const wsPath = workspaceId ? `workspaces/${workspaceId}` : null;
   console.log('[FinancialPage] Workspace path:', wsPath || 'NULL');
+  console.log('[FinancialPage] ✅ Checkpoint 1: After workspace path');
   
   const [selectedRows, setSelectedRows] = useState([]);
+  console.log('[FinancialPage] ✅ Checkpoint 2: After state declarations');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -1735,7 +1737,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   }, [prefilledTaskId]);
 
   // ⭐ Payment categories definition - merge with CATEGORIES from context to get images
+  console.log('[FinancialPage] ✅ Checkpoint 3: Before useMemo for PAYMENT_CATEGORIES');
   const PAYMENT_CATEGORIES = useMemo(() => {
+    console.log('[FinancialPage] ✅ Inside PAYMENT_CATEGORIES useMemo');
     return CATEGORIES && CATEGORIES.length > 0 
       ? CATEGORIES.map(cat => ({
           label: cat.label || cat.name,
@@ -2772,6 +2776,15 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     paymentsLength: paginatedPayments?.length || 0,
     teamLength: team?.length || 0
   });
+
+  console.log('[FinancialPage] Preparing to return JSX...');
+  
+  // Safety check - if component is stuck, show error message
+  if (!paginatedPayments && !team && !workspaceId) {
+    console.log('[FinancialPage] No data loaded - showing loading spinner');
+  } else {
+    console.log('[FinancialPage] Data loaded - will render main content');
+  }
   
   return (
     <div style={{ 
