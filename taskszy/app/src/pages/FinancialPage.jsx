@@ -1605,13 +1605,16 @@ function PaymentDetailPanel({ payment, onClose }) {
 }
 
 export default function FinancialPage({ prefilledTaskId = null, setPageFilteredData = null, filterToTaskId = null }) {
+  console.log('🔵 FinancialPage: Component started rendering');
+  console.log('🔵 FinancialPage: Props:', { prefilledTaskId, setPageFilteredData, filterToTaskId });
+  
   // All admin users get full access
   const isAdminA = false;
   // ⭐ Fixed: Moved state declarations before hasActiveFilters calculation
   
   // ⭐ OPTIMIZATION: Only log in development mode
   if (process.env.NODE_ENV === 'development') {
-
+    console.log('🔵 FinancialPage: Running in development mode');
   }
   
   // ⭐ State declarations MUST come before using them
@@ -1622,6 +1625,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   const hasActiveFilters = selectedCategories.length > 0 || selectedMembers.length > 0;
   
   // ⭐ OPTIMIZATION: Use paginated payments hook (loads only 15 at a time)
+  console.log('🔵 FinancialPage: About to call usePaginatedPayments hook');
   const {
     payments: paginatedPayments,
     tasks,
@@ -1637,9 +1641,14 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     showingTo: paymentsShowingTo,
     getCacheStats,
   } = usePaginatedPayments(15);
+  console.log('🔵 FinancialPage: Paginated payments loaded:', paginatedPayments?.length, 'Loading:', paymentsLoading);
   
+  console.log('🔵 FinancialPage: Getting context data from useApp');
   const { financials, STAGE_COLORS, STAGE_BG, markTaskPaid, team, addTaskHistoryEntry, currentUser, addPaymentToTask, markPaymentAsPaid, updatePaymentNotes, CATEGORIES, workspaceId, addTimelineEvent, payments: allPayments } = useApp();
+  console.log('🔵 FinancialPage: Context loaded. Team length:', team?.length, 'Workspace ID:', workspaceId);
+  
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
+  console.log('🔵 FinancialPage: Password modal state:', showPasswordModal);
   
   // ⭐ Workspace path for Firebase operations
   const wsPath = workspaceId ? `workspaces/${workspaceId}` : null;
@@ -2733,6 +2742,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     }
   };
 
+  console.log('🔵 FinancialPage: About to render. Sorted payments:', sorted.length);
+  console.log('🔵 FinancialPage: Paginated filtered:', paginatedFiltered.length);
+  console.log('🔵 FinancialPage: Selected rows:', selectedRows.length);
+  
   return (
     <div style={{ 
       flex: 1, 
@@ -3386,6 +3399,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         {/* Rows */}
         {sorted.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '80px 24px', gap: 16, visibility: 'visible', opacity: 1 }}>
+            {console.log('🔵 FinancialPage: Rendering empty state')}
             <div style={{ width: 72, height: 72, borderRadius: 20, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Wallet size={32} color="#12C479" strokeWidth={1.8} />
             </div>
@@ -3399,6 +3413,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 300 }}>
+            {console.log('🔵 FinancialPage: Rendering table with', paginatedFiltered.length, 'rows')}
             {/* ⭐ Show paginated filtered results when filters active, otherwise show Firestore paginated data */}
             {paginatedFiltered.map((row, idx) => {
               const isLast = idx === paginatedFiltered.length - 1;
