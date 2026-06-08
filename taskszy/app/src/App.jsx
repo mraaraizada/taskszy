@@ -858,7 +858,7 @@ function AppShell() {
   };
 
   const handleLogout = async (expired = false) => {
-
+    console.log('[App.jsx handleLogout] Starting logout, expired:', expired);
     expiredLogoutRef.current = false; // manual logout — never expired
     setSessionExpired(false);
     logoutInProgressRef.current = true;
@@ -867,11 +867,15 @@ function AppShell() {
     setIsPlanSelectionActive(false); // Clear plan selection flag
     
     // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
-
+    console.log('[App.jsx handleLogout] Clearing currentUid and user state');
     const uidToClean = currentUid;
     setCurrentUid(null);
     setWorkspaceId(null);
     setCurrentUser(null);
+    
+    // CRITICAL: Set auth to null immediately to prevent role access errors
+    setAuth(null);
+    console.log('[App.jsx handleLogout] Auth state cleared');
     
     // Clear all localStorage cache related to app state
     try {
@@ -907,8 +911,8 @@ function AppShell() {
     // Wait a bit for Firebase to propagate the logout
     await new Promise(resolve => setTimeout(resolve, 150));
     
-    // Reset ALL application state to initial values
-    setAuth(null);
+    // Reset remaining application state
+    console.log('[App.jsx handleLogout] Resetting remaining app state');
     setDashVisible(false);
     setInitialLoading(false);
     setVisitedPages(new Set());
@@ -928,7 +932,7 @@ function AppShell() {
     
     // Set authLoading to false after all cleanup to show login page
     setAuthLoading(false);
-
+    console.log('[App.jsx handleLogout] Logout complete, showing login page');
   };
 
   const handleNav = (item, extraProps = {}) => {
@@ -1062,7 +1066,7 @@ function AppShell() {
   }
 
   // ── Member role ──
-  if (auth.role === 'member') {
+  if (auth?.role === 'member') {
     console.log('[App.jsx Render] Rendering MemberApp for memberId:', auth.memberId);
     return (
       <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
@@ -1072,7 +1076,7 @@ function AppShell() {
   }
 
   // ── Management role ──
-  if (auth.role === 'management') {
+  if (auth?.role === 'management') {
     console.log('[App.jsx Render] Rendering ManagementApp for management user');
     return (
       <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>

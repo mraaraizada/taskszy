@@ -4,13 +4,15 @@ import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
-// Temporarily enable console.error in production to debug payment page issue
+// Temporarily DISABLE console suppression in production to debug payment page issue
+// ⚠️ REMOVE THIS BEFORE FINAL DEPLOYMENT
 if (import.meta.env.PROD) {
-  console.log = () => {};
-  console.warn = () => {};
-  // console.error = () => {}; // TEMPORARILY COMMENTED to see production errors
-  console.info = () => {};
-  console.debug = () => {};
+  // console.log = () => {};  // TEMPORARILY DISABLED for debugging
+  // console.warn = () => {};  // TEMPORARILY DISABLED for debugging
+  // console.error = () => {};  // TEMPORARILY DISABLED for debugging
+  // console.info = () => {};  // TEMPORARILY DISABLED for debugging
+  // console.debug = () => {};  // TEMPORARILY DISABLED for debugging
+  console.log('[main.jsx] 🔥 PRODUCTION MODE - Console logs ENABLED for debugging');
 }
 
 // Suppress specific warnings in development

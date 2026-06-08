@@ -9,6 +9,8 @@ import { useLottie } from 'lottie-react';
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+console.log('[FinancialPage] Module loaded - top level');
+
 // Dynamic loading animation loader
 function useLoadingAnimation() {
   const [data, setData] = useState(null);
@@ -1605,13 +1607,16 @@ function PaymentDetailPanel({ payment, onClose }) {
 }
 
 export default function FinancialPage({ prefilledTaskId = null, setPageFilteredData = null, filterToTaskId = null }) {
+  console.log('[FinancialPage] Component rendering with props:', { prefilledTaskId, filterToTaskId });
+  console.log('[FinancialPage] Environment:', { NODE_ENV: process.env.NODE_ENV, isProd: import.meta.env.PROD });
+  
   // All admin users get full access
   const isAdminA = false;
   // ⭐ Fixed: Moved state declarations before hasActiveFilters calculation
   
   // ⭐ OPTIMIZATION: Only log in development mode
   if (process.env.NODE_ENV === 'development') {
-
+    console.log('[FinancialPage] Development mode logging enabled');
   }
   
   // ⭐ State declarations MUST come before using them
@@ -1623,9 +1628,14 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   
   // ⭐ OPTIMIZATION: Use paginated payments hook (loads only 15 at a time)
   // Always call hooks unconditionally - React requirement
+  console.log('[FinancialPage] Calling hooks...');
   const hookResult = usePaginatedPayments(15);
   const appContext = useApp();
   const passwordHook = useAdminPassword();
+  console.log('[FinancialPage] Hooks called, checking results...');
+  console.log('[FinancialPage] hookResult:', hookResult ? 'exists' : 'NULL');
+  console.log('[FinancialPage] appContext:', appContext ? 'exists' : 'NULL');
+  console.log('[FinancialPage] passwordHook:', passwordHook ? 'exists' : 'NULL');
   
   const {
     payments: paginatedPayments = [],
@@ -1643,11 +1653,28 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     getCacheStats = () => {},
   } = hookResult || {};
   
+  console.log('[FinancialPage] Paginated payments data:', {
+    paymentsCount: paginatedPayments?.length || 0,
+    tasksCount: tasks?.length || 0,
+    currentPage: paymentsCurrentPage,
+    totalPages: paymentsTotalPages,
+    loading: paymentsLoading
+  });
+  
   const { financials = {}, STAGE_COLORS = {}, STAGE_BG = {}, markTaskPaid = () => {}, team = [], addTaskHistoryEntry = () => {}, currentUser = {}, addPaymentToTask = () => {}, markPaymentAsPaid = () => {}, updatePaymentNotes = () => {}, CATEGORIES = [], workspaceId = null, addTimelineEvent = () => {}, payments: allPayments = [] } = appContext || {};
   const { showPasswordModal = false, pendingAction = null, requestAdminPassword = () => {}, handlePasswordConfirm = () => {}, handlePasswordCancel = () => {} } = passwordHook || {};
   
+  console.log('[FinancialPage] AppContext data:', {
+    teamCount: team?.length || 0,
+    workspaceId: workspaceId || 'NULL',
+    currentUser: currentUser?.email || 'NULL',
+    categoriesCount: CATEGORIES?.length || 0,
+    allPaymentsCount: allPayments?.length || 0
+  });
+  
   // ⭐ Workspace path for Firebase operations
   const wsPath = workspaceId ? `workspaces/${workspaceId}` : null;
+  console.log('[FinancialPage] Workspace path:', wsPath || 'NULL');
   
   const [selectedRows, setSelectedRows] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -2738,6 +2765,14 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     }
   };
 
+  console.log('[FinancialPage] About to render, checking data availability:', {
+    hasPaginatedPayments: !!paginatedPayments && paginatedPayments.length > 0,
+    hasTeam: !!team && team.length > 0,
+    hasWorkspaceId: !!workspaceId,
+    paymentsLength: paginatedPayments?.length || 0,
+    teamLength: team?.length || 0
+  });
+  
   return (
     <div style={{ 
       flex: 1, 
@@ -2757,6 +2792,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
 
       {/* Show message if no data loaded at all */}
       {!paginatedPayments && !team && !workspaceId ? (
+        <>
+        {console.log('[FinancialPage] Rendering loading state - no data available')}
         <div style={{
           flex: 1,
           display: 'flex',
@@ -2783,8 +2820,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
             }
           `}</style>
         </div>
+        </>
       ) : (
         <>
+        {console.log('[FinancialPage] Rendering main content - data available')}
       {/* -- Payments table -- */}
       <div style={{ 
         background: 'var(--bg-surface)', 
