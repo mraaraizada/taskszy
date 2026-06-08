@@ -2072,141 +2072,156 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   console.log('[FinancialPage] ✅ Checkpoint 4: After allRows useMemo, before filtering logic');
 
   // ═══════════════════════════════════════════════════════════════
-  // FILTER LOGIC - Rewritten from scratch for clarity
+  // FILTER LOGIC - Wrapped in useMemo to prevent infinite re-renders
   // ═══════════════════════════════════════════════════════════════
   
-  if (process.env.NODE_ENV === 'development') {
+  const { filtered, sorted, finalFiltered, totalPaid, totalPending, totalBudget, paidRate } = useMemo(() => {
+    if (process.env.NODE_ENV === 'development') {
 
-  }
-  
-  let filtered = allRows;
-  
-  // STEP 1: Filter by Category/Role (if selected)
-  if (selectedCategories.length > 0) {
-    filtered = filtered.filter(row => {
-      return selectedCategories.some(cat => {
-        if (cat.type === 'category') {
-          // ⭐ Check task category (not investment category)
-          if (row.category && row.category.label === cat.label) {
-            return true;
-          }
-          // Also check investment category for manual payments
-          if (row.isInvestment && row.memberName === cat.label) {
-            return true;
+    }
+    
+    let filtered = allRows;
+    
+    // STEP 1: Filter by Category/Role (if selected)
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(row => {
+        return selectedCategories.some(cat => {
+          if (cat.type === 'category') {
+            // ⭐ Check task category (not investment category)
+            if (row.category && row.category.label === cat.label) {
+              return true;
+            }
+            // Also check investment category for manual payments
+            if (row.isInvestment && row.memberName === cat.label) {
+              return true;
+            }
+            return false;
+          } else if (cat.type === 'role') {
+            // ⭐ Member role match - works for both manual and task-linked payments
+            return !row.isInvestment && row.memberRole === cat.label;
           }
           return false;
-        } else if (cat.type === 'role') {
-          // ⭐ Member role match - works for both manual and task-linked payments
-          return !row.isInvestment && row.memberRole === cat.label;
-        }
-        return false;
+        });
       });
-    });
-    if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === 'development') {
 
+      }
     }
-  }
-  
-  // STEP 2: Filter by Team Member (if selected) - AND logic with category filter
-  if (selectedMembers.length > 0) {
-    filtered = filtered.filter(row => {
-      return selectedMembers.some(memberId => {
-        if (memberId === 'Investment') {
-          // ⭐ Show only additional payments (not investment categories)
-          return row.paymentType === 'additional';
-        }
-        if (memberId === 'TaskBudget') {
-          // ⭐ Show only task budget payments
-          return row.paymentType === 'task-budget';
-        }
-        return row.memberId === memberId;
+    
+    // STEP 2: Filter by Team Member (if selected) - AND logic with category filter
+    if (selectedMembers.length > 0) {
+      filtered = filtered.filter(row => {
+        return selectedMembers.some(memberId => {
+          if (memberId === 'Investment') {
+            // ⭐ Show only additional payments (not investment categories)
+            return row.paymentType === 'additional';
+          }
+          if (memberId === 'TaskBudget') {
+            // ⭐ Show only task budget payments
+            return row.paymentType === 'task-budget';
+          }
+          return row.memberId === memberId;
+        });
       });
+      if (process.env.NODE_ENV === 'development') {
+
+      }
+    }
+    
+    // STEP 3: Filter by Date Range
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter(row => {
+        // Get the date to check (deadline or createdOn)
+        let dateToCheck = row.deadline || row.createdOn;
+        
+        // Skip if no date
+        if (!dateToCheck) {
+
+          return true; // Include rows without dates
+        }
+        
+        // Convert Firestore timestamp to Date
+        if (dateToCheck.toDate) {
+          dateToCheck = dateToCheck.toDate();
+        }
+        
+        // Parse to Date object
+        const rowDate = new Date(dateToCheck);
+        rowDate.setHours(0, 0, 0, 0);
+        
+        // Validate date
+        if (isNaN(rowDate.getTime())) {
+
+          return true; // Include rows with invalid dates
+        }
+        
+        // Check date range
+        let matches = true;
+        
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          matches = matches && rowDate >= fromDate;
+        }
+        
+        if (dateTo) {
+          const toDate = new Date(dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          matches = matches && rowDate <= toDate;
+        }
+        
+        return matches;
+      });
+
+    }
+    
+    // STEP 4: Filter by Status (All/Pending/Paid)
+    if (process.env.NODE_ENV === 'development') {
+
+    if (statusFilter === 'Pending') {
+      filtered = filtered.filter(row => !row.isPaid);
+
+    } else if (statusFilter === 'Paid') {
+      filtered = filtered.filter(row => row.isPaid);
+
+    } else {
+      // ⭐ "All" - show everything (no filtering)
+      if (process.env.NODE_ENV === 'development') {
+
+      }
+    }
+    
+    // STEP 5: Sort by due date (deadline) - Latest due date first
+    const sorted = filtered.sort((a, b) => {
+      const dateA = new Date(a.deadline || a.createdOn);
+      const dateB = new Date(b.deadline || b.createdOn);
+      return dateB - dateA; // Latest due date first (descending)
     });
+    
+    // STEP 6: Apply search filter if filterToTaskId is provided (show only that task)
+    let finalFiltered = sorted;
+    if (filterToTaskId) {
+      finalFiltered = sorted.filter(row => row.taskId === filterToTaskId || row.id === filterToTaskId);
+    }
+    
     if (process.env.NODE_ENV === 'development') {
 
     }
-  }
-  
-  // STEP 3: Filter by Date Range
-  if (dateFrom || dateTo) {
-    filtered = filtered.filter(row => {
-      // Get the date to check (deadline or createdOn)
-      let dateToCheck = row.deadline || row.createdOn;
-      
-      // Skip if no date
-      if (!dateToCheck) {
+    
+    // Calculate totals from filtered results
+    // ⭐ Total Earned = ONLY paid amounts (not pending)
+    const totalPaid    = filtered.filter(r => r.isPaid).reduce((s, r) => s + r.amount, 0);
+    const totalPending = filtered.filter(r => !r.isPaid).reduce((s, r) => s + r.amount, 0);
+    const totalBudget  = totalPaid + totalPending; // Total of all payments (paid + pending)
+    const paidRate     = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
 
-        return true; // Include rows without dates
-      }
-      
-      // Convert Firestore timestamp to Date
-      if (dateToCheck.toDate) {
-        dateToCheck = dateToCheck.toDate();
-      }
-      
-      // Parse to Date object
-      const rowDate = new Date(dateToCheck);
-      rowDate.setHours(0, 0, 0, 0);
-      
-      // Validate date
-      if (isNaN(rowDate.getTime())) {
-
-        return true; // Include rows with invalid dates
-      }
-      
-      // Check date range
-      let matches = true;
-      
-      if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        fromDate.setHours(0, 0, 0, 0);
-        matches = matches && rowDate >= fromDate;
-      }
-      
-      if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        matches = matches && rowDate <= toDate;
-      }
-      
-      return matches;
-    });
-
-  }
-  
-  // STEP 4: Filter by Status (All/Pending/Paid)
-  if (process.env.NODE_ENV === 'development') {
-
-  if (statusFilter === 'Pending') {
-    filtered = filtered.filter(row => !row.isPaid);
-
-  } else if (statusFilter === 'Paid') {
-    filtered = filtered.filter(row => row.isPaid);
-
-  } else {
-    // ⭐ "All" - show everything (no filtering)
     if (process.env.NODE_ENV === 'development') {
 
     }
-  }
-  
-  // STEP 5: Sort by due date (deadline) - Latest due date first
-  const sorted = filtered.sort((a, b) => {
-    const dateA = new Date(a.deadline || a.createdOn);
-    const dateB = new Date(b.deadline || b.createdOn);
-    return dateB - dateA; // Latest due date first (descending)
-  });
-  
-  // STEP 6: Apply search filter if filterToTaskId is provided (show only that task)
-  let finalFiltered = sorted;
-  if (filterToTaskId) {
-    finalFiltered = sorted.filter(row => row.taskId === filterToTaskId || row.id === filterToTaskId);
-  }
-  
-  if (process.env.NODE_ENV === 'development') {
+    
+    return { filtered, sorted, finalFiltered, totalPaid, totalPending, totalBudget, paidRate };
+  }, [allRows, selectedCategories, selectedMembers, dateFrom, dateTo, statusFilter, filterToTaskId]);
 
-  }
-  
   // ⭐ STEP 6: Client-side pagination for filtered results
   // ⭐ filteredPage state MOVED TO TOP (line ~1645) - React Rules of Hooks requirement
   const filteredPageSize = 15;
@@ -2228,17 +2243,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     : paymentsTotalPages;
   
   if (process.env.NODE_ENV === 'development' && (hasActiveFilters || filterToTaskId)) {
-
-  }
-  
-  // Calculate totals from filtered results
-  // ⭐ Total Earned = ONLY paid amounts (not pending)
-  const totalPaid    = filtered.filter(r => r.isPaid).reduce((s, r) => s + r.amount, 0);
-  const totalPending = filtered.filter(r => !r.isPaid).reduce((s, r) => s + r.amount, 0);
-  const totalBudget  = totalPaid + totalPending; // Total of all payments (paid + pending)
-  const paidRate     = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
-
-  if (process.env.NODE_ENV === 'development') {
 
   }
 
