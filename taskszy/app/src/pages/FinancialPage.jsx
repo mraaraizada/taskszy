@@ -1622,28 +1622,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   const hasActiveFilters = selectedCategories.length > 0 || selectedMembers.length > 0;
   
   // ⭐ OPTIMIZATION: Use paginated payments hook (loads only 15 at a time)
-  // Wrap in try-catch to prevent crashes from blocked resources
-  let hookResult;
-  try {
-    hookResult = usePaginatedPayments(15);
-  } catch (error) {
-    // If hook fails (e.g., due to blocked Firebase), use fallback values
-    hookResult = {
-      payments: [],
-      tasks: [],
-      currentPage: 1,
-      totalPages: 1,
-      pageSize: 15,
-      loading: false,
-      nextPage: () => {},
-      prevPage: () => {},
-      goToPage: () => {},
-      refresh: () => {},
-      showingFrom: 0,
-      showingTo: 0,
-      getCacheStats: () => {},
-    };
-  }
+  // Always call hooks unconditionally - React requirement
+  const hookResult = usePaginatedPayments(15);
+  const appContext = useApp();
+  const passwordHook = useAdminPassword();
   
   const {
     payments: paginatedPayments = [],
@@ -1661,24 +1643,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     getCacheStats = () => {},
   } = hookResult || {};
   
-  // Wrap context access in try-catch
-  let appContext;
-  try {
-    appContext = useApp();
-  } catch (error) {
-    appContext = {};
-  }
-  
-  const { financials = {}, STAGE_COLORS = {}, STAGE_BG = {}, markTaskPaid = () => {}, team = [], addTaskHistoryEntry = () => {}, currentUser = {}, addPaymentToTask = () => {}, markPaymentAsPaid = () => {}, updatePaymentNotes = () => {}, CATEGORIES = [], workspaceId = null, addTimelineEvent = () => {}, payments: allPayments = [] } = appContext;
-  
-  let passwordHook;
-  try {
-    passwordHook = useAdminPassword();
-  } catch (error) {
-    passwordHook = {};
-  }
-  
-  const { showPasswordModal = false, pendingAction = null, requestAdminPassword = () => {}, handlePasswordConfirm = () => {}, handlePasswordCancel = () => {} } = passwordHook;
+  const { financials = {}, STAGE_COLORS = {}, STAGE_BG = {}, markTaskPaid = () => {}, team = [], addTaskHistoryEntry = () => {}, currentUser = {}, addPaymentToTask = () => {}, markPaymentAsPaid = () => {}, updatePaymentNotes = () => {}, CATEGORIES = [], workspaceId = null, addTimelineEvent = () => {}, payments: allPayments = [] } = appContext || {};
+  const { showPasswordModal = false, pendingAction = null, requestAdminPassword = () => {}, handlePasswordConfirm = () => {}, handlePasswordCancel = () => {} } = passwordHook || {};
   
   // ⭐ Workspace path for Firebase operations
   const wsPath = workspaceId ? `workspaces/${workspaceId}` : null;
@@ -4014,6 +3980,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         show={showLoadingOverlay} 
         onComplete={() => setShowLoadingOverlay(false)} 
       />
+      </>
+      )}
     </div>
   );
 }}
