@@ -1509,7 +1509,7 @@ export default function FinancialPage() {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: 'visible', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
 
       {/* ── Payments table ── */}
       <div style={{ background: 'var(--bg-surface)', borderRadius: 18, border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>

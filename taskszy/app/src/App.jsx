@@ -94,10 +94,10 @@ const SKELETON_MAP = {
 };
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
-function renderPage(activeItem, handleNav, extraProps = {}, onNavigateToNotes, setPageFilteredData) {
+function renderPage(activeItem, handleNav, extraProps = {}, onNavigateToNotes, setPageFilteredData, currentUser = null) {
   switch (activeItem) {
     case 'tasks':       return <TasksPage onNavigateToNotes={() => handleNav('notes')} onNavigateToManage={() => handleNav('roles')} onNavigateToFinancial={(taskId) => handleNav('financial', { prefilledTaskId: taskId })} setPageFilteredData={setPageFilteredData} filterToTaskId={extraProps.filterToTaskId} {...extraProps} />;
-    case 'team':        return <TeamPage onNavigateToManage={() => handleNav('roles')} setPageFilteredData={setPageFilteredData} {...extraProps} />;
+    case 'team':        return <TeamPage onNavigateToManage={() => handleNav('roles')} setPageFilteredData={setPageFilteredData} currentUser={currentUser} {...extraProps} />;
     case 'financial':   return <FinancialPage prefilledTaskId={extraProps.prefilledTaskId} filterToTaskId={extraProps.filterToTaskId} setPageFilteredData={setPageFilteredData} />;
     case 'roles':       return <RolesPage />;
     case 'performance': return <PerformancePage />;
@@ -312,6 +312,15 @@ function AppShell() {
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = (event) => {
+      // Prevent going back to website - stay within app
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes('/app')) {
+        // User navigated outside /app - redirect back to app
+        window.history.pushState({ page: activeItem }, '', '/app#' + activeItem);
+        window.location.href = '/app#' + activeItem;
+        return;
+      }
+      
       if (event.state && event.state.page) {
         setActiveItem(event.state.page);
       } else {
@@ -325,9 +334,16 @@ function AppShell() {
     
     window.addEventListener('popstate', handlePopState);
     
-    // Set initial history state
+    // Set initial history state and add a sentinel entry to prevent going back to website
     const currentPath = window.location.pathname;
     const basePath = currentPath.includes('/app') ? '/app' : '';
+    
+    // Add a sentinel entry at the start of history to block going back to website
+    if (window.history.state === null || !window.history.state.isAppEntry) {
+      window.history.pushState({ isAppEntry: true, page: 'dashboard' }, '', `${basePath}#dashboard`);
+    }
+    
+    // Replace current state with active page
     window.history.replaceState({ page: activeItem }, '', `${basePath}#${activeItem}`);
     
     return () => window.removeEventListener('popstate', handlePopState);
@@ -393,14 +409,14 @@ function AppShell() {
       // Skip if logout is in progress — prevents false expiry detection
       if (logoutInProgressRef.current) {
 
-        setAuthLoading(false);
+        // Don't process anything during logout - wait for logout to complete
         return;
       }
       
       // Skip if login is in progress — let LoginPage handle it
       if (loginInProgressRef.current) {
 
-        setAuthLoading(false);
+        // Don't set authLoading to false yet - let handleLogin complete
         return;
       }
       
@@ -410,7 +426,7 @@ function AppShell() {
         // If logout is in progress, this is expected - don't do anything
         if (logoutInProgressRef.current) {
 
-          setAuthLoading(false);
+          // Don't process anything during logout
           return;
         }
         
@@ -418,11 +434,15 @@ function AppShell() {
         // Wait for login to complete instead of showing login page
         if (loginInProgressRef.current) {
 
-          setAuthLoading(false);
+          // Don't set authLoading to false yet - let handleLogin complete
           return;
         }
         
-        setAuthLoading(false);
+        // User is logged out - set authLoading to false to show login page
+        // But only if we're not in the middle of logout or login
+        if (!logoutInProgressRef.current && !loginInProgressRef.current) {
+          setAuthLoading(false);
+        }
         return;
       }
       
@@ -630,12 +650,27 @@ function AppShell() {
       return;
     }
     
+    // Mark that login is in progress IMMEDIATELY to prevent race conditions
+    loginInProgressRef.current = true;
+    loginHandledRef.current = true;
+    
+    // Set authLoading to true during login to prevent flicker
+    setAuthLoading(true);
+    
     // Clear plan selection active flag - user is now logging in
     setIsPlanSelectionActive(false);
     
-    // Mark that login is in progress
-    loginInProgressRef.current = true;
-    loginHandledRef.current = true;
+    // Clear session expired state
+    expiredLogoutRef.current = false;
+    setSessionExpired(false);
+    
+    // Set currentUid immediately at the start of handleLogin
+    const { getAuth } = await import('firebase/auth');
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+
+      setCurrentUid(uid);
+    }
     
     // Load workspace data if needed (for management/admin users who need WorkspaceSetup)
     if ((role === 'admin' || role === 'management') && workspaceIdParam && !workspace) {
@@ -662,86 +697,79 @@ function AppShell() {
         // Don't block login - workspace data can be loaded later if needed
       }
     }
-    expiredLogoutRef.current = false;
-    setSessionExpired(false);
-    
-    // Set currentUid immediately at the start of handleLogin
-    import('firebase/auth').then(({ getAuth }) => {
-      const uid = getAuth().currentUser?.uid;
-      if (uid) {
-
-        setCurrentUid(uid);
-      }
-    }).catch(() => {});
     
     if (email) {
       if (workspaceIdParam) setWorkspaceId(workspaceIdParam);
       
       // Load user profile from Firestore to get name and phone
-      import('./lib/userProfileService').then(({ getProfile }) => {
-        import('firebase/auth').then(({ getAuth }) => {
-          const auth = getAuth();
-          const uid = auth.currentUser?.uid;
-          if (uid) {
-            getProfile(uid).then(async (profileData) => {
-              if (profileData) {
-                let actualRoleName = role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member';
-                
-                // For all users, fetch their actual role name from team collection if they have a memberId
-                if (profileData.workspaceId && profileData.memberId) {
-                  try {
-                    const { doc: firestoreDoc, getDoc: firestoreGetDoc } = await import('firebase/firestore');
-                    const { db } = await import('./lib/firebase');
-                    const memberDoc = await firestoreGetDoc(firestoreDoc(db, `workspaces/${profileData.workspaceId}/team/${profileData.memberId}`));
-                    if (memberDoc.exists()) {
-                      actualRoleName = memberDoc.data().role || actualRoleName;
-                    }
-                  } catch (err) {
-
-                  }
+      if (uid) {
+        const { getProfile } = await import('./lib/userProfileService');
+        try {
+          const profileData = await getProfile(uid);
+          if (profileData) {
+            let actualRoleName = role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member';
+            
+            // For all users, fetch their actual role name from team collection if they have a memberId
+            if (profileData.workspaceId && profileData.memberId) {
+              try {
+                const memberDoc = await getDoc(doc(db, `workspaces/${profileData.workspaceId}/team/${profileData.memberId}`));
+                if (memberDoc.exists()) {
+                  actualRoleName = memberDoc.data().role || actualRoleName;
                 }
-                
-                const profile = {
-                  uid: uid, // Add Firebase Auth uid
-                  name: profileData.name || email.split('@')[0],
-                  email: profileData.email || email,
-                  phone: profileData.phone || '',
-                  role: actualRoleName,
-                  avatar: (profileData.name || email)[0].toUpperCase(),
-                  avatarImg: profileData.avatarImg || null, // Add profile picture
-                  color: profileData.color || '#3B5BFC', // ⭐ Use profile color if available
-                  userRole: role || profileData.role || 'member', // Fallback to profileData.role if role param is missing
-                  memberId: profileData.memberId || null, // Add memberId to identify team members
-                  hasSeenWelcomeAnimation: profileData.hasSeenWelcomeAnimation === true ? true : false,
-                };
+              } catch (err) {
 
-                setCurrentUser(profile);
               }
-            }).catch(() => {
-              // Fallback if profile fetch fails
-              const profile = { 
-                uid: uid, // Add Firebase Auth uid
-                name: email.split('@')[0], 
-                email,
-                phone: '',
-                role: role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member', 
-                avatar: email[0].toUpperCase(), 
-                color: '#3B5BFC', // ⭐ Default color for fallback
-                userRole: role,
-                hasSeenWelcomeAnimation: false,
-              };
-              setCurrentUser(profile);
-            });
+            }
+            
+            const profile = {
+              uid: uid, // Add Firebase Auth uid
+              name: profileData.name || email.split('@')[0],
+              email: profileData.email || email,
+              phone: profileData.phone || '',
+              role: actualRoleName,
+              avatar: (profileData.name || email)[0].toUpperCase(),
+              avatarImg: profileData.avatarImg || null, // Add profile picture
+              color: profileData.color || '#3B5BFC', // ⭐ Use profile color if available
+              userRole: role || profileData.role || 'member', // Fallback to profileData.role if role param is missing
+              memberId: profileData.memberId || null, // Add memberId to identify team members
+              hasSeenWelcomeAnimation: profileData.hasSeenWelcomeAnimation === true ? true : false,
+            };
+
+            setCurrentUser(profile);
           }
-        });
-      });
+        } catch (err) {
+          // Fallback if profile fetch fails
+          const profile = { 
+            uid: uid, // Add Firebase Auth uid
+            name: email.split('@')[0], 
+            email,
+            phone: '',
+            role: role === 'admin' ? 'Administrator' : role === 'management' ? 'Management' : 'Team Member', 
+            avatar: email[0].toUpperCase(), 
+            color: '#3B5BFC', // ⭐ Default color for fallback
+            userRole: role,
+            hasSeenWelcomeAnimation: false,
+          };
+          setCurrentUser(profile);
+        }
+      }
     }
+    
+    // Set all auth-related states together to minimize re-renders
     setInitialLoading(true);
     setVisitedPages(new Set());
-
     setAuth({ role, memberId });
+    
+    // Set authLoading to false AFTER setting auth to prevent login page flash
+    setAuthLoading(false);
+    
+    // Use setTimeout with 0 to batch the next state updates
     setTimeout(() => {
       setDashVisible(true);
+      
+      // Mark login as complete
+      loginInProgressRef.current = false;
+      
       if (role === 'admin') {
         // Note: LoginPage already validates that admin has selected a plan
         // No need to check again here - trust LoginPage's validation
@@ -820,12 +848,24 @@ function AppShell() {
     logoutInProgressRef.current = true;
     loginInProgressRef.current = false; // Reset login progress flag
     loginHandledRef.current = false; // Reset login handled flag
+    setIsPlanSelectionActive(false); // Clear plan selection flag
     
     // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
 
     const uidToClean = currentUid;
     setCurrentUid(null);
     setWorkspaceId(null);
+    setCurrentUser(null);
+    
+    // Clear all localStorage cache related to app state
+    try {
+      localStorage.removeItem('lastActivePage');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('workspaceId');
+      // Don't clear teamMemberFormCache - that's for form persistence
+    } catch (err) {
+      console.error('[handleLogout] Error clearing localStorage:', err);
+    }
     
     // Wait for React to process the state update and cleanup listeners
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -849,9 +889,9 @@ function AppShell() {
     }
     
     // Wait a bit for Firebase to propagate the logout
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     
-    logoutInProgressRef.current = false;
+    // Reset ALL application state to initial values
     setAuth(null);
     setDashVisible(false);
     setInitialLoading(false);
@@ -860,11 +900,18 @@ function AppShell() {
     setShowWorkspaceSetup(false);
     setWorkspace(null);
     setShowMgmtPwdPrompt(false);
+    setShowDonutWelcome(false);
+    setNeedsPlanCheck(false);
     
-    // Clear saved page from localStorage on logout
-    try {
-      localStorage.removeItem('lastActivePage');
-    } catch {}
+    // IMPORTANT: Set logoutInProgressRef to false BEFORE setting authLoading to false
+    // This allows onAuthChanged to process the logout properly
+    logoutInProgressRef.current = false;
+    
+    // Wait a tiny bit for the flag to propagate
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Set authLoading to false after all cleanup to show login page
+    setAuthLoading(false);
 
   };
 
@@ -988,34 +1035,6 @@ function AppShell() {
   }
 
   // ── Not logged in ──
-  if (authLoading) {
-    // Show loading screen while checking authentication (prevents login flash)
-    return (
-      <div style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 48,
-            height: 48,
-            border: '4px solid rgba(255,255,255,0.3)',
-            borderTop: '4px solid white',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px',
-          }} />
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-          <p style={{ color: 'white', fontSize: 14, fontWeight: 500 }}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (!auth) {
     return (
       <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />
@@ -1192,7 +1211,7 @@ function AppShell() {
 
                     setSelectedScribeId(noteId);
                     handleNav('notes');
-                  }, setPageFilteredData)}
+                  }, setPageFilteredData, currentUser)}
                 </Suspense>
               )
             }

@@ -2,9 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  base: '/adminzdashboard/',
+  base: mode === 'production' ? '/adminzdashboard/' : '/',
   server: {
     port: 5175,
     strictPort: true,
@@ -29,4 +29,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

@@ -23,18 +23,69 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const { workspaceId } = useApp();
   const isEdit = !!member;
+  
+  // Load cached form data for new members only
+  const getCachedFormData = () => {
+    if (isEdit) return null; // Don't use cache for editing
+    try {
+      const cached = localStorage.getItem('teamMemberFormCache');
+      return cached ? JSON.parse(cached) : null;
+    } catch (err) {
+      return null;
+    }
+  };
+  
+  const cachedData = getCachedFormData();
+  
   const [form, setForm] = useState({
-    name: member?.name || '',
-    email: member?.email || '',
-    phone: member?.phone || '',
-    location: member?.location || '',
-    role: member?.role || '', // Don't auto-select first role - require manual selection
-    password: '',
-    desc: member?.desc || '',
+    name: member?.name || cachedData?.name || '',
+    email: member?.email || cachedData?.email || '',
+    phone: member?.phone || cachedData?.phone || '',
+    location: member?.location || cachedData?.location || '',
+    role: member?.role || cachedData?.role || '', // Don't auto-select first role - require manual selection
+    password: cachedData?.password || '',
+    desc: member?.desc || cachedData?.desc || '',
     status: member?.status || 'Active',
   });
+  
+  // Save form data to cache whenever it changes (only for new members)
+  useEffect(() => {
+    if (!isEdit) {
+      try {
+        localStorage.setItem('teamMemberFormCache', JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          location: form.location,
+          role: form.role,
+          password: form.password,
+          desc: form.desc,
+        }));
+      } catch (err) {
+        // Ignore cache errors
+      }
+    }
+  }, [form, isEdit]);
+  
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
   const [modalError, setModalError] = useState('');
+  
+  // Function to close modal without clearing cache (for X button)
+  const handleCloseWithoutClear = () => {
+    onClose();
+  };
+  
+  // Clear cache only on successful save
+  const handleCloseAndClearCache = () => {
+    if (!isEdit) {
+      try {
+        localStorage.removeItem('teamMemberFormCache');
+      } catch (err) {
+        // Ignore
+      }
+    }
+    onClose();
+  };
 
   const handleSaveClick = () => {
     // Validate all required fields
@@ -164,8 +215,8 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
 
         onSave(newMember, addedByInfo);
         
-        // Close modal
-        onClose();
+        // Close modal and clear cache on successful save
+        handleCloseAndClearCache();
       } else {
         // Editing existing member
         if (member?.uid) {
@@ -198,7 +249,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
         onSave(newMember, null);
       }
 
-      onClose();
+      handleCloseAndClearCache();
     });
   };
 
@@ -211,7 +262,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{isEdit ? 'Edit Member' : 'Add Team Member'}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{isEdit ? 'Update member details and permissions' : 'Create a new account and assign a role'}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'var(--input-bg)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <button onClick={handleCloseWithoutClear} style={{ background: 'var(--input-bg)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <X size={16} color="#6B7280" />
           </button>
         </div>
@@ -243,7 +294,11 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                           // Only allow digits, +, -, spaces, and parentheses for phone
                           if (field.key === 'phone') {
                             const filtered = e.target.value.replace(/[^\d+\-\s()]/g, '');
-                            f(field.key)(filtered);
+                            // Limit to 12 digits (not counting special characters)
+                            const digitsOnly = filtered.replace(/[^\d]/g, '');
+                            if (digitsOnly.length <= 12) {
+                              f(field.key)(filtered);
+                            }
                           } else if (field.key === 'email') {
                             // Remove spaces from email
                             const filtered = e.target.value.replace(/\s/g, '');
@@ -254,6 +309,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                         }} 
                         readOnly={isReadOnly}
                         placeholder={field.placeholder}
+                        maxLength={field.key === 'phone' ? 20 : undefined}
                         style={{ 
                           width: '100%', 
                           padding: '10px 14px 10px 32px', 
@@ -329,7 +385,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                 {onNavigateToManage && (
                   <button
                     type="button"
-                    onClick={() => { onClose(); onNavigateToManage(); }}
+                    onClick={() => { handleCloseWithoutClear(); onNavigateToManage(); }}
                     title="Create a new role"
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4,

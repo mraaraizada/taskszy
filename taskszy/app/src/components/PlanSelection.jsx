@@ -257,7 +257,19 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
     return Math.ceil(diffDays / 30); // Convert days to months
   };
   
+  // Get remaining days (not months)
+  const getRemainingDays = () => {
+    if (!planExpiryDate) return 0;
+    const now = new Date();
+    const expiry = new Date(planExpiryDate);
+    if (expiry <= now) return 0;
+    
+    const diffTime = expiry - now;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+  
   const remainingMonths = getRemainingMonths();
+  const remainingDays = getRemainingDays();
   
   // Get base duration for plans (monthly = 1, yearly = 12)
   const getBaseDuration = (cycle) => cycle === 'yearly' ? 12 : 1;
@@ -317,15 +329,20 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
     // PART 3: Base subscription fee
     let baseFee = 0;
     if (currentPlan && remainingMonths > 0) {
-      // User has active plan - charge base renewal fee (1 month or 1 year)
-      baseFee = activeBillingCycle === 'yearly' 
-        ? Math.round(selectedMonthlyRate * 12) 
-        : selectedMonthlyRate;
-
+      // ⭐ If less than 7 days remaining, don't charge base renewal fee
+      // Only the upgrade fee (prorated for remaining days) should apply
+      if (remainingDays >= 7) {
+        // User has active plan with 7+ days remaining - charge base renewal fee (1 month or 1 year)
+        baseFee = activeBillingCycle === 'yearly' 
+          ? Math.round(selectedMonthlyRate * 12) 
+          : selectedMonthlyRate;
+      } else {
+        // Less than 7 days remaining - no base fee, only upgrade fee applies
+        baseFee = 0;
+      }
     } else if (!currentPlan || remainingMonths === 0) {
       // New user or expired plan - base fee is covered by extraMonthsFee
       baseFee = 0;
-
     }
     
     // Apply coupon discount
@@ -1097,8 +1114,37 @@ function CheckoutStep({ plan, billingCycle, email, workspaceId, onBack, onConfir
 
           <Divider />
 
-          {/* Pricing Breakdown - Only Total */}
+          {/* Pricing Breakdown */}
           <div>
+            {/* Show breakdown items if applicable */}
+            {(pricing.upgradeFee > 0 || pricing.baseFee > 0 || pricing.extraMonthsFee > 0 || pricing.discount > 0) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12, padding: '0 12px' }}>
+                {pricing.upgradeFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#6B7280' }}>Upgrade fee</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1D2E' }}>₹{pricing.upgradeFee.toLocaleString()}</span>
+                  </div>
+                )}
+                {pricing.baseFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#6B7280' }}>Plan fee</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1D2E' }}>₹{pricing.baseFee.toLocaleString()}</span>
+                  </div>
+                )}
+                {pricing.extraMonthsFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#6B7280' }}>Extra months</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1D2E' }}>₹{pricing.extraMonthsFee.toLocaleString()}</span>
+                  </div>
+                )}
+                {pricing.discount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#12C479' }}>Discount</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#12C479' }}>-₹{pricing.discount.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Total */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: `${activePlan.color}08`, borderRadius: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#1A1D2E' }}>Total Amount</span>

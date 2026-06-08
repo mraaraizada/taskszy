@@ -457,14 +457,14 @@ function RoleCard({ role, selected, onSelect, onCopy, onDelete, onEdit }) {
   return (
     <div onClick={onSelect} style={{
       background: selected ? `linear-gradient(135deg, ${role.color}12, ${role.color}06)` : 'var(--bg-surface)',
-      borderRadius: 14, padding: '16px 18px',
+      borderRadius: 12, padding: '12px 14px',
       border: `2px solid ${selected ? role.color : 'var(--border)'}`,
       cursor: 'pointer', transition: 'all 0.2s',
       boxShadow: selected ? `0 4px 16px ${role.color}20` : 'none',
       position: 'relative',
     }}>
       {selected && (
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(role); }} 
             style={{ 
@@ -509,12 +509,12 @@ function RoleCard({ role, selected, onSelect, onCopy, onDelete, onEdit }) {
           </button>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `linear-gradient(135deg, ${role.color}, ${role.color}99)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {role.roleType === 'Admin' ? <Shield size={18} color="#fff" /> : role.roleType === 'Management' ? <Settings2 size={18} color="#fff" /> : role.roleType === 'Team Member' ? <Users size={18} color="#fff" /> : <Settings2 size={18} color="#fff" />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg, ${role.color}, ${role.color}99)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {role.roleType === 'Admin' ? <Shield size={16} color="#fff" /> : role.roleType === 'Management' ? <Settings2 size={16} color="#fff" /> : role.roleType === 'Team Member' ? <Users size={16} color="#fff" /> : <Settings2 size={16} color="#fff" />}
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{role.name}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{role.name}</div>
           {role.roleType && (
             <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: role.roleType === 'Admin' ? '#F5F3FF' : role.roleType === 'Management' ? '#EEF2FF' : '#ECFDF5', color: role.roleType === 'Admin' ? '#7C3AED' : role.roleType === 'Management' ? '#3B5BFC' : '#12C479', marginTop: 3, display: 'inline-block' }}>{role.roleType}</span>
           )}
@@ -611,16 +611,16 @@ function RolesTab() {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 18, minHeight: 0, flex: 1, overflow: 'hidden', width: '100%' }}>
+    <div style={{ display: 'flex', gap: 14, minHeight: 0, flex: 1, overflow: 'hidden', width: '100%' }}>
       {/* Left � Role list */}
-      <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, minHeight: 0 }}>
+      <div style={{ width: 200, display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2, flexShrink: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Roles</span>
           <button onClick={() => setShowNew(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 10px #3B5BFC40' }}>
             <Plus size={13} /> New
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
           {roles.map(r => <RoleCard key={r.id} role={r} selected={selectedId === r.id} onSelect={() => { setSelectedId(r.id); setEditingDesc(false); setEditingAbout(false); }} onCopy={copyRole} onDelete={deleteRole} onEdit={startEditRole} />)}
         </div>
       </div>
@@ -630,13 +630,13 @@ function RolesTab() {
         {role ? (
           <div style={{ background: 'var(--bg-surface)', borderRadius: 16, border: `2px solid ${role.color}30`, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {/* Header */}
-            <div style={{ padding: '20px 24px', background: `linear-gradient(135deg, ${role.color}12, transparent)`, borderBottom: '1.5px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${role.color}, ${role.color}99)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {role.roleType === 'Admin' ? <Shield size={20} color="#fff" /> : role.roleType === 'Management' ? <Settings2 size={20} color="#fff" /> : role.roleType === 'Team Member' ? <Users size={20} color="#fff" /> : <Settings2 size={20} color="#fff" />}
+            <div style={{ padding: '14px 20px', background: `linear-gradient(135deg, ${role.color}12, transparent)`, borderBottom: '1.5px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 11, background: `linear-gradient(135deg, ${role.color}, ${role.color}99)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {role.roleType === 'Admin' ? <Shield size={18} color="#fff" /> : role.roleType === 'Management' ? <Settings2 size={18} color="#fff" /> : role.roleType === 'Team Member' ? <Users size={18} color="#fff" /> : <Settings2 size={18} color="#fff" />}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{role.name}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>{role.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
                   {role.roleType && (
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: role.roleType === 'Admin' ? '#F5F3FF' : role.roleType === 'Management' ? '#EEF2FF' : '#ECFDF5', color: role.roleType === 'Admin' ? '#7C3AED' : role.roleType === 'Management' ? '#3B5BFC' : '#12C479', display: 'inline-block' }}>{role.roleType}</span>
                   )}
@@ -698,11 +698,11 @@ function RolesTab() {
             </div>
 
             {/* Body */}
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24, minHeight: 0 }}>
+            <div style={{ flex: 1, padding: '18px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18, minHeight: 0 }}>
 
               {/* Description section */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Work Description</div>
                 </div>
                 {editingDesc ? (
@@ -715,7 +715,7 @@ function RolesTab() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ position: 'relative', minHeight: 120, padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: 10, border: '1.5px solid var(--border-light)', fontSize: 13, color: role.workDescription ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ position: 'relative', minHeight: 100, padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: 10, border: '1.5px solid var(--border-light)', fontSize: 13, color: role.workDescription ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                     {role.workDescription || 'Use / to separate each point. e.g. Review pull requests daily / Write unit tests / Attend weekly stand-ups'}
                     <button onClick={() => { setEditingDesc(true); setTempDesc(role.workDescription || ''); }}
                       style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -953,18 +953,18 @@ function TagsAndCategoriesTab({ managementMode = false }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* All Items - Tags & Categories */}
-      <div style={{ background: 'var(--bg-surface)', borderRadius: 18, padding: 24, border: '1.5px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 }}>
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 18, padding: 16, border: '1.5px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Tag size={18} color="#3B5BFC" strokeWidth={2.5} />
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Tag size={16} color="#3B5BFC" strokeWidth={2.5} />
             </div>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>Tags & Categories</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Manage task labels and types</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Tags & Categories</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Manage task labels and types</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -980,16 +980,16 @@ function TagsAndCategoriesTab({ managementMode = false }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {/* Empty state when both tags and cats are empty */}
           {tags.length === 0 && cats.length === 0 && (
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', gap: 14 }}>
-              <div style={{ width: 60, height: 60, borderRadius: 18, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Tag size={26} color="#3B5BFC" strokeWidth={1.8} />
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 20px', gap: 12 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tag size={22} color="#3B5BFC" strokeWidth={1.8} />
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>No tags or categories yet</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 300 }}>Add tags and categories to organise and label your tasks</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>No tags or categories yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 280 }}>Add tags and categories to organise and label your tasks</div>
               </div>
-              <button onClick={() => setShowCreate(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(59,91,252,0.25)' }}>
-                <Plus size={14} /> Add First Tag
+              <button onClick={() => setShowCreate(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', background: 'linear-gradient(135deg, #3B5BFC, #2142D9)', border: 'none', borderRadius: 10, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(59,91,252,0.25)' }}>
+                <Plus size={13} /> Add First Tag
               </button>
             </div>
           )}
