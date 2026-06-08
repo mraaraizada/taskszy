@@ -591,6 +591,7 @@ function AppShell() {
           // ALSO: Don't call handleLogin if plan selection is currently active
           if (!loginHandledRef.current && !loginInProgressRef.current && !isPlanSelectionActive) {
 
+            // Don't set authLoading to false yet - let handleLogin do it after setting auth state
             handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false);
           } else {
             // LoginPage already handled login OR login is in progress OR plan selection is active
@@ -603,14 +604,16 @@ function AppShell() {
             }
             // Ensure workspace is set even if we skip handleLogin
             if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
+            // Only set authLoading to false if we're NOT going to call handleLogin
             setAuthLoading(false);
           }
         }
       } else {
         // No user - logged out state
 
+        // Set authLoading to false to show login page
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
     return unsubscribe;
   }, []);

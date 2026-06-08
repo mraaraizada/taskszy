@@ -1508,11 +1508,37 @@ export default function FinancialPage() {
     return <FinancialSkeleton />;
   }
 
+  // Ensure page is always visible with explicit styles
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'visible', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
+    <div style={{ 
+      flex: 1, 
+      minHeight: 0, 
+      overflow: 'visible', 
+      padding: '20px 28px 24px', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 18, 
+      position: 'relative',
+      visibility: 'visible',
+      opacity: 1,
+      width: '100%',
+      height: '100%'
+    }}>
 
       {/* ── Payments table ── */}
-      <div style={{ background: 'var(--bg-surface)', borderRadius: 18, border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div style={{ 
+        background: 'var(--bg-surface)', 
+        borderRadius: 18, 
+        border: '1.5px solid var(--border)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        flex: 1, 
+        minHeight: 400, 
+        maxHeight: '100%', 
+        overflow: 'hidden',
+        visibility: 'visible',
+        width: '100%'
+      }}>
 
         {/* Table toolbar */}
         <div style={{
@@ -1772,6 +1798,9 @@ export default function FinancialPage() {
           borderBottom: '1.5px solid var(--border-light)',
           background: 'var(--bg-subtle)',
           flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}>
           {['Organization', 'User Name', 'Phone Number', 'Payment ID', 'Date & Time', 'Coupon', 'Plan', 'Amount'].map((h, i) => (
             <div key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: i === 7 ? 'right' : 'left' }}>
@@ -1784,7 +1813,7 @@ export default function FinancialPage() {
         {pageLoading ? (
           <FinancialSkeleton />
         ) : sorted.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 20px', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 20px', gap: 12, visibility: 'visible', opacity: 1 }}>
             <div style={{ width: 56, height: 56, borderRadius: 16, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Wallet size={26} color="#3B5BFC" strokeWidth={1.8} />
             </div>
@@ -1792,7 +1821,7 @@ export default function FinancialPage() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 220 }}>Payment records will appear here once tasks are assigned and budgets are set.</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 300 }}>
             {sorted.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).map((row, idx) => {
               const isLast = idx === sorted.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage).length - 1;
               const key = `${row.id}-${row.memberName}`;
@@ -1804,10 +1833,13 @@ export default function FinancialPage() {
                     display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1.2fr 1fr 1.3fr 1fr 0.9fr 1fr',
                     alignItems: 'center',
                     padding: '14px 20px',
+                    minHeight: '60px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                     background: isSelected ? '#EEF2FF' : row.isPaid ? 'var(--bg-surface)' : 'var(--bg-surface)',
                     transition: 'background 0.12s',
                     cursor: 'pointer',
+                    visibility: 'visible',
+                    opacity: 1,
                   }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-subtle)'; }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isSelected ? '#EEF2FF' : 'var(--bg-surface)'; }}
