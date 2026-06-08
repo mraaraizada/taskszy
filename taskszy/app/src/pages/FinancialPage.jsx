@@ -4041,4 +4041,4 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       )}
     </div>
   );
-}}
+}
