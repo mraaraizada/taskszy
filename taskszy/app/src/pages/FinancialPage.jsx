@@ -2178,10 +2178,20 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     }
     
     // Calculate totals from filtered results
-    // ⭐ Total Earned = ONLY paid amounts (not pending)
+    // ⭐ Total Paid = ONLY paid amounts (not pending)
     const totalPaid    = filtered.filter(r => r.isPaid).reduce((s, r) => s + r.amount, 0);
     const totalPending = filtered.filter(r => !r.isPaid).reduce((s, r) => s + r.amount, 0);
-    const totalBudget  = totalPaid + totalPending; // Total of all payments (paid + pending)
+    
+    // ⭐ CRITICAL FIX: Calculate actual task budgets from tasks, not from payments
+    // Total Budget = Sum of all member budgets assigned in tasks
+    const totalBudget = tasks.reduce((sum, task) => {
+      if (!task.members || task.members.length === 0) return sum;
+      const taskMemberBudgets = task.members.reduce((memberSum, member) => {
+        return memberSum + (member.budget || 0);
+      }, 0);
+      return sum + taskMemberBudgets;
+    }, 0);
+    
     const paidRate     = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
 
     if (process.env.NODE_ENV === 'development') {
