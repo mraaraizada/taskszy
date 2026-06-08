@@ -2178,6 +2178,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     // STEP 4: Filter by Status (All/Pending/Paid)
     if (process.env.NODE_ENV === 'development') {
 
+    }
+    
     if (statusFilter === 'Pending') {
       filtered = filtered.filter(row => !row.isPaid);
 
