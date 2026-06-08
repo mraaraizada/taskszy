@@ -2734,10 +2734,36 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'visible', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
+    <div style={{ 
+      flex: 1, 
+      minHeight: 0, 
+      overflow: 'visible', 
+      padding: '20px 28px 24px', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 18, 
+      position: 'relative',
+      visibility: 'visible',
+      opacity: 1,
+      width: '100%',
+      height: '100%',
+      background: 'var(--bg-main)'
+    }}>
 
       {/* -- Payments table -- */}
-      <div style={{ background: 'var(--bg-surface)', borderRadius: 18, border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div style={{ 
+        background: 'var(--bg-surface)', 
+        borderRadius: 18, 
+        border: '1.5px solid var(--border)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        flex: 1, 
+        minHeight: 400, 
+        maxHeight: '100%', 
+        overflow: 'hidden',
+        visibility: 'visible',
+        width: '100%'
+      }}>
 
         {/* Table toolbar */}
         <div style={{
@@ -3335,6 +3361,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           borderBottom: '1.5px solid var(--border-light)',
           background: 'var(--bg-subtle)',
           flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <input 
@@ -3356,7 +3385,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
 
         {/* Rows */}
         {sorted.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '80px 24px', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '80px 24px', gap: 16, visibility: 'visible', opacity: 1 }}>
             <div style={{ width: 72, height: 72, borderRadius: 20, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Wallet size={32} color="#12C479" strokeWidth={1.8} />
             </div>
@@ -3369,7 +3398,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 300 }}>
             {/* ⭐ Show paginated filtered results when filters active, otherwise show Firestore paginated data */}
             {paginatedFiltered.map((row, idx) => {
               const isLast = idx === paginatedFiltered.length - 1;
@@ -3388,10 +3417,13 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                     display: 'grid', gridTemplateColumns: '50px 560px 1.5fr 160px 130px 130px 120px 90px 90px 110px',
                     alignItems: 'center',
                     padding: '14px 20px',
+                    minHeight: '60px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                     background: isSelected ? '#EEF2FF' : row.isPaid ? 'var(--bg-surface)' : 'var(--bg-surface)',
                     transition: 'background 0.12s',
                     cursor: row.isPaid ? 'default' : 'pointer',
+                    visibility: 'visible',
+                    opacity: 1,
                   }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-subtle)'; }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isSelected ? '#EEF2FF' : 'var(--bg-surface)'; }}

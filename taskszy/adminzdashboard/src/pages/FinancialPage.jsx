@@ -1522,7 +1522,8 @@ export default function FinancialPage() {
       visibility: 'visible',
       opacity: 1,
       width: '100%',
-      height: '100%'
+      height: '100%',
+      background: 'var(--bg-main)'
     }}>
 
       {/* ── Payments table ── */}
