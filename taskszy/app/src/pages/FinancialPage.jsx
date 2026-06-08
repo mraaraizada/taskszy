@@ -1431,13 +1431,13 @@ function PaymentDetailPanel({ payment, onClose }) {
     <div 
       ref={panelRef}
       style={{ 
-        position: 'absolute',
+        position: 'fixed',
         top: 0,
         right: 0,
         bottom: 0,
         width: 420,
         background: 'var(--bg-surface)', 
-        zIndex: 10,
+        zIndex: 1000,
         display: 'flex', 
         flexDirection: 'column', 
         boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
@@ -2734,7 +2734,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: 'visible', padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
 
       {/* -- Payments table -- */}
       <div style={{ background: 'var(--bg-surface)', borderRadius: 18, border: '1.5px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
