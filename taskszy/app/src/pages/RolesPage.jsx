@@ -130,7 +130,7 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
     });
   };
 
-  const canAdd = name.trim();
+  const canAdd = name.trim() && imagePreview;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>

@@ -2300,7 +2300,6 @@ export function AppProvider({ children }) {
     
     // Validate that the stage is one of the allowed stages
     if (!STAGES.includes(cleanStage)) {
-
       newStage = 'New';
     } else {
       newStage = cleanStage;
@@ -2308,7 +2307,6 @@ export function AppProvider({ children }) {
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) {
-
       return;
     }
     
@@ -2389,7 +2387,6 @@ export function AppProvider({ children }) {
 
     // ⭐ CRITICAL: Save to Firestore FIRST before updating local state
     if (wsPath) {
-
       try {
         // Sanitize members array to remove any undefined values
         const sanitizedMembers = sanitizeForFirestore(updatedMembers);
@@ -2428,6 +2425,7 @@ export function AppProvider({ children }) {
         }));
         
       } catch (err) {
+        console.error('[AppContext updateTaskStage] Firestore update failed:', err);
 
         // If Firestore save fails, update local state as fallback
         setTasks(prev => prev.map(t => {

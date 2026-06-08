@@ -4,13 +4,14 @@ import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
-// Suppress console logs in production for performance
+// Temporarily enable console logs in production for debugging stage update issue
 if (import.meta.env.PROD) {
-  console.log = () => {};
-  console.warn = () => {};
-  console.error = () => {};
-  console.info = () => {};
-  console.debug = () => {};
+  // console.log = () => {};  // DISABLED for debugging
+  // console.warn = () => {};  // DISABLED for debugging
+  // console.error = () => {};  // DISABLED for debugging
+  // console.info = () => {};  // DISABLED for debugging
+  // console.debug = () => {};  // DISABLED for debugging
+  console.log('[main.jsx] 🔥 PRODUCTION MODE - Console logs ENABLED for debugging stage update');
 }
 
 // Suppress specific warnings in development

@@ -757,7 +757,6 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
     if (modalTask) {
       const updatedTask = tasks.find(t => t.id === modalTask.id);
       if (updatedTask) {
-
         // Always update to ensure we have the latest data
         setModalTask(updatedTask);
       }
@@ -866,7 +865,10 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
   function handleStageUpdate(task) {
     const newStage = stageSelect[task.id];
-    if (!newStage) return;
+    
+    if (!newStage) {
+      return;
+    }
     
     // If selecting Issue stage, require issue text
     if (newStage === 'Issue' && !issueText[task.id]?.trim()) {
@@ -878,12 +880,12 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
     setTimeout(() => {
       // Pass issue text if stage is Issue
       const issueNote = newStage === 'Issue' ? issueText[task.id] : null;
-      updateTaskStage(task.id, newStage, member.id, null, issueNote);
+      // Pass member name as actorName to properly record who updated the stage
+      updateTaskStage(task.id, newStage, member.id, member.name, issueNote);
       setUpdating(null);
       setStageSelect(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       setIssueText(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       setModalTask(null);
-
     }, 700);
   }
 
@@ -1052,11 +1054,6 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
           {paginatedTasks.map(task => {
             const mem = task.members.find(m => String(m.id) === String(member.id));
             
-            // Debug logging for budget
-            if (!mem || !mem.budget) {
-
-            }
-            
             const overdueFlag = isOverdue(task);
             const isComplete  = task.stage === 'Complete' || mem?.stage === 'Complete';
             const days = daysLeft(task.deadline, task.extendedDeadline);
@@ -1158,7 +1155,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: isComplete ? '#12C479' : '#374151' }}>
-                    ? {mem?.budget ? mem.budget.toLocaleString() : '0'}
+                    ₹ {mem?.budget ? mem.budget.toLocaleString() : '0'}
                   </div>
                 </div>
               </div>
@@ -1524,19 +1521,18 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
         
         // If task not found in enrichedTasks, close modal (task might have been deleted)
         if (!t) {
-
           setModalTask(null);
           return null;
         }
-        
-        // Log task member data for debugging
 
+        // FIRST: Define all variables before using them in logs
         const mem = t.members.find(m => String(m.id) === String(member.id));
         const overdueFlag = isOverdue(t);
         const isComplete  = t.stage === 'Complete' || mem?.stage === 'Complete';
         const onHold = mem?.isOnHold || t.paused || t.isPaused || false;
         const days = daysLeft(t.deadline, t.extendedDeadline);
         const currentStage = mem?.stage || t.stage;
+        
         // Members can select stages defined in MEMBER_STAGES
         // Prevent going back from Start to New
         const allowedNext = MEMBER_STAGES.filter(s => {
@@ -1546,6 +1542,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
           if (currentStage !== 'New' && s === 'New') return false;
           return true;
         });
+        
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.08)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.18)', overflow: 'hidden' }}>
@@ -1611,7 +1608,9 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                     })}
                   </div>
                 </div>
-                <button onClick={() => setModalTask(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F2F8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#6B7280' }}>?</button>
+                <button onClick={() => setModalTask(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F2F8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#6B7280' }}>
+                  <X size={16} color="#6B7280" />
+                </button>
               </div>
 
               {/* Modal body - scrollable */}
@@ -1838,12 +1837,16 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 2 }}>Update your stage</div>
                         {stageSelect[t.id] && stageSelect[t.id] !== currentStage && <div style={{ fontSize: 11, color: '#9CA3AF' }}>{STAGE_DESCRIPTIONS[stageSelect[t.id]]}</div>}
                       </div>
-                      <select value={stageSelect[t.id] || currentStage} onChange={(e) => setStageSelect((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                      <select value={stageSelect[t.id] || currentStage} onChange={(e) => {
+                        setStageSelect((prev) => ({ ...prev, [t.id]: e.target.value }));
+                      }}
                         style={{ height: 38, borderRadius: 10, border: `1.5px solid ${stageSelect[t.id] && stageSelect[t.id] !== currentStage ? '#3B5BFC' : '#E8EAEF'}`, padding: '0 12px', fontSize: 12, fontWeight: 600, color: '#1A1D2E', background: '#fff', cursor: 'pointer', outline: 'none', minWidth: 160 }}>
                         <option value={currentStage}>{currentStage} (Current)</option>
                         {allowedNext.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
-                      <button disabled={!stageSelect[t.id] || stageSelect[t.id] === currentStage || updating === t.id} onClick={() => handleStageUpdate(t)}
+                      <button disabled={!stageSelect[t.id] || stageSelect[t.id] === currentStage || updating === t.id} onClick={() => {
+                        handleStageUpdate(t);
+                      }}
                         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 20px', borderRadius: 10, border: 'none', background: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : '#F0F2F8', color: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700, cursor: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? 'pointer' : 'default', boxShadow: (stageSelect[t.id] && stageSelect[t.id] !== currentStage) ? '0 4px 12px rgba(59,91,252,0.3)' : 'none', transition: 'all 0.15s' }}>
                         {updating === t.id ? <><RefreshCw size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving...</> : 'Update Stage'}
                       </button>

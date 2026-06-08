@@ -327,10 +327,14 @@ service cloud.firestore {
       allow create, update, delete: if belongsToWorkspace(workspaceId) 
                                      && isAdminOrManagement();
       
-      // Members can update tasks assigned to them (limited fields)
+      // ⭐ CRITICAL: Members can update ONLY their own stage in the members array
+      // Members can update: stage, members array (their own stage), history, updatedAt, issueNote, _stageUpdateTimestamp
+      // This allows members to update their personal stage progress without modifying the entire task
       allow update: if belongsToWorkspace(workspaceId) 
                     && isMember()
-                    && resource.data.assignedTo.hasAny([getUserData().memberId]);
+                    && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/team/$(getUserData().memberId))
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['stage', 'members', 'history', 'updatedAt', 'issueNote', '_stageUpdateTimestamp']);
     }
     
     // ══════════════════════════════════════════════════════════════════════
