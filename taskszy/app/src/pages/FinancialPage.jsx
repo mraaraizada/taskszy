@@ -1612,16 +1612,35 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   
   // All admin users get full access
   const isAdminA = false;
-  // ⭐ Fixed: Moved state declarations before hasActiveFilters calculation
   
-  // ⭐ OPTIMIZATION: Only log in development mode
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[FinancialPage] Development mode logging enabled');
-  }
-  
-  // ⭐ State declarations MUST come before using them
+  // ⭐ ALL useState declarations MUST be at the top - React Rules of Hooks
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedMembers, setSelectedMembers] = useState([]);
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [manualPayments, setManualPayments] = useState([]);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+  const [showCategoryPaymentModal, setShowCategoryPaymentModal] = useState(false);
+  const [showAddBudgetModal, setShowAddBudgetModal] = useState(false);
+  const [selectedTaskBudget, setSelectedTaskBudget] = useState(null);
+  const [localDescriptionUpdates, setLocalDescriptionUpdates] = useState({});
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  const [prefilledTask, setPrefilledTask] = useState(null);
+  const [expandedPaymentHistory, setExpandedPaymentHistory] = useState({});
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState('all');
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [tempDateFrom, setTempDateFrom] = useState('');
+  const [tempDateTo, setTempDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [hoveredDescription, setHoveredDescription] = useState(null);
+  const [editingDescription, setEditingDescription] = useState(null);
+  const [editDescriptionValue, setEditDescriptionValue] = useState('');
+  const [filteredPage, setFilteredPage] = useState(1); // ⭐ MOVED FROM LINE 2239 - Must be at top per React Rules of Hooks
   
   // ⭐ Check if any filters are active (after state declarations)
   const hasActiveFilters = selectedCategories.length > 0 || selectedMembers.length > 0;
@@ -1677,33 +1696,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   console.log('[FinancialPage] Workspace path:', wsPath || 'NULL');
   console.log('[FinancialPage] ✅ Checkpoint 1: After workspace path');
   
-  const [selectedRows, setSelectedRows] = useState([]);
-  console.log('[FinancialPage] ✅ Checkpoint 2: After state declarations');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState(null);
-  const [manualPayments, setManualPayments] = useState([]);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
-  const [showCategoryPaymentModal, setShowCategoryPaymentModal] = useState(false);
-  const [showAddBudgetModal, setShowAddBudgetModal] = useState(false); // ⭐ Add budget modal state
-  const [selectedTaskBudget, setSelectedTaskBudget] = useState(null); // ⭐ Selected task budget entry
-  const [localDescriptionUpdates, setLocalDescriptionUpdates] = useState({}); // ⭐ Track local description updates
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false); // ⭐ Loading animation state
-  const [prefilledTask, setPrefilledTask] = useState(null); // ⭐ Store prefilled task ID for modal
-  const [expandedPaymentHistory, setExpandedPaymentHistory] = useState({}); // ⭐ Track which payment histories are expanded
-  
-  // ⭐ Set default to NO date filter (show all data)
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [dateRangeFilter, setDateRangeFilter] = useState('all');
-  const [showDateDropdown, setShowDateDropdown] = useState(false);
-  const [tempDateFrom, setTempDateFrom] = useState('');
-  const [tempDateTo, setTempDateTo] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [hoveredDescription, setHoveredDescription] = useState(null);
-  const [editingDescription, setEditingDescription] = useState(null);
-  const [editDescriptionValue, setEditDescriptionValue] = useState('');
+  // ⭐ ALL useState moved to top of component - removed duplicates here
+  console.log('[FinancialPage] ✅ Checkpoint 2: After state declarations (moved to top)');
   
   // ⭐ Pagination is now handled by usePaginatedPayments hook
   // No need for currentPage and rowsPerPage state here
@@ -2075,6 +2069,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   return rows;
   }, [paymentsToUse, tasks, team, manualPayments, localDescriptionUpdates, PAYMENT_CATEGORIES, currentUser, hasActiveFilters]);
 
+  console.log('[FinancialPage] ✅ Checkpoint 4: After allRows useMemo, before filtering logic');
+
   // ═══════════════════════════════════════════════════════════════
   // FILTER LOGIC - Rewritten from scratch for clarity
   // ═══════════════════════════════════════════════════════════════
@@ -2212,8 +2208,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   }
   
   // ⭐ STEP 6: Client-side pagination for filtered results
-  const [filteredPage, setFilteredPage] = useState(1);
+  // ⭐ filteredPage state MOVED TO TOP (line ~1645) - React Rules of Hooks requirement
   const filteredPageSize = 15;
+  
+  console.log('[FinancialPage] ✅ Checkpoint 5: Before useEffect for filtered pagination');
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -2776,6 +2774,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     paymentsLength: paginatedPayments?.length || 0,
     teamLength: team?.length || 0
   });
+  console.log('[FinancialPage] ✅ Checkpoint 6: Right before return statement');
 
   console.log('[FinancialPage] Preparing to return JSX...');
   
