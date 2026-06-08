@@ -203,8 +203,6 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
         newMember.uid = uid;
         
         // Use actual current user info for addedBy field
-        console.log('[TeamPage] Creating addedByInfo, currentUser:', currentUser);
-        
         const addedByInfo = currentUser ? {
           uid: currentUser.uid || null, // Add uid for profile enrichment
           name: currentUser.name && currentUser.name !== 'User' ? currentUser.name : (currentUser.email || 'Admin'),
@@ -213,8 +211,6 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
           color: currentUser.color || '#3B5BFC',
           role: currentUser.role && currentUser.role !== 'Member' ? currentUser.role : 'Administrator' // Use display role name, not userRole
         } : { name: 'Admin', avatar: 'A', color: '#3B5BFC', role: 'Administrator' };
-        
-        console.log('[TeamPage] addedByInfo created:', addedByInfo);
 
         onSave(newMember, addedByInfo);
         

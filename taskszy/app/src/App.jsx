@@ -95,12 +95,10 @@ const SKELETON_MAP = {
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
 function renderPage(activeItem, handleNav, extraProps = {}, onNavigateToNotes, setPageFilteredData, currentUser = null) {
-  console.log('[App.jsx renderPage] Rendering page:', activeItem, 'with props:', extraProps);
   switch (activeItem) {
     case 'tasks':       return <TasksPage onNavigateToNotes={() => handleNav('notes')} onNavigateToManage={() => handleNav('roles')} onNavigateToFinancial={(taskId) => handleNav('financial', { prefilledTaskId: taskId })} setPageFilteredData={setPageFilteredData} filterToTaskId={extraProps.filterToTaskId} {...extraProps} />;
     case 'team':        return <TeamPage onNavigateToManage={() => handleNav('roles')} setPageFilteredData={setPageFilteredData} currentUser={currentUser} {...extraProps} />;
     case 'financial':   
-      console.log('[App.jsx renderPage] Rendering FinancialPage with props:', { prefilledTaskId: extraProps.prefilledTaskId, filterToTaskId: extraProps.filterToTaskId });
       return <FinancialPage prefilledTaskId={extraProps.prefilledTaskId} filterToTaskId={extraProps.filterToTaskId} setPageFilteredData={setPageFilteredData} />;
     case 'roles':       return <RolesPage />;
     case 'performance': return <PerformancePage />;
@@ -305,12 +303,10 @@ function AppShell() {
 
   // Track page navigation
   useEffect(() => {
-    console.log('[App.jsx Navigation] Page changed to:', activeItem);
     monitor.trackPageLoad(`admin_${activeItem}`);
     // Persist active page to localStorage for refresh restoration
     try {
       localStorage.setItem('lastActivePage', activeItem);
-      console.log('[App.jsx Navigation] Saved to localStorage:', activeItem);
     } catch (err) {
       console.error('[App.jsx Navigation] Failed to save to localStorage:', err);
     }
@@ -565,7 +561,6 @@ function AppShell() {
           if (userRole === 'admin' && (!completedSetup || !hasPlan) && !isRelogin) {
             // Don't call handleLogin - let LoginPage handle it
             // LoginPage will show plan selection if needed
-            console.log('[App.jsx onAuthStateChanged] Admin needs plan/setup - showing LoginPage with plan check');
             setIsPlanSelectionActive(true); // Mark that plan selection is active
             setNeedsPlanCheck(true); // Tell LoginPage to check for plan
             setAuthLoading(false);
@@ -607,7 +602,6 @@ function AppShell() {
 
             }
             if (isPlanSelectionActive) {
-              console.log('[App.jsx onAuthStateChanged] Skipping handleLogin - plan selection is active');
             }
             // Ensure workspace is set even if we skip handleLogin
             if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
@@ -652,7 +646,6 @@ function AppShell() {
   }, [currentUid]);
 
   const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false) => {
-    console.log('[App.jsx handleLogin] Starting login:', { role, memberId, email, workspaceIdParam, completedSetup, isNewSignup });
     const callStack = new Error().stack;
 
     // Prevent duplicate calls - if login is already in progress, ignore
@@ -664,7 +657,6 @@ function AppShell() {
     // Mark that login is in progress IMMEDIATELY to prevent race conditions
     loginInProgressRef.current = true;
     loginHandledRef.current = true;
-    console.log('[App.jsx handleLogin] Marked login as in progress');
     
     // Set authLoading to true during login to prevent flicker
     setAuthLoading(true);
@@ -680,7 +672,6 @@ function AppShell() {
     const { getAuth } = await import('firebase/auth');
     const uid = getAuth().currentUser?.uid;
     if (uid) {
-      console.log('[App.jsx handleLogin] Setting currentUid:', uid);
       setCurrentUid(uid);
     } else {
       console.warn('[App.jsx handleLogin] No Firebase Auth user found');
@@ -770,14 +761,12 @@ function AppShell() {
     }
     
     // Set all auth-related states together to minimize re-renders
-    console.log('[App.jsx handleLogin] Setting auth state:', { role, memberId });
     setInitialLoading(true);
     setVisitedPages(new Set());
     setAuth({ role, memberId });
     
     // Set authLoading to false AFTER setting auth to prevent login page flash
     setAuthLoading(false);
-    console.log('[App.jsx handleLogin] Auth state set, authLoading = false');
     
     // Use setTimeout with 0 to batch the next state updates
     setTimeout(() => {
@@ -858,7 +847,6 @@ function AppShell() {
   };
 
   const handleLogout = async (expired = false) => {
-    console.log('[App.jsx handleLogout] Starting logout, expired:', expired);
     expiredLogoutRef.current = false; // manual logout — never expired
     setSessionExpired(false);
     logoutInProgressRef.current = true;
@@ -867,7 +855,6 @@ function AppShell() {
     setIsPlanSelectionActive(false); // Clear plan selection flag
     
     // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
-    console.log('[App.jsx handleLogout] Clearing currentUid and user state');
     const uidToClean = currentUid;
     setCurrentUid(null);
     setWorkspaceId(null);
@@ -875,7 +862,6 @@ function AppShell() {
     
     // CRITICAL: Set auth to null immediately to prevent role access errors
     setAuth(null);
-    console.log('[App.jsx handleLogout] Auth state cleared');
     
     // Clear all localStorage cache related to app state
     try {
@@ -912,7 +898,6 @@ function AppShell() {
     await new Promise(resolve => setTimeout(resolve, 150));
     
     // Reset remaining application state
-    console.log('[App.jsx handleLogout] Resetting remaining app state');
     setDashVisible(false);
     setInitialLoading(false);
     setVisitedPages(new Set());
@@ -932,7 +917,6 @@ function AppShell() {
     
     // Set authLoading to false after all cleanup to show login page
     setAuthLoading(false);
-    console.log('[App.jsx handleLogout] Logout complete, showing login page');
   };
 
   const handleNav = (item, extraProps = {}) => {
@@ -1028,7 +1012,6 @@ function AppShell() {
 
   // ── Auth loading (waiting for onAuthStateChanged on mount) ──
   if (authLoading) {
-    console.log('[App.jsx Render] Auth loading - showing skeleton');
     return (
       <>
         <SkeletonStyles />
@@ -1043,7 +1026,6 @@ function AppShell() {
   const oobCode = urlParams.get('oobCode');
   
   if (mode && oobCode) {
-    console.log('[App.jsx Render] Auth action detected:', mode);
     return (
       <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
         <AuthActionPage />
@@ -1059,7 +1041,6 @@ function AppShell() {
 
   // ── Not logged in ──
   if (!auth) {
-    console.log('[App.jsx Render] Not logged in - showing LoginPage');
     return (
       <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />
     );
@@ -1067,7 +1048,6 @@ function AppShell() {
 
   // ── Member role ──
   if (auth?.role === 'member') {
-    console.log('[App.jsx Render] Rendering MemberApp for memberId:', auth.memberId);
     return (
       <Suspense fallback={<div style={{ width: '100vw', height: '100vh', background: '#F0F2F8' }} />}>
         <MemberApp memberId={auth.memberId} onLogout={handleLogout} visible={dashVisible} />
@@ -1077,7 +1057,6 @@ function AppShell() {
 
   // ── Management role ──
   if (auth?.role === 'management') {
-    console.log('[App.jsx Render] Rendering ManagementApp for management user');
     return (
       <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
         {/* Management Dashboard (blurred when setup/loader is showing) */}
@@ -1105,7 +1084,6 @@ function AppShell() {
             existingWorkspace={workspace}
             isManagement={true}
             onComplete={(ws) => {
-              console.log('[App.jsx WorkspaceSetup] Setup completed for management:', ws);
               setWorkspace(ws);
               setShowWorkspaceSetup(false);
               isFirstSetupRef.current = true; // Mark first setup for welcome animation
@@ -1122,10 +1100,8 @@ function AppShell() {
           loop={false}
           onComplete={() => {
             setShowLoader(false);
-            console.log('[App.jsx Loader] Loader complete for management');
             // Prevent duplicate triggers
             if (mgmtAnimationTriggeredRef.current) {
-              console.log('[App.jsx Loader] Management animation already triggered');
               setDashVisible(true);
               return;
             }
@@ -1170,7 +1146,6 @@ function AppShell() {
   }
 
   // ── Admin role ──
-  console.log('[App.jsx Render] Rendering admin dashboard - activeItem:', activeItem);
   const page = pageConfig[activeItem] || pageConfig['dashboard'];
   const SkeletonComp = SKELETON_MAP[activeItem] || DashboardSkeleton;
 
@@ -1188,7 +1163,6 @@ function AppShell() {
     : {};
 
   if (initialLoading) {
-    console.log('[App.jsx Render] Initial loading - showing skeleton for:', activeItem);
     return (
       <>
         <SkeletonStyles />
@@ -1197,7 +1171,6 @@ function AppShell() {
     );
   }
 
-  console.log('[App.jsx Render] Rendering admin dashboard with dashVisible:', dashVisible, 'pageLoading:', pageLoading);
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <div style={{

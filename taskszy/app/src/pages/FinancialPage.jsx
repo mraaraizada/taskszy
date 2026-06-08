@@ -9,8 +9,6 @@ import { useLottie } from 'lottie-react';
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-console.log('[FinancialPage] Module loaded - top level');
-
 // Dynamic loading animation loader
 function useLoadingAnimation() {
   const [data, setData] = useState(null);
@@ -1607,9 +1605,6 @@ function PaymentDetailPanel({ payment, onClose }) {
 }
 
 export default function FinancialPage({ prefilledTaskId = null, setPageFilteredData = null, filterToTaskId = null }) {
-  console.log('[FinancialPage] Component rendering with props:', { prefilledTaskId, filterToTaskId });
-  console.log('[FinancialPage] Environment:', { NODE_ENV: process.env.NODE_ENV, isProd: import.meta.env.PROD });
-  
   // All admin users get full access
   const isAdminA = false;
   
@@ -1647,14 +1642,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   
   // ⭐ OPTIMIZATION: Use paginated payments hook (loads only 15 at a time)
   // Always call hooks unconditionally - React requirement
-  console.log('[FinancialPage] Calling hooks...');
   const hookResult = usePaginatedPayments(15);
   const appContext = useApp();
   const passwordHook = useAdminPassword();
-  console.log('[FinancialPage] Hooks called, checking results...');
-  console.log('[FinancialPage] hookResult:', hookResult ? 'exists' : 'NULL');
-  console.log('[FinancialPage] appContext:', appContext ? 'exists' : 'NULL');
-  console.log('[FinancialPage] passwordHook:', passwordHook ? 'exists' : 'NULL');
   
   const {
     payments: paginatedPayments = [],
@@ -1672,32 +1662,13 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     getCacheStats = () => {},
   } = hookResult || {};
   
-  console.log('[FinancialPage] Paginated payments data:', {
-    paymentsCount: paginatedPayments?.length || 0,
-    tasksCount: tasks?.length || 0,
-    currentPage: paymentsCurrentPage,
-    totalPages: paymentsTotalPages,
-    loading: paymentsLoading
-  });
-  
   const { financials = {}, STAGE_COLORS = {}, STAGE_BG = {}, markTaskPaid = () => {}, team = [], addTaskHistoryEntry = () => {}, currentUser = {}, addPaymentToTask = () => {}, markPaymentAsPaid = () => {}, updatePaymentNotes = () => {}, CATEGORIES = [], workspaceId = null, addTimelineEvent = () => {}, payments: allPayments = [] } = appContext || {};
   const { showPasswordModal = false, pendingAction = null, requestAdminPassword = () => {}, handlePasswordConfirm = () => {}, handlePasswordCancel = () => {} } = passwordHook || {};
   
-  console.log('[FinancialPage] AppContext data:', {
-    teamCount: team?.length || 0,
-    workspaceId: workspaceId || 'NULL',
-    currentUser: currentUser?.email || 'NULL',
-    categoriesCount: CATEGORIES?.length || 0,
-    allPaymentsCount: allPayments?.length || 0
-  });
-  
   // ⭐ Workspace path for Firebase operations
   const wsPath = workspaceId ? `workspaces/${workspaceId}` : null;
-  console.log('[FinancialPage] Workspace path:', wsPath || 'NULL');
-  console.log('[FinancialPage] ✅ Checkpoint 1: After workspace path');
   
   // ⭐ ALL useState moved to top of component - removed duplicates here
-  console.log('[FinancialPage] ✅ Checkpoint 2: After state declarations (moved to top)');
   
   // ⭐ Pagination is now handled by usePaginatedPayments hook
   // No need for currentPage and rowsPerPage state here
@@ -1731,9 +1702,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   }, [prefilledTaskId]);
 
   // ⭐ Payment categories definition - merge with CATEGORIES from context to get images
-  console.log('[FinancialPage] ✅ Checkpoint 3: Before useMemo for PAYMENT_CATEGORIES');
   const PAYMENT_CATEGORIES = useMemo(() => {
-    console.log('[FinancialPage] ✅ Inside PAYMENT_CATEGORIES useMemo');
     return CATEGORIES && CATEGORIES.length > 0 
       ? CATEGORIES.map(cat => ({
           label: cat.label || cat.name,
@@ -2069,8 +2038,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   return rows;
   }, [paymentsToUse, tasks, team, manualPayments, localDescriptionUpdates, PAYMENT_CATEGORIES, currentUser, hasActiveFilters]);
 
-  console.log('[FinancialPage] ✅ Checkpoint 4: After allRows useMemo, before filtering logic');
-
   // ═══════════════════════════════════════════════════════════════
   // FILTER LOGIC - Wrapped in useMemo to prevent infinite re-renders
   // ═══════════════════════════════════════════════════════════════
@@ -2227,8 +2194,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // ⭐ STEP 6: Client-side pagination for filtered results
   // ⭐ filteredPage state MOVED TO TOP (line ~1645) - React Rules of Hooks requirement
   const filteredPageSize = 15;
-  
-  console.log('[FinancialPage] ✅ Checkpoint 5: Before useEffect for filtered pagination');
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -2773,20 +2738,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
     }
   };
 
-  console.log('[FinancialPage] About to render, checking data availability:', {
-    hasPaginatedPayments: !!paginatedPayments && paginatedPayments.length > 0,
-    hasTeam: !!team && team.length > 0,
-    hasWorkspaceId: !!workspaceId,
-    paymentsLength: paginatedPayments?.length || 0,
-    teamLength: team?.length || 0
-  });
-  console.log('[FinancialPage] ✅ Checkpoint 6: Right before return statement');
-
-  console.log('[FinancialPage] Preparing to return JSX...');
-  
   // Safety check - if component is stuck, show error message
   if (!paginatedPayments && !team && !workspaceId) {
-    console.log('[FinancialPage] No data loaded - showing loading spinner');
   } else {
     console.log('[FinancialPage] Data loaded - will render main content');
   }
