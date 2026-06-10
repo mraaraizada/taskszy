@@ -736,8 +736,12 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                     overflowY: 'auto',
                     zIndex: 1000
                   }}>
-                    {/* ⭐ Group by roles - Show ALL members but sort Active first, then Inactive */}
-                    {[...new Set(team.map(m => m.role))].sort().map(role => {
+                    {/* ⭐ Group by roles - Exclude Admin users, show Active first then Inactive (non-selectable) */}
+                    {[...new Set(team.map(m => m.role))].filter(role => {
+                      // Exclude admin roles
+                      const roleLC = (role || '').toLowerCase();
+                      return !roleLC.includes('admin') && !roleLC.includes('administrator');
+                    }).sort().map(role => {
                       // Sort by status: Active members first, then Inactive
                       const membersInRole = team
                         .filter(m => m.role === role)
@@ -767,25 +771,37 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                           </div>
                           
                           {/* Members in this role */}
-                          {membersInRole.map(m => (
-                            <div
-                              key={m.id}
-                              onClick={() => {
-                                setMemberId(m.id.toString());
-                                setShowMemberDropdown(false);
-                              }}
-                              style={{
-                                padding: '10px 12px',
-                                cursor: 'pointer',
-                                borderBottom: '1px solid var(--border-light)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 10,
-                                background: memberId === m.id.toString() ? '#EEF2FF' : 'transparent'
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#EEF2FF'}
-                              onMouseLeave={e => e.currentTarget.style.background = memberId === m.id.toString() ? '#EEF2FF' : 'transparent'}
-                            >
+                          {membersInRole.map(m => {
+                            const isInactive = m.status === 'Inactive';
+                            return (
+                              <div
+                                key={m.id}
+                                onClick={() => {
+                                  // Don't allow selection of inactive members
+                                  if (isInactive) return;
+                                  setMemberId(m.id.toString());
+                                  setShowMemberDropdown(false);
+                                }}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: isInactive ? 'not-allowed' : 'pointer',
+                                  borderBottom: '1px solid var(--border-light)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  background: memberId === m.id.toString() ? '#EEF2FF' : 'transparent',
+                                  opacity: isInactive ? 0.5 : 1
+                                }}
+                                onMouseEnter={e => {
+                                  if (!isInactive) {
+                                    e.currentTarget.style.background = '#EEF2FF';
+                                  }
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.background = memberId === m.id.toString() ? '#EEF2FF' : 'transparent';
+                                }}
+                                title={isInactive ? 'Inactive member cannot receive payments' : ''}
+                              >
                               {/* ⭐ Show avatar image or initials */}
                               {m.avatarImg ? (
                                 <img
@@ -853,7 +869,8 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                 }}>{m.email}</div>
                               </div>
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       );
                     })}
@@ -1680,6 +1697,11 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   const [editingDescription, setEditingDescription] = useState(null);
   const [editDescriptionValue, setEditDescriptionValue] = useState('');
   const [filteredPage, setFilteredPage] = useState(1); // ⭐ MOVED FROM LINE 2239 - Must be at top per React Rules of Hooks
+  
+  // ⭐ Click outside to close filter dropdowns
+  const categoryDropdownRef = useClickOutside(() => setShowCategoryDropdown(false), showCategoryDropdown);
+  const memberFilterDropdownRef = useClickOutside(() => setShowMemberDropdown(false), showMemberDropdown);
+  const dateDropdownRef = useClickOutside(() => setShowDateDropdown(false), showDateDropdown);
   
   // ⭐ Check if any filters are active (after state declarations)
   const hasActiveFilters = selectedCategories.length > 0 || selectedMembers.length > 0;
@@ -3002,7 +3024,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                 </div>
               </div>
             )}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }} ref={memberFilterDropdownRef}>
               <button
                 onClick={() => setShowMemberDropdown(!showMemberDropdown)}
                 style={{

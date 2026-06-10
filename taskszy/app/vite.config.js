@@ -27,6 +27,13 @@ export default defineConfig(({ mode }) => ({
     assetsDir: 'assets',
     chunkSizeWarningLimit: 1000,
     copyPublicDir: true, // Ensure public files are copied
+    minify: 'terser', // Use terser for better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove all console.log, console.warn, etc in production
+        drop_debugger: true, // Remove debugger statements
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

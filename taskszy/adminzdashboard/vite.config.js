@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 1000,
+    minify: 'terser', // Use terser for better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove all console.log, console.warn, etc in production
+        drop_debugger: true, // Remove debugger statements
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

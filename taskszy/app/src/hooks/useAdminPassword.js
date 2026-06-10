@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export function useAdminPassword() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -6,15 +6,28 @@ export function useAdminPassword() {
   
   // Track authenticated pages - key is page identifier, value is timestamp
   const authenticatedPagesRef = useRef({});
-  const currentPageRef = useRef(null);
+  const [currentPage, setCurrentPage] = useState('');
   
   // Session timeout: 30 minutes per page
   const SESSION_TIMEOUT = 30 * 60 * 1000;
+  
+  // Track current page based on URL changes
+  useEffect(() => {
+    const updateCurrentPage = () => {
+      const pageName = window.location.pathname + window.location.hash;
+      setCurrentPage(pageName);
+    };
+    
+    updateCurrentPage();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', updateCurrentPage);
+    return () => window.removeEventListener('hashchange', updateCurrentPage);
+  }, []);
 
   const requestAdminPassword = (actionName, callback, pageIdentifier = null) => {
-    // Determine current page identifier
+    // Get current page identifier (allow override for specific cases)
     const pageName = pageIdentifier || window.location.pathname + window.location.hash;
-    currentPageRef.current = pageName;
     
     // Check if this page is already authenticated and not expired
     const authTime = authenticatedPagesRef.current[pageName];
@@ -22,13 +35,11 @@ export function useAdminPassword() {
     
     if (authTime && (now - authTime) < SESSION_TIMEOUT) {
       // Page is already authenticated and session not expired - execute directly
-      console.log('[useAdminPassword] Page already authenticated:', pageName);
       if (callback) callback();
       return;
     }
     
     // Not authenticated or session expired - show password modal
-    console.log('[useAdminPassword] Requesting password for page:', pageName);
     setPendingAction({ actionName, callback, pageIdentifier: pageName });
     setShowPasswordModal(true);
   };
@@ -41,7 +52,6 @@ export function useAdminPassword() {
     // Mark current page as authenticated
     if (pendingAction?.pageIdentifier) {
       authenticatedPagesRef.current[pendingAction.pageIdentifier] = Date.now();
-      console.log('[useAdminPassword] Page authenticated:', pendingAction.pageIdentifier);
     }
     
     setPendingAction(null);
@@ -55,17 +65,15 @@ export function useAdminPassword() {
   
   // Manual method to clear authentication for a specific page (optional)
   const clearPageAuth = (pageIdentifier = null) => {
-    const pageName = pageIdentifier || currentPageRef.current;
+    const pageName = pageIdentifier || currentPage;
     if (pageName && authenticatedPagesRef.current[pageName]) {
       delete authenticatedPagesRef.current[pageName];
-      console.log('[useAdminPassword] Cleared authentication for page:', pageName);
     }
   };
   
   // Manual method to clear all page authentications (optional)
   const clearAllAuth = () => {
     authenticatedPagesRef.current = {};
-    console.log('[useAdminPassword] Cleared all page authentications');
   };
 
   return {

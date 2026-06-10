@@ -316,6 +316,70 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           <div style={{ width: 22, height: 22, borderRadius: '50%', border: '3px solid #EEF2FF', borderTopColor: '#3B5BFC', animation: 'spin 0.7s linear infinite' }} />
         </div>
       )}
+      
+      {/* Custom styles to fix toolbar visibility */}
+      <style>{`
+        /* Fix xspreadsheet toolbar visibility */
+        .x-spreadsheet-toolbar {
+          background: #f8f9fa !important;
+          border-bottom: 1px solid #dee2e6 !important;
+        }
+        
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns .x-spreadsheet-toolbar-btn {
+          color: #212529 !important;
+          opacity: 1 !important;
+        }
+        
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn svg {
+          fill: #495057 !important;
+        }
+        
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:hover {
+          background: #e9ecef !important;
+        }
+        
+        /* Fix dropdown selectors (font, font-size) */
+        .x-spreadsheet-selector {
+          background: white !important;
+          border: 1px solid #ced4da !important;
+          color: #212529 !important;
+        }
+        
+        .x-spreadsheet-selector .x-spreadsheet-selector-text {
+          color: #212529 !important;
+        }
+        
+        /* Fix cell editor */
+        .x-spreadsheet-editor {
+          background: white !important;
+          color: #212529 !important;
+          border: 2px solid #3B5BFC !important;
+        }
+        
+        /* Fix context menu */
+        .x-spreadsheet-contextmenu {
+          background: white !important;
+          border: 1px solid #dee2e6 !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        }
+        
+        .x-spreadsheet-contextmenu .x-spreadsheet-item {
+          color: #212529 !important;
+        }
+        
+        .x-spreadsheet-contextmenu .x-spreadsheet-item:hover {
+          background: #e9ecef !important;
+        }
+        
+        /* Fix grid lines and cells */
+        .x-spreadsheet-table {
+          background: white !important;
+        }
+        
+        .x-spreadsheet-cell {
+          color: #212529 !important;
+        }
+      `}</style>
     </div>
   );
 }
