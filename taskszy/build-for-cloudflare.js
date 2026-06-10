@@ -71,6 +71,20 @@ try {
   copyDir('./app/dist', './deploy/app');
   copyDir('./adminzdashboard/dist', './deploy/adminzdashboard');
   
+  // Step 5.5: Explicitly copy xspreadsheet files from app/public to deploy/app
+  console.log('\n📄 Step 5.5: Copying xspreadsheet static files...');
+  const xspreadsheetFiles = ['xspreadsheet.js', 'xspreadsheet.css'];
+  for (const file of xspreadsheetFiles) {
+    const srcPath = path.join('./app/public', file);
+    const destPath = path.join('./deploy/app', file);
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+      console.log(`   ✅ Copied ${file} to deploy/app/`);
+    } else {
+      console.log(`   ⚠️  ${file} not found in app/public/`);
+    }
+  }
+  
   // Step 6: Copy functions folder
   console.log('\n📝 Step 6: Copying functions for SPA routing...');
   if (fs.existsSync('./functions')) {
