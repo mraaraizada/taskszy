@@ -143,6 +143,16 @@ try {
     console.log('   ✅ Taskszy App (Task Management)');
     console.log('   ✅ Taskszy Admin Dashboard (System Admin)');
     console.log('   ✅ Functions Middleware (SPA Routing)');
+    console.log('   ✅ XSpreadsheet Static Files');
+    console.log('\n🔍 Running deployment verification...');
+    
+    // Run verification script
+    try {
+      run('node verify-deploy.js');
+    } catch (err) {
+      console.log('⚠️  Verification script not found or failed');
+    }
+    
     console.log('\n🚀 Ready to deploy to Cloudflare Pages!');
     console.log('\n📝 Next steps:');
     console.log('   1. Run: npx wrangler pages deploy deploy --project-name=taskszy');
