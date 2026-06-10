@@ -17,28 +17,68 @@
         background: #fff;
       }
       
-      /* Make toolbar icons more visible */
+      /* AGGRESSIVE FIX: Hide broken icons and show text labels instead */
       .x-spreadsheet-icon .x-spreadsheet-icon-img {
-        opacity: 0.85 !important;
+        display: none !important;
       }
       
-      .x-spreadsheet-toolbar-btn:hover .x-spreadsheet-icon-img {
-        opacity: 1 !important;
-      }
-      
-      /* Ensure toolbar is visible */
-      .x-spreadsheet-toolbar {
-        background: #f5f6f7 !important;
-        border-bottom: 1px solid #e0e2e4 !important;
-      }
-      
+      /* Make toolbar buttons visible with text */
       .x-spreadsheet-toolbar-btn {
-        border: 1px solid transparent !important;
+        background: #ffffff !important;
+        border: 1px solid #d0d0d0 !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        min-width: 32px !important;
+        min-height: 28px !important;
+        cursor: pointer !important;
+        position: relative !important;
       }
       
       .x-spreadsheet-toolbar-btn:hover {
-        background: rgba(0, 0, 0, 0.08) !important;
-        border-radius: 2px !important;
+        background: #f0f0f0 !important;
+        border-color: #3B5BFC !important;
+      }
+      
+      .x-spreadsheet-toolbar-btn:active,
+      .x-spreadsheet-toolbar-btn.active {
+        background: #e0e0e0 !important;
+      }
+      
+      /* Add text labels for common toolbar buttons */
+      .x-spreadsheet-toolbar-btn:nth-child(1):after { content: "↶"; font-size: 16px; }
+      .x-spreadsheet-toolbar-btn:nth-child(2):after { content: "↷"; font-size: 16px; }
+      .x-spreadsheet-toolbar-btn:nth-child(3):after { content: "🖨"; font-size: 14px; }
+      .x-spreadsheet-toolbar-btn:nth-child(4):after { content: "🖌"; font-size: 14px; }
+      .x-spreadsheet-toolbar-btn:nth-child(5):after { content: "B"; font-weight: bold; font-size: 14px; }
+      .x-spreadsheet-toolbar-btn:nth-child(6):after { content: "I"; font-style: italic; font-size: 14px; }
+      .x-spreadsheet-toolbar-btn:nth-child(7):after { content: "U"; text-decoration: underline; font-size: 14px; }
+      
+      /* Ensure toolbar is visible */
+      .x-spreadsheet-toolbar {
+        background: #f8f9fa !important;
+        border-bottom: 1px solid #e0e2e4 !important;
+        padding: 6px 12px !important;
+        min-height: 40px !important;
+      }
+      
+      .x-spreadsheet-toolbar-btns {
+        display: flex !important;
+        gap: 4px !important;
+        flex-wrap: wrap !important;
+      }
+      
+      /* Dropdown menus */
+      .x-spreadsheet-dropdown {
+        background: #ffffff !important;
+        border: 1px solid #d0d0d0 !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        cursor: pointer !important;
+      }
+      
+      .x-spreadsheet-dropdown-title {
+        color: #333333 !important;
+        font-size: 13px !important;
       }
     </style>
     
