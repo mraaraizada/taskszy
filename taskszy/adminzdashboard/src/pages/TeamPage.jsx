@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Mail, Star, CheckCircle, Clock, Edit2, X, Building2, Phone, MapPin, Lock, FileText, ChevronLeft, ChevronRight, ChevronDown, User } from 'lucide-react';
+import { Plus, Search, Mail, Star, CheckCircle, Clock, Edit2, X, Building2, Phone, MapPin, Lock, FileText, ChevronLeft, ChevronRight, ChevronDown, User, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Avatar from '../components/Avatar';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
@@ -7,6 +7,7 @@ import { useAdminPassword } from '../hooks/useAdminPassword';
 import { TeamSkeleton } from '../components/Skeleton';
 import { toast } from 'sonner';
 import { getOrganizationsPaginated } from '../lib/optimizedOrganizationService';
+import { migrateTeamCounts } from '../utils/migrateTeamCounts';
 
 const AVATAR_COLORS = ['#3B5BFC','#7C3AED','#12C479','#F97316','#EF4444','#06B6D4','#EC4899','#8B5CF6'];
 
@@ -801,6 +802,7 @@ function TeamPage({ managementMode = false }) {
     const visited = sessionStorage.getItem('visited_team');
     return !visited;
   });
+  const [isMigrating, setIsMigrating] = useState(false);
 
   // Load organizations with pagination - always load data, but control skeleton separately
   useEffect(() => {
@@ -981,6 +983,31 @@ function TeamPage({ managementMode = false }) {
 
   };
 
+  const handleMigrateTeamCounts = async () => {
+    if (isMigrating) return;
+    
+    setIsMigrating(true);
+    toast.info('Starting team count migration...');
+    
+    try {
+      const results = await migrateTeamCounts();
+      
+      toast.success(
+        `Migration complete! Updated ${results.updated} workspaces, skipped ${results.skipped}, ${results.errors} errors`
+      );
+      
+      // Reload organizations to show updated counts
+      setTimeout(() => {
+        loadOrganizations(true);
+      }, 1000);
+    } catch (error) {
+      console.error('Migration error:', error);
+      toast.error('Migration failed: ' + error.message);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   // Show skeleton during initial load
   if (initialLoading) {
     return <TeamSkeleton />;
@@ -1034,6 +1061,33 @@ function TeamPage({ managementMode = false }) {
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'flex-end' }}>
+            {/* Migration Button */}
+            <button 
+              onClick={handleMigrateTeamCounts}
+              disabled={isMigrating}
+              style={{
+                padding: '6px 12px', 
+                borderRadius: 10, 
+                fontSize: 12, 
+                fontWeight: 600,
+                border: '1.5px solid #12C479', 
+                background: isMigrating ? '#F3F4F6' : '#E8FBF1',
+                color: isMigrating ? '#6B7280' : '#12C479', 
+                cursor: isMigrating ? 'not-allowed' : 'pointer', 
+                outline: 'none',
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6,
+                opacity: isMigrating ? 0.6 : 1,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => !isMigrating && (e.currentTarget.style.background = '#D1FAE5')}
+              onMouseLeave={(e) => !isMigrating && (e.currentTarget.style.background = '#E8FBF1')}
+            >
+              <RefreshCw size={14} style={{ animation: isMigrating ? 'spin 1s linear infinite' : 'none' }} />
+              {isMigrating ? 'Migrating...' : 'Fix Team Counts'}
+            </button>
+            
             {/* Clear Selected Organization Filter */}
             {selectedOrganizationId && (
               <button 

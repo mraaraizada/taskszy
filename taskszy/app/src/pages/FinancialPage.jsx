@@ -736,21 +736,20 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                     overflowY: 'auto',
                     zIndex: 1000
                   }}>
-                    {/* ⭐ Group by roles - Exclude Admin users, show Active first then Inactive (non-selectable) */}
+                    {/* ⭐ Group by roles - Exclude Admin users and Inactive members, show ONLY Active members */}
                     {[...new Set(team.map(m => m.role))].filter(role => {
                       // Exclude admin roles
                       const roleLC = (role || '').toLowerCase();
                       return !roleLC.includes('admin') && !roleLC.includes('administrator');
                     }).sort().map(role => {
-                      // Sort by status: Active members first, then Inactive
+                      // Filter to ONLY Active members (exclude Inactive completely)
                       const membersInRole = team
-                        .filter(m => m.role === role)
-                        .sort((a, b) => {
-                          // Active (1) comes before Inactive (0)
-                          const aActive = a.status === 'Active' ? 1 : 0;
-                          const bActive = b.status === 'Active' ? 1 : 0;
-                          return bActive - aActive; // Descending so Active (1) is first
-                        });
+                        .filter(m => m.role === role && m.status === 'Active')
+                        .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
+                      
+                      // Skip rendering this role section if no active members
+                      if (membersInRole.length === 0) return null;
+                      
                       return (
                         <div key={role}>
                           {/* Role header */}
@@ -772,35 +771,28 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                           
                           {/* Members in this role */}
                           {membersInRole.map(m => {
-                            const isInactive = m.status === 'Inactive';
                             return (
                               <div
                                 key={m.id}
                                 onClick={() => {
-                                  // Don't allow selection of inactive members
-                                  if (isInactive) return;
                                   setMemberId(m.id.toString());
                                   setShowMemberDropdown(false);
                                 }}
                                 style={{
                                   padding: '10px 12px',
-                                  cursor: isInactive ? 'not-allowed' : 'pointer',
+                                  cursor: 'pointer',
                                   borderBottom: '1px solid var(--border-light)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: 10,
-                                  background: memberId === m.id.toString() ? '#EEF2FF' : 'transparent',
-                                  opacity: isInactive ? 0.5 : 1
+                                  background: memberId === m.id.toString() ? '#EEF2FF' : 'transparent'
                                 }}
                                 onMouseEnter={e => {
-                                  if (!isInactive) {
-                                    e.currentTarget.style.background = '#EEF2FF';
-                                  }
+                                  e.currentTarget.style.background = '#EEF2FF';
                                 }}
                                 onMouseLeave={e => {
                                   e.currentTarget.style.background = memberId === m.id.toString() ? '#EEF2FF' : 'transparent';
                                 }}
-                                title={isInactive ? 'Inactive member cannot receive payments' : ''}
                               >
                               {/* ⭐ Show avatar image or initials */}
                               {m.avatarImg ? (
@@ -813,8 +805,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                     borderRadius: '50%',
                                     objectFit: 'cover',
                                     flexShrink: 0,
-                                    border: '2px solid var(--bg-surface)',
-                                    opacity: m.status === 'Inactive' ? 0.5 : 1
+                                    border: '2px solid var(--bg-surface)'
                                   }}
                                 />
                               ) : (
@@ -829,8 +820,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                   fontSize: 10,
                                   fontWeight: 800,
                                   color: '#fff',
-                                  flexShrink: 0,
-                                  opacity: m.status === 'Inactive' ? 0.5 : 1
+                                  flexShrink: 0
                                 }}>
                                   {m.avatar}
                                 </div>
@@ -841,31 +831,16 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                 <div style={{ 
                                   fontSize: 13, 
                                   fontWeight: 600, 
-                                  color: m.status === 'Inactive' ? 'var(--text-muted)' : 'var(--text-primary)',
+                                  color: 'var(--text-primary)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: 6
                                 }}>
                                   {m.name}
-                                  {m.status === 'Inactive' && (
-                                    <span style={{
-                                      fontSize: 9,
-                                      fontWeight: 700,
-                                      color: '#EF4444',
-                                      background: '#FEE2E2',
-                                      padding: '2px 6px',
-                                      borderRadius: 4,
-                                      textTransform: 'uppercase',
-                                      letterSpacing: '0.3px'
-                                    }}>
-                                      Inactive
-                                    </span>
-                                  )}
                                 </div>
                                 <div style={{ 
                                   fontSize: 11, 
-                                  color: 'var(--text-muted)',
-                                  opacity: m.status === 'Inactive' ? 0.7 : 1
+                                  color: 'var(--text-muted)'
                                 }}>{m.email}</div>
                               </div>
                             </div>
@@ -1879,14 +1854,8 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         // Get task details for regular payments
         const task = tasks.find(t => t.id === payment.taskId);
         
-        // ⭐ Debug: Log the newest payment to verify title field
-        if (payment.id === 'm1uheZTtervAPHDA9XqS') {
-
-        }
-        
-        // ⭐ Debug: Log paused status for task B6I41C7A
-        if (payment.taskId === 'B6I41C7A') {
-
+        // ⭐ Debug: Check paidBy field
+        if (payment.status === 'Paid' && payment.id) {
         }
         
         // Create a row for each payment
@@ -1909,7 +1878,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         lastPaymentAt: payment.lastPaymentAt ? (payment.lastPaymentAt.toDate ? payment.lastPaymentAt.toDate() : payment.lastPaymentAt) : null, // ⭐ Last payment timestamp
         lastPaymentAmount: payment.lastPaymentAmount || 0, // ⭐ Last payment amount
         lastPaymentBy: payment.lastPaymentBy || null, // ⭐ Who made last payment
-        paidOn:      payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null,
+        paidOn:      payment.paidOn || (payment.paidAt ? (payment.paidAt.toDate ? payment.paidAt.toDate() : payment.paidAt) : null),
         paidBy:      payment.paidBy || null, // ⭐ Track who paid
         isCategoryPayment: payment.isCategoryPayment || false, // ⭐ Track if paid via category button
         createdOn:   payment.createdAt ? (payment.createdAt.toDate ? payment.createdAt.toDate() : payment.createdAt) : null,
@@ -2410,6 +2379,13 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
               ...p, 
               isPaid: true, 
               paidOn: paidTimestamp,
+              paidAmount: p.amount, // ⭐ Save paid amount
+              paidBy: {
+                uid: currentUser?.uid || null,
+                name: currentUser?.name || 'Admin',
+                email: currentUser?.email || null,
+                userRole: currentUser?.userRole || 'admin'
+              },
               notes: notes && notes.trim() ? notes.trim() : p.notes // ⭐ Update description
             } : p
           ));
@@ -2804,7 +2780,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // Safety check - if component is stuck, show error message
   if (!paginatedPayments && !team && !workspaceId) {
   } else {
-    console.log('[FinancialPage] Data loaded - will render main content');
   }
   
   return (
@@ -2827,7 +2802,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
       {/* Show message if no data loaded at all */}
       {!paginatedPayments && !team && !workspaceId ? (
         <>
-        {console.log('[FinancialPage] Rendering loading state - no data available')}
         <div style={{
           flex: 1,
           display: 'flex',
@@ -2857,7 +2831,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
         </>
       ) : (
         <>
-        {console.log('[FinancialPage] Rendering main content - data available')}
       {/* -- Payments table -- */}
       <div style={{ 
         background: 'var(--bg-surface)', 
@@ -3528,9 +3501,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                   style={{
                     display: 'grid', gridTemplateColumns: '50px 2fr 1.5fr 1.2fr 1fr 1fr 1fr 0.8fr 0.8fr 1fr',
                     alignItems: 'center',
-                    padding: '14px 20px',
+                    padding: '16px 20px',
                     minWidth: '1000px',
-                    minHeight: '60px',
+                    minHeight: '75px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                     background: isSelected ? '#EEF2FF' : row.isPaid ? 'var(--bg-surface)' : 'var(--bg-surface)',
                     transition: 'background 0.12s',
@@ -3953,9 +3926,14 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
                                     {new Date(currentEntry.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                  <div style={{ fontSize: 10, fontWeight: 600, color: '#3B5BFC', marginTop: 1 }}>
                                     {currentEntry.paidBy?.name || 'Admin'}
                                   </div>
+                                  {currentEntry.paidBy?.userRole && (
+                                    <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', marginTop: 1 }}>
+                                      {currentEntry.paidBy.userRole.charAt(0).toUpperCase() + currentEntry.paidBy.userRole.slice(1)}
+                                    </div>
+                                  )}
                                 </div>
                               </>
                             );
@@ -3964,7 +3942,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                       ) : (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
                       )
-                    ) : row.isPaid && row.paidOn ? (
+                    ) : row.isPaid && (row.paidOn || row.paidAt) ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                         {/* ⭐ Show category icon if payment was paid via category button */}
                         {row.isCategoryPayment && (
@@ -3976,14 +3954,21 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                             ₹{row.paidAmount.toLocaleString()}
                           </div>
                           <div style={{ fontSize: 11, fontWeight: 600, color: '#12C479' }}>
-                            {new Date(row.paidOn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {new Date(row.paidOn || row.paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-                            {new Date(row.paidOn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {new Date(row.paidOn || row.paidAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                           </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-                            {row.paidBy?.name || 'Admin'}
-                          </div>
+                          {row.paidBy && (
+                            <div style={{ fontSize: 10, fontWeight: 600, color: '#3B5BFC', marginTop: 2 }}>
+                              {row.paidBy?.name || 'Admin'}
+                            </div>
+                          )}
+                          {row.paidBy?.userRole && (
+                            <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', marginTop: 1 }}>
+                              {row.paidBy.userRole.charAt(0).toUpperCase() + row.paidBy.userRole.slice(1)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : (

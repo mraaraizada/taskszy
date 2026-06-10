@@ -52,7 +52,6 @@ export async function sendPasswordReset(email) {
     
     return result.data;
   } catch (error) {
-    console.error('Password reset error:', error);
     throw error;
   }
 }
@@ -84,7 +83,6 @@ export async function signInWithGoogle() {
     return await signInWithPopup(auth, provider);
   } catch (error) {
     // Log the full error for debugging
-    console.error('Google Sign-In Error:', error.code, error.message);
     throw error; // Re-throw so the UI can handle it
   }
 }
@@ -107,7 +105,6 @@ export function onAuthChanged(callback) {
 export function mapAuthError(code) {
   // Handle cases where code might be undefined or null
   if (!code) {
-    console.error('mapAuthError called with no code');
     return 'An unexpected error occurred. Please try again.';
   }
 
@@ -146,7 +143,6 @@ export function mapAuthError(code) {
     case 'unknown':
       return 'Unable to complete sign-in. Please check your internet connection and try again.';
     default:
-      console.error('Unmapped auth error:', code);
       return 'An unexpected error occurred. Please try again.';
   }
 }

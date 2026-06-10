@@ -215,7 +215,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
                   // If no plan, show plan selection
                   if (!hasPlan) {
                     const completedSetup = wsData?.settings?.hasCompletedSetup === true;
-                    console.log('[LoginPage] Admin has no plan - showing plan selection');
                     setEmail(currentUser.email || ''); // Set email state for PlanSelection component
                     setAuthenticatedUser({ 
                       email: currentUser.email, 
@@ -232,7 +231,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
                   }
                 } else {
                   // Workspace doesn't exist - new signup, show plan selection
-                  console.log('[LoginPage] Workspace does not exist - showing plan selection');
                   setEmail(currentUser.email || ''); // Set email state for PlanSelection component
                   setAuthenticatedUser({ 
                     email: currentUser.email, 
@@ -249,12 +247,10 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
                 }
               }
             } catch (err) {
-              console.error('[LoginPage] Failed to check user plan:', err);
             }
           }
         });
       } catch (err) {
-        console.error('[LoginPage] Failed to setup auth listener:', err);
       }
     };
     
@@ -526,8 +522,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       if (window.kiroLastLoginAttempt) {
         window.kiroLastLoginAttempt.current = Date.now();
       }
-      if (window.kiroLog) window.kiroLog('[LoginPage] Set authState to authenticating');
-      console.log('[LoginPage] Set authState to authenticating - onAuthStateChanged will be blocked');
       
       // Fetch profile AFTER setting the state
       const profile = await getProfile(user.uid);
@@ -614,7 +608,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       
       // If admin without plan, show plan selection BEFORE proceeding to dashboard/workspace setup
       if (profile.role === 'admin' && !hasPlan) {
-        console.log('[LoginPage handleLogin] Admin has no plan - showing plan selection');
         setLoading(false);
         setAuthenticatedUser({ 
           email: user.email, 
@@ -631,7 +624,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       
       // Plan exists (or user is not admin) - proceed to workspace setup or dashboard
       // Call onLogin immediately - authState was already set right after signIn
-      console.log('[LoginPage handleLogin] Calling onLogin with role:', profile.role);
       onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
     } catch (err) {
       setLoading(false);
@@ -665,7 +657,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
     const wsId = authenticatedUser?.workspaceId;
     if (wsId) {
       try {
-        console.log('[LoginPage handlePlanSelect] Writing plan to workspace:', wsId);
         await setDoc(doc(db, `workspaces/${wsId}`), {
           plan: {
             id:              planData.id,
@@ -681,7 +672,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           },
         }, { merge: true });
         
-        console.log('[LoginPage handlePlanSelect] Plan written, verifying...');
         
         // ROBUST: Wait and verify plan was written before proceeding
         let planVerified = false;
@@ -690,24 +680,19 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           
           const workspaceDoc = await getDoc(doc(db, `workspaces/${wsId}`));
           if (workspaceDoc.exists() && workspaceDoc.data()?.plan?.id === planData.id) {
-            console.log('[LoginPage handlePlanSelect] Plan verified after', attempt + 1, 'attempts');
             planVerified = true;
             break;
           }
-          console.log('[LoginPage handlePlanSelect] Plan not verified, retrying...', attempt + 1);
         }
         
         if (!planVerified) {
-          console.warn('[LoginPage handlePlanSelect] Plan not verified after 5 attempts - proceeding anyway');
         }
       } catch (err) {
-        console.error('[LoginPage handlePlanSelect] Error writing plan:', err);
         // Don't block login on plan write error
       }
     }
 
     // Proceed to onLogin after plan is confirmed
-    console.log('[LoginPage handlePlanSelect] Proceeding to onLogin');
     setTimeout(() => {
       onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email, authenticatedUser.workspaceId || null, authenticatedUser.completedSetup ?? false, authenticatedUser.isNewSignup === true);
     }, 100);
@@ -760,7 +745,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       if (window.kiroLastLoginAttempt) {
         window.kiroLastLoginAttempt.current = Date.now();
       }
-      if (window.kiroLog) window.kiroLog('[LoginPage Google] Set authState to authenticating');
       
       const profile = await getProfile(user.uid);
 
@@ -921,7 +905,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       }
     } catch (err) {
       setLoading(false);
-      console.error('Google Sign-In Error in LoginPage:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
       const errorMessage = mapAuthError(err.code || 'unknown');
       if (errorMessage) {

@@ -172,6 +172,7 @@ export async function updateTaskAggregation(workspaceId, operation, taskData) {
 export async function updateTeamAggregation(workspaceId, operation, memberData) {
   try {
     const aggRef = doc(db, `workspaces/${workspaceId}/aggregations/dashboard`);
+    const workspaceRef = doc(db, `workspaces/${workspaceId}`);
     const batch = writeBatch(db);
     
     if (operation === 'add') {
@@ -181,17 +182,41 @@ export async function updateTeamAggregation(workspaceId, operation, memberData) 
         [`team.byRole.${memberData.role}`]: increment(1),
         lastUpdated: serverTimestamp()
       });
+      // ⭐ UPDATE: Also update workspace document root fields for admin dashboard
+      batch.update(workspaceRef, {
+        'teamCount': increment(1),
+        'activeTeamCount': increment(1)
+      });
     } else if (operation === 'remove') {
       batch.update(aggRef, {
         'team.total': increment(-1),
         [`team.byRole.${memberData.role}`]: increment(-1),
         lastUpdated: serverTimestamp()
       });
+      // ⭐ UPDATE: Also update workspace document root fields for admin dashboard
+      batch.update(workspaceRef, {
+        'teamCount': increment(-1),
+        'activeTeamCount': increment(memberData.status === 'Active' ? -1 : 0)
+      });
     } else if (operation === 'deactivate') {
       batch.update(aggRef, {
         'team.active': increment(-1),
         'team.inactive': increment(1),
         lastUpdated: serverTimestamp()
+      });
+      // ⭐ UPDATE: Also update workspace document root fields for admin dashboard
+      batch.update(workspaceRef, {
+        'activeTeamCount': increment(-1)
+      });
+    } else if (operation === 'activate') {
+      batch.update(aggRef, {
+        'team.active': increment(1),
+        'team.inactive': increment(-1),
+        lastUpdated: serverTimestamp()
+      });
+      // ⭐ UPDATE: Also update workspace document root fields for admin dashboard
+      batch.update(workspaceRef, {
+        'activeTeamCount': increment(1)
       });
     }
     

@@ -309,7 +309,6 @@ function AppShell() {
     try {
       localStorage.setItem('lastActivePage', activeItem);
     } catch (err) {
-      console.error('[App.jsx Navigation] Failed to save to localStorage:', err);
     }
   }, [activeItem]);
   
@@ -417,7 +416,6 @@ function AppShell() {
           getDoc(doc(db, 'users', currentUid)).then(userDoc => {
             if (userDoc.exists()) {
               const userData = userDoc.data();
-              console.log('[App.jsx] Fetched user data for createdAt:', userData.createdAt);
               
               if (userData.createdAt) {
                 let fetchedCreatedAt = null;
@@ -430,7 +428,6 @@ function AppShell() {
                 }
                 
                 if (fetchedCreatedAt) {
-                  console.log('[App.jsx] Found createdAt from Firestore:', fetchedCreatedAt);
                   // Re-initialize the listener with the correct date
                   // This will trigger the useEffect again with updated currentUser
                   setCurrentUser(prev => ({
@@ -441,30 +438,22 @@ function AppShell() {
               }
             }
           }).catch(err => {
-            console.error('[App.jsx] Error fetching user createdAt:', err);
           });
         });
       });
     }
     
-    console.log('[App.jsx] Feedback listener - userCreatedAt:', userCreatedAt);
-    console.log('[App.jsx] Feedback listener - workspaceId:', listenerId);
 
     // Don't require currentUid - listener can work without it
     // currentUid is only needed for dismissing feedback, not for receiving it
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('[App.jsx] Feedback request received:', request ? 'YES' : 'NO');
       if (request) {
-        console.log('[App.jsx] Feedback created at:', request.createdAt);
-        console.log('[App.jsx] User joined at:', userCreatedAt);
-        console.log('[App.jsx] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
       }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('[App.jsx] Feedback listener cleanup');
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);
@@ -485,81 +474,27 @@ function AppShell() {
     window.kiroLoginInProgress = loginInProgressRef;
     window.kiroLoginHandled = loginHandledRef;
     window.kiroLastLoginAttempt = lastLoginAttemptRef;
-    
-    // Create a persistent log array that survives page refreshes using sessionStorage
-    try {
-      const existingLogs = sessionStorage.getItem('kiroDebugLogs');
-      window.kiroDebugLogs = existingLogs ? JSON.parse(existingLogs) : [];
-    } catch (e) {
-      window.kiroDebugLogs = [];
-    }
-    
-    window.kiroLog = (msg) => {
-      const timestamp = new Date().toISOString().substr(11, 12);
-      const logEntry = `[${timestamp}] ${msg}`;
-      window.kiroDebugLogs.push(logEntry);
-      console.log(logEntry);
-      // Keep only last 100 logs
-      if (window.kiroDebugLogs.length > 100) {
-        window.kiroDebugLogs.shift();
-      }
-      // Save to sessionStorage so it survives page refresh
-      try {
-        sessionStorage.setItem('kiroDebugLogs', JSON.stringify(window.kiroDebugLogs));
-      } catch (e) {
-        // Storage might be full or disabled
-      }
-    };
-    
-    // Function to dump all logs
-    window.kiroShowLogs = () => {
-      console.log('=== KIRO DEBUG LOGS (from sessionStorage) ===');
-      try {
-        const logs = sessionStorage.getItem('kiroDebugLogs');
-        const logArray = logs ? JSON.parse(logs) : window.kiroDebugLogs;
-        logArray.forEach(log => console.log(log));
-        console.log(`=== END LOGS (${logArray.length} total) ===`);
-      } catch (e) {
-        console.error('Error reading logs:', e);
-      }
-    };
-    
-    // Function to clear logs
-    window.kiroClearLogs = () => {
-      window.kiroDebugLogs = [];
-      sessionStorage.removeItem('kiroDebugLogs');
-      console.log('Logs cleared');
-    };
-    
-    window.kiroLog('[App.jsx] Debug logging initialized');
   }, []);
 
   useEffect(() => {
     const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     const unsubscribe = onAuthChanged(async (user) => {
-      const logMsg = `[onAuthStateChanged] user=${user ? user.uid.substr(0,8) : 'null'} authState=${authStateRef.current} loginHandled=${loginHandledRef.current}`;
-      if (window.kiroLog) window.kiroLog(logMsg);
-      console.log('[App.jsx onAuthStateChanged] Triggered, user:', user ? user.uid : 'null', 'authState:', authStateRef.current, 'loginHandledRef:', loginHandledRef.current);
-
       // Mark that auth has initialized (fired at least once)
       authInitializedRef.current = true;
 
       // STATE MACHINE: Handle logout state first
       if (authStateRef.current === 'logging_out') {
-        console.log('[App.jsx onAuthStateChanged] Logout in progress - skipping');
         return;
       }
       
       // STATE MACHINE: If LoginPage is actively handling authentication, skip completely
       if (authStateRef.current === 'authenticating' || loginInProgressRef.current) {
-        console.log('[App.jsx onAuthStateChanged] Authentication in progress - skipping');
         return;
       }
       
       // Handle logged out state
       if (!user) {
-        console.log('[App.jsx onAuthStateChanged] No user - setting auth state to idle');
         authStateRef.current = 'idle';
         
         // Only set authLoading to false if we're not in a transition state
@@ -677,15 +612,12 @@ function AppShell() {
           // CRITICAL: If LoginPage set loginHandledRef, it means LoginPage is handling this login
           // Do NOT interfere - just return and let LoginPage complete the flow
           if (loginHandledRef.current) {
-            console.log('[App.jsx onAuthStateChanged] LoginPage is handling this login - returning');
             return;
           }
           
-          console.log('[App.jsx onAuthStateChanged] Processing auto-login:', { userRole, completedSetup, hasPlan, isRelogin });
           
           // For admins without plan, redirect to LoginPage which will show plan selection
           if (userRole === 'admin' && !hasPlan && !isRelogin) {
-            console.log('[App.jsx onAuthStateChanged] Admin needs plan - showing LoginPage');
             authStateRef.current = 'idle';
             setIsPlanSelectionActive(true);
             setNeedsPlanCheck(true);
@@ -696,7 +628,6 @@ function AppShell() {
           
           // For admins without setup, redirect to LoginPage
           if (userRole === 'admin' && !completedSetup && !isRelogin) {
-            console.log('[App.jsx onAuthStateChanged] Admin needs setup - showing LoginPage');
             authStateRef.current = 'idle';
             setNeedsPlanCheck(true);
             setAuthLoading(false);
@@ -720,12 +651,9 @@ function AppShell() {
           const recentLogin = lastLoginAttemptRef.current && (currentTime - lastLoginAttemptRef.current) < 2000;
           
           if (!recentLogin && !isPlanSelectionActive) {
-            console.log('[App.jsx onAuthStateChanged] Proceeding with auto-login');
             authStateRef.current = 'authenticating';
             handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false, 'auto-login');
           } else {
-            console.log('[App.jsx onAuthStateChanged] Skipping auto-login - LoginPage already handled it');
-            console.log('[App.jsx onAuthStateChanged] recentLogin:', recentLogin, 'isPlanSelectionActive:', isPlanSelectionActive);
             
             // LoginPage already called handleLogin, so we just need to ensure state is correct
             // Don't call handleLogin again to avoid duplicate execution
@@ -736,7 +664,6 @@ function AppShell() {
             
             // Don't set authLoading to false here - let handleLogin do it
             // because handleLogin might still be executing
-            console.log('[App.jsx onAuthStateChanged] State set to authenticated, waiting for handleLogin to complete');
           }
         }
       } else {
@@ -776,13 +703,8 @@ function AppShell() {
   }, [currentUid]);
 
   const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false, source = 'unknown') => {
-    const logMsg = `[handleLogin] role=${role} source=${source} authState=${authStateRef.current} loginInProgress=${loginInProgressRef.current}`;
-    if (window.kiroLog) window.kiroLog(logMsg);
-    console.log('[App.jsx handleLogin] Called with role:', role, 'source:', source, 'authState:', authStateRef.current);
-
     // STATE MACHINE: Prevent duplicate calls ONLY if loginInProgressRef is true
     if (loginInProgressRef.current) {
-      console.warn('[App.jsx handleLogin] Login already in progress - ignoring duplicate call from', source);
       return;
     }
     
@@ -790,7 +712,6 @@ function AppShell() {
     // BUT: Only block if this is an auto-login call and LoginPage already called handleLogin
     const loginTimestamp = Date.now();
     if (source === 'auto-login' && lastLoginAttemptRef.current > 0 && (loginTimestamp - lastLoginAttemptRef.current) < 2000) {
-      console.warn('[App.jsx handleLogin] LoginPage already handled login - ignoring auto-login duplicate');
       return;
     }
     lastLoginAttemptRef.current = loginTimestamp;
@@ -802,10 +723,6 @@ function AppShell() {
     loginInProgressRef.current = true;
     setLoginInProgress(true);
     loginHandledRef.current = true;
-    
-    const flagsMsg = `[handleLogin] State confirmed as 'authenticating', loginInProgress=true, source=${source}`;
-    if (window.kiroLog) window.kiroLog(flagsMsg);
-    console.log('[App.jsx handleLogin] State:', authStateRef.current, 'proceeding with login from', source);
     
     // Set authLoading to true during login to prevent flicker
     setAuthLoading(true);
@@ -826,7 +743,6 @@ function AppShell() {
     if (uid) {
       setCurrentUid(uid);
     } else {
-      console.warn('[App.jsx handleLogin] No Firebase Auth user found');
     }
     
     // Load workspace data if needed (for management/admin users who need WorkspaceSetup)
@@ -997,11 +913,9 @@ function AppShell() {
       // CRITICAL: Transition to 'authenticated' state BEFORE clearing authLoading
       // This ensures render logic knows authentication is complete
       authStateRef.current = 'authenticated';
-      console.log('[App.jsx handleLogin] State transition to authenticated');
       
       // NOW set authLoading to false - after all auth state is set and ready
       setAuthLoading(false);
-      console.log('[App.jsx handleLogin] Set authLoading=false, authentication complete');
       
       // Clear login progress flags
       loginInProgressRef.current = false;
@@ -1010,13 +924,11 @@ function AppShell() {
       // Clear loginHandledRef after a delay to allow subsequent page reloads to auto-login
       setTimeout(() => {
         loginHandledRef.current = false;
-        console.log('[App.jsx handleLogin] Cleared loginHandledRef for future auto-login');
       }, 2000);
     }, 50);
   };
 
   const handleLogout = async (expired = false) => {
-    console.log('[App.jsx handleLogout] Logout initiated, expired:', expired);
     
     // STATE MACHINE: Transition to logging_out state
     authStateRef.current = 'logging_out';
@@ -1028,11 +940,9 @@ function AppShell() {
     loginHandledRef.current = false;
     lastLoginAttemptRef.current = 0; // Reset timestamp to allow immediate re-login
     setIsPlanSelectionActive(false);
-    console.log('[App.jsx handleLogout] State transition to logging_out, refs reset');
     
     // CRITICAL: Set authLoading to true FIRST to show loading skeleton
     setAuthLoading(true);
-    console.log('[App.jsx handleLogout] Set authLoading=true, showing loading skeleton');
     
     // Wait for React to re-render with skeleton before clearing auth
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -1043,7 +953,6 @@ function AppShell() {
     setCurrentUid(null);
     setWorkspaceId(null);
     setCurrentUser(null);
-    console.log('[App.jsx handleLogout] Auth and user data cleared');
     
     // Reset UI state immediately to prevent WorkspaceSetup/Dashboard from showing
     setDashVisible(false);
@@ -1055,11 +964,9 @@ function AppShell() {
     setShowMgmtPwdPrompt(false);
     setShowDonutWelcome(false);
     setNeedsPlanCheck(false);
-    console.log('[App.jsx handleLogout] UI state reset complete');
     
     // Wait for React to process the state update and cleanup listeners
     await new Promise(resolve => setTimeout(resolve, 200));
-    console.log('[App.jsx handleLogout] Waited for state cleanup');
     
     // Clear all localStorage cache related to app state
     try {
@@ -1067,46 +974,35 @@ function AppShell() {
       localStorage.removeItem('userEmail');
       localStorage.removeItem('workspaceId');
       // Don't clear teamMemberFormCache - that's for form persistence
-      console.log('[App.jsx handleLogout] localStorage cleared');
     } catch (err) {
-      console.error('[handleLogout] Error clearing localStorage:', err);
     }
     
     // Clear session fields in Firestore before signing out
     if (uidToClean) {
       try { 
-        console.log('[App.jsx handleLogout] Clearing session for uid:', uidToClean);
         await clearSession(uidToClean); 
-        console.log('[App.jsx handleLogout] Session cleared in Firestore');
       } catch (err) {
-        console.error('[App.jsx handleLogout] Error clearing session:', err);
       }
     }
     
     // Sign out from Firebase
     try { 
-      console.log('[App.jsx handleLogout] Signing out from Firebase');
       await signOutUser(); 
-      console.log('[App.jsx handleLogout] Successfully signed out from Firebase');
     } catch (err) { 
-      console.error('[App.jsx handleLogout] Error signing out:', err);
     }
     
     // Wait a bit for Firebase to propagate the logout
     await new Promise(resolve => setTimeout(resolve, 150));
-    console.log('[App.jsx handleLogout] Waited for Firebase logout propagation');
     
     // STATE MACHINE: Transition to idle state BEFORE showing login page
     authStateRef.current = 'idle';
     logoutInProgressRef.current = false;
-    console.log('[App.jsx handleLogout] State transition to idle');
     
     // Wait for state to propagate
     await new Promise(resolve => setTimeout(resolve, 50));
     
     // Finally, show login page
     setAuthLoading(false);
-    console.log('[App.jsx handleLogout] Logout complete - showing login page');
   };
 
   const handleNav = (item, extraProps = {}) => {
@@ -1226,7 +1122,6 @@ function AppShell() {
 
   // ── Data load error - show manual retry button ──
   if (dataLoadError) {
-    console.error('[App.jsx Render] Data load error:', dataLoadError);
     return <DataLoadError error={dataLoadError} onRetry={refreshData} />;
   }
 
@@ -1246,7 +1141,6 @@ function AppShell() {
   const shouldShowLoadingSkeleton = !auth && (authStateRef.current === 'checking' || authStateRef.current === 'authenticating' || authStateRef.current === 'logging_out' || loginInProgress);
   
   if (shouldShowLoadingSkeleton) {
-    console.log('[App.jsx Render] Showing loading skeleton - authState:', authStateRef.current, 'loginInProgress:', loginInProgress);
     return (
       <>
         <SkeletonStyles />
@@ -1256,7 +1150,6 @@ function AppShell() {
   }
   
   if (shouldShowLoginPage) {
-    console.log('[App.jsx Render] Showing login page - authState:', authStateRef.current);
     return (
       <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />
     );
@@ -1265,7 +1158,6 @@ function AppShell() {
   // If we have auth but authLoading is still true, clear it
   // This is a safety check to prevent getting stuck in loading state
   if (auth && authLoading && authStateRef.current === 'authenticated') {
-    console.log('[App.jsx Render] Auth exists but authLoading is true - clearing it');
     setTimeout(() => setAuthLoading(false), 0);
   }
 

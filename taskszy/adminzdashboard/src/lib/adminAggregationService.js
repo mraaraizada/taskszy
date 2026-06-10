@@ -152,6 +152,17 @@ export async function rebuildAdminAggregation() {
         tasksCount,
         ownerId: workspaceData.ownerId
       });
+      
+      // ⭐ UPDATE: Write team counts back to workspace document for admin dashboard
+      try {
+        await setDoc(doc(db, 'workspaces', workspaceId), {
+          teamCount,
+          activeTeamCount,
+          tasksCount
+        }, { merge: true });
+      } catch (err) {
+
+      }
     }
     
     // Calculate workspace stats

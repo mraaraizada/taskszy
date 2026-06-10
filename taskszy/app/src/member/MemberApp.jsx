@@ -171,18 +171,14 @@ export default function MemberApp({ memberId, onLogout, visible }) {
       }
     }
     
-    console.log('[MemberApp] Feedback listener - userCreatedAt:', userCreatedAt);
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('[MemberApp] Feedback request received:', request ? 'YES' : 'NO');
       if (request) {
-        console.log('[MemberApp] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
       }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('[MemberApp] Feedback listener cleanup');
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);

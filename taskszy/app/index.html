@@ -20,6 +20,15 @@
       .x-spreadsheet-cell {
         color: #0a0a0a !important;
       }
+      /* Fix grid lines visibility */
+      .x-spreadsheet-table td,
+      .x-spreadsheet-table th {
+        border: 1px solid #e0e0e0 !important;
+      }
+      /* Ensure table has proper border collapse */
+      .x-spreadsheet-table {
+        border-collapse: collapse !important;
+      }
       /* Fix toolbar visibility - force text and icons to be visible */
       .x-spreadsheet-toolbar,
       .x-spreadsheet-toolbar * {

@@ -2455,7 +2455,6 @@ export function AppProvider({ children }) {
         }));
         
       } catch (err) {
-        console.error('[AppContext updateTaskStage] Firestore update failed:', err);
 
         // If Firestore save fails, update local state as fallback
         setTasks(prev => prev.map(t => {
@@ -2870,19 +2869,22 @@ export function AppProvider({ children }) {
 
     try {
       const now = new Date();
+      const paidTimestamp = now.toISOString();
       
       // Get payment details first
       const payment = payments.find(p => p.id === paymentId);
       
-      // Update payment record
+      // Update payment record with both paidAt (server timestamp) and paidOn (ISO string)
       await updateDoc(doc(db, `${wsPath}/payments`, paymentId), {
         status: "Paid",
         isPaid: true, // ⭐ Add isPaid field for consistency
         paidAt: serverTimestamp(),
+        paidOn: paidTimestamp, // ⭐ ISO string for consistent date formatting
         paidAmount: amount,
         paidBy: {
           uid: currentUser?.uid || null,
           name: currentUser?.name || 'Admin',
+          email: currentUser?.email || null,
           userRole: currentUser?.userRole || 'admin'
         }
       });

@@ -33,69 +33,38 @@ function randomTagColor() {
 // -- Inline sheet viewer ------------------------------------------------------
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    // Force console logs to appear in production
-    if (typeof window !== 'undefined') {
-      window.console.log('[loadScript] Attempting to load script:', src);
-    }
-    
     // Check if already loaded
     const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
-      window.console.log('[loadScript] Script already exists in DOM:', src);
-      window.console.log('[loadScript] Script loaded state:', existing.readyState || 'unknown');
       resolve();
       return;
     }
     
-    window.console.log('[loadScript] Creating new script element for:', src);
     const s = document.createElement('script');
     s.src = src;
     
     s.onload = () => {
-      window.console.log('[loadScript] ✅ Script loaded successfully:', src);
-      window.console.log('[loadScript] window.x_spreadsheet available:', !!window.x_spreadsheet);
       resolve();
     };
     
     s.onerror = (error) => {
-      window.console.error('[loadScript] ❌ Script load FAILED:', src);
-      window.console.error('[loadScript] Error event:', error);
-      window.console.error('[loadScript] Check if file exists at public folder');
-      window.console.error('[loadScript] Full URL attempted:', window.location.origin + src);
       reject(error);
     };
     
-    window.console.log('[loadScript] Appending script to document head...');
     document.head.appendChild(s);
   });
 }
 
 function loadStyle(href) {
-  window.console.log('[loadStyle] Attempting to load stylesheet:', href);
-  
   const existing = document.querySelector(`link[href="${href}"]`);
   if (existing) {
-    window.console.log('[loadStyle] Stylesheet already exists in DOM:', href);
     return;
   }
   
-  window.console.log('[loadStyle] Creating new link element for:', href);
   const l = document.createElement('link');
   l.rel = 'stylesheet';
   l.href = href;
   
-  l.onload = () => {
-    window.console.log('[loadStyle] ✅ Stylesheet loaded successfully:', href);
-  };
-  
-  l.onerror = (error) => {
-    window.console.error('[loadStyle] ❌ Stylesheet load FAILED:', href);
-    window.console.error('[loadStyle] Error event:', error);
-    window.console.error('[loadStyle] Check if file exists at public folder');
-    window.console.error('[loadStyle] Full URL attempted:', window.location.origin + href);
-  };
-  
-  window.console.log('[loadStyle] Appending link to document head...');
   document.head.appendChild(l);
 }
 
@@ -106,11 +75,6 @@ function SheetViewer({ sheetItem, onAutoSave }) {
   const autoSaveTimerRef = useRef(null);
 
   useEffect(() => {
-    window.console.log('[SheetViewer] Starting to load xspreadsheet CSS and JS...');
-    window.console.log('[SheetViewer] Current location:', window.location.href);
-    window.console.log('[SheetViewer] Environment:', process.env.NODE_ENV);
-    window.console.log('[SheetViewer] Origin:', window.location.origin);
-    
     // CRITICAL: Use relative path for Vite's base configuration
     // In production, base is '/app/' so we need './xspreadsheet.css' not '/xspreadsheet.css'
     // The './' makes it relative to current location (app/) instead of site root
@@ -118,109 +82,142 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     const cssPath = `${basePath}xspreadsheet.css`;
     const jsPath = `${basePath}xspreadsheet.js`;
     
-    window.console.log('[SheetViewer] Base path:', basePath);
-    window.console.log('[SheetViewer] CSS path:', cssPath);
-    window.console.log('[SheetViewer] JS path:', jsPath);
-    
     loadStyle(cssPath);
     loadScript(jsPath)
       .then(() => {
-        window.console.log('[SheetViewer] xspreadsheet.js loaded successfully');
-        window.console.log('[SheetViewer] window.x_spreadsheet exists:', !!window.x_spreadsheet);
         setReady(true);
       })
       .catch((error) => {
-        window.console.error('[SheetViewer] ERROR loading xspreadsheet.js:', error);
-        window.console.error('[SheetViewer] Script src attempted:', jsPath);
-        window.console.error('[SheetViewer] Full URL would be:', window.location.origin + jsPath);
+        // Silent fail
       });
   }, []);
 
   useEffect(() => {
-    window.console.log('[SheetViewer] useEffect triggered - ready:', ready, 'containerRef:', !!containerRef.current);
-    
     if (!ready || !containerRef.current) {
-      window.console.log('[SheetViewer] Not ready or no container. Skipping initialization.');
       return;
     }
     
-    window.console.log('[SheetViewer] Clearing container and initializing spreadsheet...');
     containerRef.current.innerHTML = '';
     instanceRef.current = null;
     
     const xs = window.x_spreadsheet;
-    window.console.log('[SheetViewer] window.x_spreadsheet:', xs);
-    window.console.log('[SheetViewer] typeof x_spreadsheet:', typeof xs);
     
     if (!xs) {
-      window.console.error('[SheetViewer] ERROR: window.x_spreadsheet is not available!');
-      window.console.error('[SheetViewer] This means the script did not load properly.');
-      window.console.error('[SheetViewer] Check Network tab in DevTools for failed requests');
       return;
     }
-    
-    window.console.log('[SheetViewer] Initializing x_spreadsheet with config...');
     
     // Initialize spreadsheet
     try {
       instanceRef.current = xs(containerRef.current, {
-        mode: 'edit', showToolbar: true, showGrid: true, showContextmenu: true,
+        mode: 'edit', 
+        showToolbar: true, 
+        showGrid: true, 
+        showContextmenu: true,
         view: {
           height: () => containerRef.current?.clientHeight || 500,
           width: () => containerRef.current?.clientWidth || 700,
         },
-        row: { len: 100, height: 25 },
-        col: { len: 26, width: 100, indexWidth: 60, minWidth: 60 },
-        style: { bgcolor: '#ffffff', align: 'left', valign: 'middle', textwrap: false, strike: false, underline: false, color: '#000000', font: { name: 'Arial', size: 13, bold: false, italic: false } },
+        row: { 
+          len: 100, 
+          height: 25 
+        },
+        col: { 
+          len: 26, 
+          width: 100, 
+          indexWidth: 60, 
+          minWidth: 60 
+        },
+        style: { 
+          bgcolor: '#ffffff', 
+          align: 'left', 
+          valign: 'middle', 
+          textwrap: false, 
+          strike: false, 
+          underline: false, 
+          color: '#000000', 
+          font: { 
+            name: 'Arial', 
+            size: 13, 
+            bold: false, 
+            italic: false 
+          },
+          // Enhanced grid line styling
+          border: {
+            color: '#333333',
+            style: 'solid'
+          }
+        },
       });
       
-      window.console.log('[SheetViewer] ✅ Spreadsheet instance created:', !!instanceRef.current);
+      // CRITICAL: Override xspreadsheet's internal grid line color after initialization
+      if (instanceRef.current && instanceRef.current.sheet) {
+        // Try to access internal table and modify grid rendering
+        setTimeout(() => {
+          const tableEl = containerRef.current?.querySelector('.x-spreadsheet-table');
+          if (tableEl) {
+            // Force re-render with custom grid color by injecting CSS filter
+            tableEl.style.setProperty('--grid-color', '#666', 'important');
+          }
+        }, 100);
+      }
+      
+      // CRITICAL: Override xspreadsheet's internal grid line color after initialization
+      if (instanceRef.current && instanceRef.current.sheet) {
+        // Try to access internal table and modify grid rendering
+        setTimeout(() => {
+          const tableEl = containerRef.current?.querySelector('.x-spreadsheet-table');
+          if (tableEl) {
+            // Force re-render with custom grid color by injecting CSS filter
+            tableEl.style.setProperty('--grid-color', '#666', 'important');
+          }
+        }, 100);
+      }
     } catch (error) {
-      window.console.error('[SheetViewer] ❌ ERROR creating spreadsheet instance:', error);
-      window.console.error('[SheetViewer] Error message:', error.message);
-      window.console.error('[SheetViewer] Error stack:', error.stack);
       return;
     }
     
     // Load existing sheet data if available
     // IMPORTANT: Only load the FIRST sheet to prevent multiple sheets/tabs
     if (sheetItem.sheetData) {
-      window.console.log('[SheetViewer] Loading existing sheet data...');
-      window.console.log('[SheetViewer] sheetData type:', Array.isArray(sheetItem.sheetData) ? 'array' : typeof sheetItem.sheetData);
-      window.console.log('[SheetViewer] sheetData length:', Array.isArray(sheetItem.sheetData) ? sheetItem.sheetData.length : 'N/A');
-      
       try {
         let dataToLoad = sheetItem.sheetData;
         
         // If data is an array of sheets, extract only the first sheet
         if (Array.isArray(sheetItem.sheetData)) {
           if (sheetItem.sheetData.length > 1) {
-            window.console.warn('[SheetViewer] Multiple sheets detected, loading only first sheet');
+            // Multiple sheets detected, loading only first sheet
           }
           // Wrap first sheet in array to maintain x-spreadsheet format
           dataToLoad = sheetItem.sheetData.length > 0 ? [sheetItem.sheetData[0]] : sheetItem.sheetData;
         }
 
-        window.console.log('[SheetViewer] Calling loadData...');
+        // Add default borders to all cells to make grid visible
+        if (Array.isArray(dataToLoad) && dataToLoad.length > 0 && dataToLoad[0].styles) {
+          // Add a default border style
+          if (!dataToLoad[0].styles[0]) {
+            dataToLoad[0].styles[0] = {
+              border: {
+                top: ['thin', '#666'],
+                bottom: ['thin', '#666'],
+                left: ['thin', '#666'],
+                right: ['thin', '#666']
+              }
+            };
+          }
+        }
+
         instanceRef.current.loadData(dataToLoad);
-        window.console.log('[SheetViewer] ✅ Sheet data loaded successfully');
       } catch (error) {
-        window.console.error('[SheetViewer] ❌ ERROR loading sheet data:', error);
-        window.console.error('[SheetViewer] Error message:', error.message);
-        window.console.error('[SheetViewer] Error stack:', error.stack);
+        // Silent fail
       }
     } else {
-      window.console.log('[SheetViewer] No existing sheet data to load');
+      // No existing sheet data to load
     }
     
     // Set up autosave on change
     if (instanceRef.current && onAutoSave) {
-      window.console.log('[SheetViewer] Setting up autosave listener...');
-      
       // Listen for cell changes
       instanceRef.current.on('cell-edited', () => {
-        window.console.log('[SheetViewer] Cell edited - scheduling autosave...');
-        
         // Clear existing timer
         if (autoSaveTimerRef.current) {
           clearTimeout(autoSaveTimerRef.current);
@@ -228,47 +225,37 @@ function SheetViewer({ sheetItem, onAutoSave }) {
         
         // Set new timer to save after 2 seconds of inactivity
         autoSaveTimerRef.current = setTimeout(() => {
-          window.console.log('[SheetViewer] Autosave triggered - saving data...');
-          
           try {
             const data = instanceRef.current.getData();
-            window.console.log('[SheetViewer] Data retrieved for saving:', Array.isArray(data) ? `array with ${data.length} sheets` : typeof data);
             
             // IMPORTANT: Only save the FIRST sheet to prevent multiple sheets/tabs
             let dataToSave = data;
             if (Array.isArray(data)) {
               if (data.length > 1) {
-                window.console.warn('[SheetViewer] Multiple sheets in data, saving only first sheet');
+                // Multiple sheets in data, saving only first sheet
               }
               // Always save only the first sheet wrapped in array
               dataToSave = data.length > 0 ? [data[0]] : data;
             }
 
-            window.console.log('[SheetViewer] Calling onAutoSave...');
             onAutoSave(dataToSave);
-            window.console.log('[SheetViewer] ✅ Autosave completed');
           } catch (error) {
-            window.console.error('[SheetViewer] ❌ ERROR during autosave:', error);
-            window.console.error('[SheetViewer] Error message:', error.message);
-            window.console.error('[SheetViewer] Error stack:', error.stack);
+            // Silent fail
           }
         }, 2000);
       });
-      
-      window.console.log('[SheetViewer] ✅ Autosave listener set up successfully');
     } else {
-      window.console.log('[SheetViewer] Skipping autosave setup - instance:', !!instanceRef.current, 'onAutoSave:', !!onAutoSave);
+      // Skipping autosave setup
     }
     
     // Handle resize events to update spreadsheet dimensions
     const handleResize = () => {
       if (instanceRef.current && containerRef.current) {
         try {
-          window.console.log('[SheetViewer] Handling resize...');
           // Force spreadsheet to recalculate its size
           instanceRef.current.reRender();
         } catch (error) {
-          window.console.error('[SheetViewer] ERROR during resize:', error);
+          // Silent fail
         }
       }
     };
@@ -279,7 +266,6 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     // Use ResizeObserver to detect container size changes
     let resizeObserver;
     if (containerRef.current && window.ResizeObserver) {
-      window.console.log('[SheetViewer] Setting up ResizeObserver...');
       resizeObserver = new ResizeObserver(() => {
         handleResize();
       });
@@ -288,14 +274,10 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     
     // Trigger initial resize after a short delay
     setTimeout(() => {
-      window.console.log('[SheetViewer] Triggering initial resize...');
       handleResize();
     }, 100);
     
-    window.console.log('[SheetViewer] ✅ Setup complete!');
-    
     return () => {
-      window.console.log('[SheetViewer] Cleanup triggered');
       window.removeEventListener('resize', handleResize);
       if (resizeObserver) {
         resizeObserver.disconnect();
@@ -323,19 +305,68 @@ function SheetViewer({ sheetItem, onAutoSave }) {
         .x-spreadsheet-toolbar {
           background: #f8f9fa !important;
           border-bottom: 1px solid #dee2e6 !important;
+          padding: 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          min-height: 40px !important;
+        }
+        
+        /* Make toolbar buttons visible */
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns {
+          display: flex !important;
+          gap: 4px !important;
+          flex-wrap: wrap !important;
         }
         
         .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns .x-spreadsheet-toolbar-btn {
           color: #212529 !important;
           opacity: 1 !important;
+          background: white !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 6px 8px !important;
+          cursor: pointer !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          min-width: 32px !important;
+          min-height: 32px !important;
         }
         
-        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn svg {
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn {
+          color: #212529 !important;
+          opacity: 1 !important;
+          background: white !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 6px 8px !important;
+          cursor: pointer !important;
+          visibility: visible !important;
+        }
+        
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn svg,
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn path {
           fill: #495057 !important;
+          stroke: #495057 !important;
+          visibility: visible !important;
+          display: block !important;
         }
         
         .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:hover {
           background: #e9ecef !important;
+          border-color: #3B5BFC !important;
+        }
+        
+        .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:active {
+          background: #dee2e6 !important;
+        }
+        
+        /* Fix icon display in toolbar */
+        .x-spreadsheet-icon {
+          width: 16px !important;
+          height: 16px !important;
+          display: inline-block !important;
+          visibility: visible !important;
         }
         
         /* Fix dropdown selectors (font, font-size) */
@@ -343,6 +374,9 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           background: white !important;
           border: 1px solid #ced4da !important;
           color: #212529 !important;
+          border-radius: 4px !important;
+          padding: 4px 8px !important;
+          min-height: 32px !important;
         }
         
         .x-spreadsheet-selector .x-spreadsheet-selector-text {
@@ -354,6 +388,7 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           background: white !important;
           color: #212529 !important;
           border: 2px solid #3B5BFC !important;
+          font-size: 13px !important;
         }
         
         /* Fix context menu */
@@ -361,25 +396,88 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           background: white !important;
           border: 1px solid #dee2e6 !important;
           box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+          border-radius: 6px !important;
         }
         
         .x-spreadsheet-contextmenu .x-spreadsheet-item {
           color: #212529 !important;
+          padding: 8px 12px !important;
         }
         
         .x-spreadsheet-contextmenu .x-spreadsheet-item:hover {
           background: #e9ecef !important;
         }
         
-        /* Fix grid lines and cells */
+        /* Main spreadsheet container - white background */
+        .x-spreadsheet {
+          background: white !important;
+        }
+        
+        /* Sheet container - white background */
+        .x-spreadsheet-sheet {
+          background: white !important;
+        }
+        
+        /* Table container - white background */
         .x-spreadsheet-table {
           background: white !important;
         }
         
-        .x-spreadsheet-cell {
+        .x-spreadsheet-table canvas {
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+        
+        /* Canvas overlay - ensure it's visible */
+        .x-spreadsheet-overlayer,
+        .x-spreadsheet-overlayer-content {
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+        
+        /* Show bottom toolbar with proper styling */
+        .x-spreadsheet-bottombar {
+          background: #f8f9fa !important;
+          border-top: 1px solid #dee2e6 !important;
+          padding: 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          min-height: 32px !important;
+        }
+        
+        /* Style sheet tabs */
+        .x-spreadsheet-bottombar .x-spreadsheet-menu {
+          display: flex !important;
+          gap: 4px !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu-item {
+          background: white !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 4px 12px !important;
           color: #212529 !important;
+          cursor: pointer !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu-item.active {
+          background: #3B5BFC !important;
+          color: white !important;
+          border-color: #3B5BFC !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu-item:hover {
+          background: #e9ecef !important;
+        }
+        
+        /* Selected cell highlight */
+        .x-spreadsheet-selector-area {
+          border: 2px solid #3B5BFC !important;
+          background: rgba(59, 91, 252, 0.1) !important;
         }
       `}</style>
+      
+      {/* Inline script removed - no custom grid overlay */}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 
+// Singleton storage outside the hook to persist across all component instances
+const authenticatedPages = {};
+
 export function useAdminPassword() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
-  
-  // Track authenticated pages - key is page identifier, value is timestamp
-  const authenticatedPagesRef = useRef({});
   const [currentPage, setCurrentPage] = useState('');
   
   // Session timeout: 30 minutes per page
@@ -30,7 +30,7 @@ export function useAdminPassword() {
     const pageName = window.location.pathname + window.location.hash;
     
     // Check if this page is already authenticated and not expired
-    const authTime = authenticatedPagesRef.current[pageName];
+    const authTime = authenticatedPages[pageName];
     const now = Date.now();
     
     if (authTime && (now - authTime) < SESSION_TIMEOUT) {
@@ -49,9 +49,9 @@ export function useAdminPassword() {
       pendingAction.callback();
     }
     
-    // Mark current page as authenticated
+    // Mark current page as authenticated in singleton storage
     if (pendingAction?.pageIdentifier) {
-      authenticatedPagesRef.current[pendingAction.pageIdentifier] = Date.now();
+      authenticatedPages[pendingAction.pageIdentifier] = Date.now();
     }
     
     setPendingAction(null);
@@ -66,14 +66,14 @@ export function useAdminPassword() {
   // Manual method to clear authentication for a specific page (optional)
   const clearPageAuth = (pageIdentifier = null) => {
     const pageName = pageIdentifier || currentPage;
-    if (pageName && authenticatedPagesRef.current[pageName]) {
-      delete authenticatedPagesRef.current[pageName];
+    if (pageName && authenticatedPages[pageName]) {
+      delete authenticatedPages[pageName];
     }
   };
   
   // Manual method to clear all page authentications (optional)
   const clearAllAuth = () => {
-    authenticatedPagesRef.current = {};
+    Object.keys(authenticatedPages).forEach(key => delete authenticatedPages[key]);
   };
 
   return {

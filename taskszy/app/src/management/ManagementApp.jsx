@@ -186,18 +186,14 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
       }
     }
     
-    console.log('[ManagementApp] Feedback listener - userCreatedAt:', userCreatedAt);
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-      console.log('[ManagementApp] Feedback request received:', request ? 'YES' : 'NO');
       if (request) {
-        console.log('[ManagementApp] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
       }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-      console.log('[ManagementApp] Feedback listener cleanup');
       unsubscribe();
     };
   }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);
