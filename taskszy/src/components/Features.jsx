@@ -60,6 +60,7 @@ const Pill = ({ unlocked }) => {
   return (
     <motion.div
       className="flex items-center justify-center overflow-hidden px-[10px] py-[18px] h-[38px] rounded-[20px]"
+      initial={false}
       animate={{ width: unlocked ? 'auto' : '180px' }}
       transition={{ duration: 0.5, ease: 'easeInOut' }}
       style={{ 
@@ -91,6 +92,7 @@ const Pill = ({ unlocked }) => {
       {/* RBAC Enabled - visible when expanded */}
       <motion.span
         className="text-[rgb(155,161,165)] text-sm font-medium whitespace-pre"
+        initial={false}
         animate={{ 
           opacity: unlocked ? 1 : 0,
           width: unlocked ? 'auto' : 0,
@@ -103,6 +105,7 @@ const Pill = ({ unlocked }) => {
       {/* Info button - visible when expanded */}
       <motion.div
         className="px-3 py-1 rounded-full text-[rgb(102,102,255)] text-xs font-medium"
+        initial={false}
         animate={{ 
           opacity: unlocked ? 1 : 0,
           width: unlocked ? 'auto' : 0,
@@ -127,15 +130,51 @@ const Pill = ({ unlocked }) => {
 
 // NotificationWidget Component - 3D Glassy with Light Cream
 const NotificationWidget = ({ isInView }) => {
-  const [isExpanded, setIsExpanded] = useState(true); // Always expanded to prevent layout shift
-  const [autoExpanded, setAutoExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false); // Start collapsed
+  const [hasAnimated, setHasAnimated] = useState(false); // Track if animation has started
+
+  useEffect(() => {
+    if (isInView && !hasAnimated) {
+      setHasAnimated(true); // Mark that animation has started
+      
+      // Create a looping animation: collapsed → expanded → collapsed → repeat
+      const cycleAnimation = () => {
+        // Expand after 1.5 seconds
+        setTimeout(() => {
+          setIsExpanded(true);
+          
+          // Collapse after 3 seconds of being expanded
+          setTimeout(() => {
+            setIsExpanded(false);
+          }, 3000);
+        }, 1500);
+      };
+      
+      // Start the first cycle
+      cycleAnimation();
+      
+      // Repeat every 4.5 seconds (1.5s wait + 3s expanded)
+      const interval = setInterval(cycleAnimation, 4500);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isInView, hasAnimated]);
 
   return (
     <div className="flex items-center justify-center w-full h-full">
       <motion.div
         onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => !autoExpanded && setIsExpanded(false)}
-        className="relative rounded-[24px] p-4 flex items-center justify-center overflow-hidden"
+        onMouseLeave={() => setIsExpanded(false)}
+        className="relative rounded-[24px] p-4 flex items-center justify-center"
+        initial={false}
+        animate={{
+          width: isExpanded ? '300px' : '280px',
+          height: isExpanded ? '320px' : '160px',
+        }}
+        transition={{ 
+          duration: 0.6, 
+          ease: [0.25, 0.1, 0.25, 1]
+        }}
         style={{
           background: `
             linear-gradient(145deg, 
@@ -164,14 +203,12 @@ const NotificationWidget = ({ isInView }) => {
             inset -6px 0 25px rgba(170, 170, 220, 0.18),
             inset 0 0 50px rgba(200, 195, 235, 0.12)
           `,
-          width: '300px',
-          height: '320px',
+          overflow: 'hidden',
           transform: 'none',
           transformStyle: 'flat',
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
         }}
-        layout={false}
       >
         {/* Edge bevel effect - top and left */}
         <div 
@@ -292,10 +329,18 @@ const NotificationWidget = ({ isInView }) => {
           className="flex flex-col w-full"
           style={{ width: '268px', gap: '16px' }}
         >
-          {/* Alert Cards Container - FIXED HEIGHT */}
-          <div 
+          {/* Alert Cards Container - ANIMATES HEIGHT */}
+          <motion.div 
             className="flex flex-col items-center justify-start relative w-full"
-            style={{ height: '240px', gap: '4px', overflow: 'hidden' }}
+            initial={false}
+            animate={{
+              height: isExpanded ? '240px' : '100px',
+            }}
+            transition={{ 
+              duration: 0.6, 
+              ease: [0.25, 0.1, 0.25, 1]
+            }}
+            style={{ gap: '4px', overflow: 'visible' }}
           >
             {/* Card 1 - Always visible on top */}
             <motion.div
@@ -356,15 +401,16 @@ const NotificationWidget = ({ isInView }) => {
                 border: '2px solid rgba(0, 0, 0, 0.15)',
                 top: '80px',
               }}
+              initial={false}
               animate={{
-                y: isExpanded ? 0 : -66,
-                scale: isExpanded ? 1 : 0.9,
-                opacity: isExpanded ? 1 : 0.5,
+                y: isExpanded ? 0 : -68,
+                scale: isExpanded ? 1 : 0.96,
+                opacity: isExpanded ? 1 : 1,
               }}
               transition={{ 
-                duration: 0.4, 
-                ease: [0.34, 1.56, 0.64, 1],
-                delay: isExpanded ? 0.1 : 0 
+                duration: 0.6, 
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: isExpanded ? 0.08 : 0 
               }}
             >
               <h3 className="text-black font-semibold text-[17px] leading-tight" style={{ 
@@ -397,15 +443,16 @@ const NotificationWidget = ({ isInView }) => {
                 border: '2px solid rgba(0, 0, 0, 0.15)',
                 top: '160px',
               }}
+              initial={false}
               animate={{
-                y: isExpanded ? 0 : -132,
-                scale: isExpanded ? 1 : 0.8,
-                opacity: isExpanded ? 1 : 0.3,
+                y: isExpanded ? 0 : -136,
+                scale: isExpanded ? 1 : 0.92,
+                opacity: isExpanded ? 1 : 1,
               }}
               transition={{ 
-                duration: 0.4, 
-                ease: [0.34, 1.56, 0.64, 1],
-                delay: isExpanded ? 0.2 : 0 
+                duration: 0.6, 
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: isExpanded ? 0.16 : 0 
               }}
             >
               <h3 className="text-black font-semibold text-[17px] leading-tight" style={{ 
@@ -426,7 +473,7 @@ const NotificationWidget = ({ isInView }) => {
                 Development Team · $8,000
               </p>
             </motion.div>
-          </div>
+          </motion.div>
 
           {/* Button Section - stays at bottom */}
           <div className="flex items-center justify-start gap-2.5 relative" style={{ marginTop: 'auto' }}>

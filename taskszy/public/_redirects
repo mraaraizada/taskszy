@@ -1,3 +1,0 @@
-# Redirect www to non-www
-https://www.taskszy.com/* https://taskszy.com/:splat 301!
-http://www.taskszy.com/* https://taskszy.com/:splat 301!

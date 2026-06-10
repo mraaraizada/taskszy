@@ -11,16 +11,14 @@
     "proxy": "node local-proxy.js",
     "dev:app": "cd app && npm run dev",
     "dev:admin": "cd adminzdashboard && npm run dev",
-    "clean": "node clean-build.js",
-    "build:all": "npm run clean && npm run build && cd app && npm install && npm run build && cd ../adminzdashboard && npm install && npm run build",
+    "build:all": "npm run build && cd app && npm install && npm run build && cd ../adminzdashboard && npm install && npm run build",
     "deploy:merge": "mkdir -p build && cp -r dist/* build/ && mkdir -p build/app && cp -r app/dist/* build/app/ && mkdir -p build/adminzdashboard && cp -r adminzdashboard/dist/* build/adminzdashboard/",
-    "build:cloudflare": "npm run clean && node build-for-cloudflare.js",
-    "verify:deploy": "node verify-deploy.js",
-    "verify:seo": "node verify-seo.js",
-    "generate:sitemap": "node generate-sitemap.js"
+    "build:cloudflare": "node build-for-cloudflare.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@hugeicons/core-free-icons": "^4.2.0",
+    "@hugeicons/react": "^1.1.6",
     "@number-flow/react": "^0.6.0",
     "@paper-design/shaders-react": "^0.0.76",
     "@radix-ui/react-tabs": "^1.1.13",
@@ -31,7 +29,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dicons": "^1.1.7",
-    "firebase": "^10.14.1",
     "framer-motion": "^11.18.2",
     "gsap": "^3.15.0",
     "http-proxy": "^1.18.1",
@@ -42,8 +39,6 @@
     "postprocessing": "^6.39.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-helmet-async": "^2.0.5",
-    "react-router-dom": "^6.30.4",
     "react-use-measure": "^2.1.7",
     "tailwind-merge": "^3.5.0",
     "three": "^0.184.0"
@@ -56,7 +51,6 @@
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.10",
     "tailwindcss-animate": "^1.0.7",
-    "terser": "^5.48.0",
     "vite": "^5.4.2"
   }
 }
