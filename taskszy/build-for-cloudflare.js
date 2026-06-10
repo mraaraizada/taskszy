@@ -73,7 +73,7 @@ try {
   
   // Step 5.5: Explicitly copy xspreadsheet files from app/public to deploy/app
   console.log('\n📄 Step 5.5: Copying xspreadsheet static files...');
-  const xspreadsheetFiles = ['xspreadsheet.js', 'xspreadsheet.css'];
+  const xspreadsheetFiles = ['xspreadsheet.js', 'xspreadsheet.css', '58eaeb4e52248a5c75936c6f4c33a370.svg'];
   for (const file of xspreadsheetFiles) {
     const srcPath = path.join('./app/public', file);
     const destPath = path.join('./deploy/app', file);
@@ -112,7 +112,8 @@ try {
   console.log('   ├── app/');
   console.log('   │   ├── index.html (main app)');
   console.log('   │   ├── xspreadsheet.js (spreadsheet library)');
-  console.log('   │   └── xspreadsheet.css (spreadsheet styles)');
+  console.log('   │   ├── xspreadsheet.css (spreadsheet styles)');
+  console.log('   │   └── 58eaeb4e52248a5c75936c6f4c33a370.svg (toolbar icons)');
   console.log('   └── adminzdashboard/');
   console.log('       └── index.html (admin dashboard)');
   
@@ -123,6 +124,7 @@ try {
     './deploy/app/index.html',
     './deploy/app/xspreadsheet.js',
     './deploy/app/xspreadsheet.css',
+    './deploy/app/58eaeb4e52248a5c75936c6f4c33a370.svg',
     './deploy/adminzdashboard/index.html'
   ];
   

@@ -27,6 +27,7 @@ const filesToCheck = [
   'app/index.html',
   'app/xspreadsheet.js',
   'app/xspreadsheet.css',
+  'app/58eaeb4e52248a5c75936c6f4c33a370.svg',
   'adminzdashboard/index.html',
   'functions/_middleware.js'
 ];
