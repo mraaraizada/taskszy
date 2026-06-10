@@ -29,7 +29,7 @@ export default function CompleteSuite() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          transition={{ duration: 0.6, delay: 1.3 }}
           className="grid grid-cols-4 gap-x-36 gap-y-6 mt-16 justify-center"
           style={{ width: 'fit-content', margin: '4rem auto' }}
         >
@@ -216,8 +216,8 @@ export default function CompleteSuite() {
                 />
                 
                 <img 
-                  src={index === 0 ? "/dashboard_10397277.png" : index === 1 ? "/3.png" : index === 2 ? "/analytics_17257787.png" : index === 3 ? "/13.png" : index === 4 ? "/workflow_14662749.png" : index === 5 ? "/10.png" : index === 6 ? "/8.png" : index === 7 ? "/1.png" : index === 8 ? "/support_18296255.png" : index === 9 ? "/note_5406380.png" : index === 10 ? "/xls_8361442.png" : index === 11 ? "/15.png" : index === 12 ? "/2.png" : index === 13 ? "/user_9977567.png" : index === 14 ? "/14.png" : "/16.png"}
-                  alt={index === 0 ? "Dashboard icon" : index === 1 ? "Icon 3" : index === 2 ? "Analytics icon" : index === 3 ? "Icon 13" : index === 4 ? "Workflow icon" : index === 5 ? "Icon 10" : index === 6 ? "Icon 8" : index === 7 ? "Icon 1" : index === 8 ? "Support icon" : index === 9 ? "Note icon" : index === 10 ? "Excel icon" : index === 11 ? "Icon 15" : index === 12 ? "Icon 2" : index === 13 ? "User icon" : index === 14 ? "Icon 14" : "Profile icon"}
+                  src={index === 0 ? "/dashboard_10397277.png" : index === 1 ? "/3.png" : index === 2 ? "/analytics_17257787.png" : index === 3 ? "/13.png" : index === 4 ? "/workflow_14662749.png" : index === 5 ? "/10.png" : index === 6 ? "/8.png" : index === 7 ? "/1.png" : index === 8 ? "/support_18296255.png" : index === 9 ? "/note_5406380.png" : index === 11 ? "/15.png" : index === 12 ? "/2.png" : index === 13 ? "/user_9977567.png" : index === 14 ? "/14.png" : index === 15 ? "/16.png" : "/xls_8361442.png"}
+                  alt={index === 0 ? "Dashboard icon" : index === 1 ? "Icon 3" : index === 2 ? "Analytics icon" : index === 3 ? "Icon 13" : index === 4 ? "Workflow icon" : index === 5 ? "Icon 10" : index === 6 ? "Icon 8" : index === 7 ? "Icon 1" : index === 8 ? "Support icon" : index === 9 ? "Note icon" : index === 11 ? "Icon 15" : index === 12 ? "Icon 2" : index === 13 ? "User icon" : index === 14 ? "Icon 14" : index === 15 ? "Icon 16" : "Excel icon"}
                   className="object-contain relative z-10"
                   style={{
                     width: '68px',

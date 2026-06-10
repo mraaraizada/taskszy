@@ -4,15 +4,6 @@ import CountUp from './CountUp'
 import CollectionPreview from './CollectionPreview'
 import WaitlistButton from './WaitlistButton'
 import PolicyModal from './PolicyModal'
-import { DashboardPreviewInternal } from './BentoCard'
-import Lottie from 'lottie-react'
-import securityAnimation from '../../public/5c260c10-1179-11ee-a284-db88e7e6dc04.json'
-import excelAnimation from '../../public/98154d60-117b-11ee-baa7-33ce05998238.json'
-import docsAnimation from '../../public/b1d93768-1165-11ee-8e09-6788f8e18b81.json'
-import CardSwap, { Card } from './CardSwap'
-import { TodoCard } from './TodoCard'
-import { ProjectTable } from './ProjectTable'
-import { SpreadsheetMini } from './SpreadsheetMini'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -321,194 +312,63 @@ export default function IntegrationArchitecture() {
           </div> */}
 
           {/* Bento Grid Section */}
-          <div className="p-8 bg-white">
-            <div className="grid grid-cols-6 auto-rows-[300px] gap-6">
-              {/* Row 1, Col 1: Security, Excel & Docs Animations + CardSwap - Taller (3 cols x 2 rows) */}
-              <div className="col-span-3 row-span-2 border-2 border-foreground p-8 flex items-start justify-between rounded-xl bg-white pt-4 relative overflow-visible">
-                {/* Animated connecting lines */}
-                <style>
-                  {`
-                    @keyframes flowDown {
-                      0% { stroke-dashoffset: 100; }
-                      100% { stroke-dashoffset: 0; }
-                    }
-                    @keyframes pulse-ring {
-                      0%, 100% { opacity: 0.3; transform: scale(1); }
-                      50% { opacity: 0.1; transform: scale(1.5); }
-                    }
-                    .flow-line { animation: flowDown 2s linear infinite; }
-                  `}
-                </style>
-                
-                {/* Docs Animation - Left */}
-                <div className="w-40 mt-3 -ml-4 relative">
-                  <Lottie 
-                    animationData={docsAnimation} 
-                    loop={true}
-                    style={{ width: '100%', height: 'auto' }}
-                  />
-                  {/* Vertical dotted line down from docs */}
-                  <svg className="absolute" style={{ left: '50%', top: '100%', width: '1px', height: '120px', transform: 'translateX(-50%)', marginTop: '-40px' }}>
-                    <line x1="0.5" y1="0" x2="0.5" y2="120" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                  </svg>
-                  {/* Horizontal line connecting to power icon */}
-                  <svg className="absolute" style={{ left: '50%', top: 'calc(100% + 80px)', width: '150px', height: '1px', transform: 'translateY(-50%)', marginTop: '-40px' }}>
-                    <line x1="0" y1="0.5" x2="150" y2="0.5" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                  </svg>
-                </div>
-                
-                {/* Excel Animation - Center */}
-                <div className="w-[88px] mt-12 relative">
-                  <Lottie 
-                    animationData={excelAnimation} 
-                    loop={true}
-                    style={{ width: '100%', height: 'auto' }}
-                  />
-                  {/* Vertical dotted line down from excel - straight to power icon */}
-                  <svg className="absolute" style={{ left: '50%', top: '100%', width: '1px', height: '80px', transform: 'translateX(-50%)', marginTop: '-10px' }}>
-                    <line x1="0.5" y1="0" x2="0.5" y2="80" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                  </svg>
-                </div>
-                
-                {/* Security Animation - Right */}
-                <div className="w-48 pr-1 relative">
-                  <Lottie 
-                    animationData={securityAnimation} 
-                    loop={true}
-                    style={{ width: '100%', height: 'auto' }}
-                  />
-                  {/* Vertical dotted line down from security */}
-                  <svg className="absolute" style={{ left: '50%', top: '100%', width: '1px', height: '140px', transform: 'translateX(-50%)', marginTop: '-10px' }}>
-                    <line x1="0.5" y1="0" x2="0.5" y2="140" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                  </svg>
-                  {/* Horizontal line connecting to power icon (going left) */}
-                  <svg className="absolute" style={{ left: '50%', top: 'calc(100% + 130px)', width: '150px', height: '1px', transform: 'translateY(-50%)' }}>
-                    <line x1="0" y1="0.5" x2="-150" y2="0.5" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3" />
-                  </svg>
-                </div>
+          <div className="grid grid-cols-6 auto-rows-[240px] gap-0">
+            {/* Typography - Tall (2 cols x 2 rows) */}
+            <div className="col-span-2 row-span-2 border-r-2 border-b-2 border-foreground p-8 flex items-center justify-center">
+              <span className="text-8xl font-serif">Aa</span>
+            </div>
 
-                {/* Power/Charging Icon in Center with animated rings */}
-                <div className="absolute" style={{ left: '45%', top: '30%', transform: 'translate(-50%, -50%)', zIndex: 20 }}>
-                  {/* Pulsing rings */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="absolute w-12 h-12 rounded-full border border-gray-200" style={{ animation: 'pulse-ring 2s ease-in-out infinite' }}></div>
-                    <div className="absolute w-16 h-16 rounded-full border border-gray-100" style={{ animation: 'pulse-ring 2s ease-in-out infinite 0.5s' }}></div>
-                  </div>
-                  
-                  {/* Power icon */}
-                  <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center shadow-lg border-2 border-green-400">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-green-400">
-                      <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                  
-                  {/* Animated green line going down only */}
-                  <svg className="absolute" style={{ left: '50%', top: '100%', width: '2px', height: '100px', transform: 'translateX(-50%)' }}>
-                    <line className="flow-line" x1="1" y1="0" x2="1" y2="100" stroke="#84cc16" strokeWidth="2" strokeDasharray="6,6" strokeLinecap="round" />
-                  </svg>
-                </div>
-                
-                {/* CardSwap Component - Bottom */}
-                <div style={{ position: 'absolute', bottom: 0, right: 0, width: '100%', height: '400px' }}>
-                  <CardSwap
-                    width={350}
-                    height={250}
-                    cardDistance={40}
-                    verticalDistance={50}
-                    delay={5000}
-                    pauseOnHover={false}
-                    easing="elastic"
-                    skewAmount={0}
-                  >
-                    <Card>
-                      <div style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        overflow: 'hidden',
-                        background: 'transparent',
-                        transform: 'translateZ(0)',
-                        WebkitFontSmoothing: 'antialiased'
-                      }}>
-                        <div style={{ 
-                          transform: 'scale(0.85)', 
-                          transformOrigin: 'top left',
-                          width: '117.6%',
-                          height: '117.6%'
-                        }}>
-                          <TodoCard />
-                        </div>
-                      </div>
-                    </Card>
-                    <Card>
-                      <div style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        overflow: 'hidden',
-                        background: 'transparent',
-                        transform: 'translateZ(0)',
-                        WebkitFontSmoothing: 'antialiased'
-                      }}>
-                        <div style={{ 
-                          transform: 'scale(0.88)', 
-                          transformOrigin: 'top left',
-                          width: '113.6%',
-                          height: '113.6%'
-                        }}>
-                          <SpreadsheetMini rows={10} cols={6} />
-                        </div>
-                      </div>
-                    </Card>
-                    <Card>
-                      <div style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        overflow: 'hidden',
-                        background: 'transparent',
-                        transform: 'translateZ(0)',
-                        WebkitFontSmoothing: 'antialiased'
-                      }}>
-                        <div style={{ 
-                          transform: 'scale(0.82)', 
-                          transformOrigin: 'top left',
-                          width: '122%',
-                          height: '122%'
-                        }}>
-                          <ProjectTable />
-                        </div>
-                      </div>
-                    </Card>
-                  </CardSwap>
+            {/* Layouts - Standard (2 cols x 1 row) */}
+            <div className="col-span-2 row-span-1 border-r-2 border-b-2 border-foreground p-8 flex items-center justify-center">
+              <div className="flex gap-2">
+                <div className="w-12 h-12 bg-gray-300 rounded"></div>
+                <div className="w-12 h-12 bg-gray-300 rounded"></div>
+                <div className="w-12 h-12 bg-gray-300 rounded"></div>
+              </div>
+            </div>
+
+            {/* Global CDN - Tall (2 cols x 2 rows) */}
+            <div className="col-span-2 row-span-2 border-b-2 border-foreground p-8 flex items-center justify-center">
+            </div>
+
+            {/* Speed - Standard (2 cols x 1 row) */}
+            <div className="col-span-2 row-span-1 border-r-2 border-b-2 border-foreground p-8 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-3xl font-semibold">100ms</div>
+                <div className="w-32 h-2 bg-gray-200 rounded-full mt-3 mx-auto">
+                  <div className="w-full h-full bg-foreground rounded-full"></div>
                 </div>
               </div>
+            </div>
 
-              {/* Row 1, Col 2: Dashboard Component (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white relative">
-                {/* Title and Description positioned in the empty space above dashboard */}
-                <div className="absolute top-4 left-6 z-20 space-y-1">
-                  <h2 className="text-[10px] text-primary uppercase tracking-wide font-semibold">Project Dashboard</h2>
-                  <p className="text-sm text-muted-foreground font-semibold leading-tight max-w-md">
-                    High-performance analytics and team collaboration tools in one place.
-                  </p>
-                </div>
-                {/* Dashboard Component - positioned exactly as before */}
-                <div className="w-full h-full flex items-end justify-center p-4">
-                  <div className="scale-100 origin-center w-full h-full flex items-center justify-center translate-y-6">
-                    <DashboardPreviewInternal />
-                  </div>
-                </div>
+            {/* Security First - Wide (3 cols x 1 row) */}
+            <div className="col-span-3 row-span-1 border-r-2 border-foreground p-8 flex items-center justify-center gap-3">
+              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
               </div>
+              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+            </div>
 
-              {/* Row 2, Col 2: Empty (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
-              </div>
-
-              {/* Row 3, Col 1: Empty (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
-              </div>
-
-              {/* Row 3, Col 2: Empty (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
-              </div>
+            {/* Mobile Ready - Wide (3 cols x 1 row) */}
+            <div className="col-span-3 row-span-1 p-8 flex items-center justify-center">
+              <svg className="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                <path d="M12 18h.01"/>
+              </svg>
             </div>
           </div>
 

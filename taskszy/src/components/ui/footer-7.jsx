@@ -15,7 +15,6 @@ const defaultSections = [
     links: [
       { name: 'Documentation', href: '#' },
       { name: 'Help Center', href: '#' },
-      { name: 'Blog', href: '#' },
       { name: 'Case Studies', href: '#' },
     ],
   },
