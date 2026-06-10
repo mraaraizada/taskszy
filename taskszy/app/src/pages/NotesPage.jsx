@@ -274,6 +274,142 @@ function SheetViewer({ sheetItem, onAutoSave }) {
           <div style={{ width: 22, height: 22, borderRadius: '50%', border: '3px solid #EEF2FF', borderTopColor: '#3B5BFC', animation: 'spin 0.7s linear infinite' }} />
         </div>
       )}
+      
+      {/* COMPREHENSIVE TOOLBAR STYLING */}
+      <style>{`
+        /* Hide broken icon sprites */
+        .x-spreadsheet-icon .x-spreadsheet-icon-img {
+          display: none !important;
+        }
+        
+        /* TOP TOOLBAR */
+        .x-spreadsheet-toolbar {
+          background: #f8f9fa !important;
+          border-bottom: 2px solid #dee2e6 !important;
+          padding: 8px 16px !important;
+          display: flex !important;
+          gap: 8px !important;
+          min-height: 44px !important;
+        }
+        
+        .x-spreadsheet-toolbar-btns {
+          display: flex !important;
+          gap: 6px !important;
+          align-items: center !important;
+        }
+        
+        .x-spreadsheet-toolbar-btn {
+          background: #ffffff !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 6px 10px !important;
+          min-width: 36px !important;
+          min-height: 32px !important;
+          cursor: pointer !important;
+          color: #495057 !important;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        
+        .x-spreadsheet-toolbar-btn:hover {
+          background: #e9ecef !important;
+          border-color: #3B5BFC !important;
+        }
+        
+        .x-spreadsheet-toolbar-btn:active,
+        .x-spreadsheet-toolbar-btn.active {
+          background: #3B5BFC !important;
+          color: #ffffff !important;
+        }
+        
+        /* Add generic icon symbols */
+        .x-spreadsheet-toolbar-btn .x-spreadsheet-icon:after {
+          content: "⚙";
+          font-size: 16px;
+        }
+        
+        /* Dropdown styling */
+        .x-spreadsheet-dropdown {
+          background: #ffffff !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 6px 12px !important;
+          cursor: pointer !important;
+          min-width: 100px !important;
+        }
+        
+        .x-spreadsheet-dropdown:hover {
+          border-color: #3B5BFC !important;
+        }
+        
+        .x-spreadsheet-dropdown-title {
+          color: #212529 !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+        }
+        
+        /* BOTTOM TOOLBAR (Sheet tabs) */
+        .x-spreadsheet-bottombar {
+          background: #f8f9fa !important;
+          border-top: 2px solid #dee2e6 !important;
+          padding: 8px 16px !important;
+          display: flex !important;
+          gap: 8px !important;
+          min-height: 40px !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu {
+          display: flex !important;
+          gap: 6px !important;
+          list-style: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu > li {
+          background: #ffffff !important;
+          border: 1px solid #ced4da !important;
+          border-radius: 4px !important;
+          padding: 6px 16px !important;
+          cursor: pointer !important;
+          color: #495057 !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          line-height: 1.5 !important;
+          height: auto !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu > li:hover {
+          background: #e9ecef !important;
+          border-color: #3B5BFC !important;
+        }
+        
+        .x-spreadsheet-bottombar .x-spreadsheet-menu > li.active {
+          background: #3B5BFC !important;
+          color: #ffffff !important;
+        }
+        
+        /* Context menu */
+        .x-spreadsheet-contextmenu {
+          background: #ffffff !important;
+          border: 1px solid #dee2e6 !important;
+          border-radius: 6px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        }
+        
+        .x-spreadsheet-item {
+          padding: 8px 12px !important;
+          color: #212529 !important;
+          font-size: 13px !important;
+        }
+        
+        .x-spreadsheet-item:hover {
+          background: #f8f9fa !important;
+        }
+      `}</style>
     </div>
   );
 }
