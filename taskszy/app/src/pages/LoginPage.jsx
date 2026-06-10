@@ -515,12 +515,30 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
     try {
       const credential = await signIn(email, password);
       const user = credential.user;
+      
+      // CRITICAL: Set auth state to 'authenticating' IMMEDIATELY to block onAuthStateChanged
+      if (window.kiroAuthState) {
+        window.kiroAuthState.current = 'authenticating';
+      }
+      if (window.kiroLoginHandled) {
+        window.kiroLoginHandled.current = true;
+      }
+      if (window.kiroLastLoginAttempt) {
+        window.kiroLastLoginAttempt.current = Date.now();
+      }
+      if (window.kiroLog) window.kiroLog('[LoginPage] Set authState to authenticating');
+      console.log('[LoginPage] Set authState to authenticating - onAuthStateChanged will be blocked');
+      
+      // Fetch profile AFTER setting the state
       const profile = await getProfile(user.uid);
       setLoading(false);
       if (!profile) {
         setError('Account setup incomplete. Please contact your administrator.');
+        // Reset auth state on error
+        if (window.kiroAuthState) window.kiroAuthState.current = 'idle';
         return;
       }
+      
       // Stamp loginTime + lastActivityTime on every sign-in
       stampLogin(user.uid).catch(() => {});
       
@@ -607,14 +625,20 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           isNewSignup: false 
         });
         setShowPlanSelection(true);
+        // Keep authState as 'authenticating' so onAuthStateChanged stays blocked
         return;
       }
       
       // Plan exists (or user is not admin) - proceed to workspace setup or dashboard
+      // Call onLogin immediately - authState was already set right after signIn
+      console.log('[LoginPage handleLogin] Calling onLogin with role:', profile.role);
       onLogin(profile.role, profile.memberId, user.email, profile.workspaceId || null, completedSetup, false);
     } catch (err) {
       setLoading(false);
       setError(mapAuthError(err.code));
+      // Reset auth state on error
+      if (window.kiroAuthState) window.kiroAuthState.current = 'idle';
+      if (window.kiroLoginHandled) window.kiroLoginHandled.current = false;
     }
   };
 
@@ -641,6 +665,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
     const wsId = authenticatedUser?.workspaceId;
     if (wsId) {
       try {
+        console.log('[LoginPage handlePlanSelect] Writing plan to workspace:', wsId);
         await setDoc(doc(db, `workspaces/${wsId}`), {
           plan: {
             id:              planData.id,
@@ -656,14 +681,36 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           },
         }, { merge: true });
         
-        // Wait longer to ensure Firebase propagates the write
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch { /* non-fatal */ }
+        console.log('[LoginPage handlePlanSelect] Plan written, verifying...');
+        
+        // ROBUST: Wait and verify plan was written before proceeding
+        let planVerified = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1))); // Exponential backoff
+          
+          const workspaceDoc = await getDoc(doc(db, `workspaces/${wsId}`));
+          if (workspaceDoc.exists() && workspaceDoc.data()?.plan?.id === planData.id) {
+            console.log('[LoginPage handlePlanSelect] Plan verified after', attempt + 1, 'attempts');
+            planVerified = true;
+            break;
+          }
+          console.log('[LoginPage handlePlanSelect] Plan not verified, retrying...', attempt + 1);
+        }
+        
+        if (!planVerified) {
+          console.warn('[LoginPage handlePlanSelect] Plan not verified after 5 attempts - proceeding anyway');
+        }
+      } catch (err) {
+        console.error('[LoginPage handlePlanSelect] Error writing plan:', err);
+        // Don't block login on plan write error
+      }
     }
 
+    // Proceed to onLogin after plan is confirmed
+    console.log('[LoginPage handlePlanSelect] Proceeding to onLogin');
     setTimeout(() => {
       onLogin(authenticatedUser.role, authenticatedUser.memberId, authenticatedUser.email, authenticatedUser.workspaceId || null, authenticatedUser.completedSetup ?? false, authenticatedUser.isNewSignup === true);
-    }, 200);
+    }, 100);
   };
 
   const handleBackToLogin = () => {
@@ -702,6 +749,19 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
     try {
       const credential = await signInWithGoogle();
       const user = credential.user;
+      
+      // CRITICAL: Set auth state to 'authenticating' IMMEDIATELY to block onAuthStateChanged
+      if (window.kiroAuthState) {
+        window.kiroAuthState.current = 'authenticating';
+      }
+      if (window.kiroLoginHandled) {
+        window.kiroLoginHandled.current = true;
+      }
+      if (window.kiroLastLoginAttempt) {
+        window.kiroLastLoginAttempt.current = Date.now();
+      }
+      if (window.kiroLog) window.kiroLog('[LoginPage Google] Set authState to authenticating');
+      
       const profile = await getProfile(user.uid);
 
       if (isSignUp) {

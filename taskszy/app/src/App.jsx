@@ -296,6 +296,7 @@ function AppShell() {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [needsPlanCheck, setNeedsPlanCheck] = useState(false); // Force LoginPage to check for plan
   const [isPlanSelectionActive, setIsPlanSelectionActive] = useState(false); // Track if plan selection is showing
+  const [loginInProgress, setLoginInProgress] = useState(false); // Track if login is in progress (for rendering)
   const [pageExtraProps, setPageExtraProps] = useState({}); // Store extra props for pages (like prefilledTaskId)
   const [selectedScribeId, setSelectedScribeId] = useState(null); // Track scribe to open in NotesPage
   const [pageFilteredData, setPageFilteredData] = useState({}); // Store filtered/paginated data from each page for search
@@ -318,9 +319,11 @@ function AppShell() {
       // Prevent going back to website - stay within app
       const currentPath = window.location.pathname;
       if (!currentPath.includes('/app')) {
-        // User navigated outside /app - redirect back to app
-        window.history.pushState({ page: activeItem }, '', '/app#' + activeItem);
-        window.location.href = '/app#' + activeItem;
+        // User navigated outside /app - push state but DON'T reload the page
+        // This prevents the hard reload that was breaking first login attempts
+        const hash = window.location.hash.replace('#', '') || activeItem;
+        window.history.pushState({ page: hash }, '', '/app#' + hash);
+        // Removed: window.location.href = '/app#' + activeItem; // CAUSES PAGE RELOAD
         return;
       }
       
@@ -342,12 +345,20 @@ function AppShell() {
     const basePath = currentPath.includes('/app') ? '/app' : '';
     
     // Add a sentinel entry at the start of history to block going back to website
+    // BUT: Only do this if we're already authenticated to avoid interfering with login
     if (window.history.state === null || !window.history.state.isAppEntry) {
-      window.history.pushState({ isAppEntry: true, page: 'dashboard' }, '', `${basePath}#dashboard`);
+      // Check if we're in the middle of authentication - if so, skip history manipulation
+      // This prevents interfering with login flow
+      if (authStateRef.current !== 'authenticating' && !loginInProgressRef.current) {
+        window.history.pushState({ isAppEntry: true, page: 'dashboard' }, '', `${basePath}#dashboard`);
+      }
     }
     
     // Replace current state with active page
-    window.history.replaceState({ page: activeItem }, '', `${basePath}#${activeItem}`);
+    // Only do this if we're not in the middle of authentication
+    if (authStateRef.current !== 'authenticating' && !loginInProgressRef.current) {
+      window.history.replaceState({ page: activeItem }, '', `${basePath}#${activeItem}`);
+    }
     
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -380,70 +391,179 @@ function AppShell() {
     const listenerId = workspaceId || 'ALL';
     
     // Get user's join date to filter out old broadcasts
-    const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
+    // Try multiple sources: createdAt, joinedDate, or joined timestamp
+    let userCreatedAt = null;
+    
+    if (currentUser?.createdAt) {
+      if (currentUser.createdAt.toDate) {
+        userCreatedAt = currentUser.createdAt.toDate();
+      } else if (currentUser.createdAt instanceof Date) {
+        userCreatedAt = currentUser.createdAt;
+      } else if (typeof currentUser.createdAt === 'number') {
+        userCreatedAt = new Date(currentUser.createdAt);
+      }
+    } else if (currentUser?.joinedDate) {
+      if (currentUser.joinedDate.toDate) {
+        userCreatedAt = currentUser.joinedDate.toDate();
+      } else if (currentUser.joinedDate instanceof Date) {
+        userCreatedAt = currentUser.joinedDate;
+      }
+    }
+    
+    // If still no date, try to fetch from Firestore users document
+    if (!userCreatedAt && currentUid) {
+      import('./lib/firebase').then(({ db }) => {
+        import('firebase/firestore').then(({ doc, getDoc }) => {
+          getDoc(doc(db, 'users', currentUid)).then(userDoc => {
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              console.log('[App.jsx] Fetched user data for createdAt:', userData.createdAt);
+              
+              if (userData.createdAt) {
+                let fetchedCreatedAt = null;
+                if (userData.createdAt.toDate) {
+                  fetchedCreatedAt = userData.createdAt.toDate();
+                } else if (userData.createdAt instanceof Date) {
+                  fetchedCreatedAt = userData.createdAt;
+                } else if (typeof userData.createdAt === 'number') {
+                  fetchedCreatedAt = new Date(userData.createdAt);
+                }
+                
+                if (fetchedCreatedAt) {
+                  console.log('[App.jsx] Found createdAt from Firestore:', fetchedCreatedAt);
+                  // Re-initialize the listener with the correct date
+                  // This will trigger the useEffect again with updated currentUser
+                  setCurrentUser(prev => ({
+                    ...prev,
+                    createdAt: userData.createdAt
+                  }));
+                }
+              }
+            }
+          }).catch(err => {
+            console.error('[App.jsx] Error fetching user createdAt:', err);
+          });
+        });
+      });
+    }
+    
+    console.log('[App.jsx] Feedback listener - userCreatedAt:', userCreatedAt);
+    console.log('[App.jsx] Feedback listener - workspaceId:', listenerId);
 
     // Don't require currentUid - listener can work without it
     // currentUid is only needed for dismissing feedback, not for receiving it
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-
+      console.log('[App.jsx] Feedback request received:', request ? 'YES' : 'NO');
+      if (request) {
+        console.log('[App.jsx] Feedback created at:', request.createdAt);
+        console.log('[App.jsx] User joined at:', userCreatedAt);
+        console.log('[App.jsx] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
+      }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-
+      console.log('[App.jsx] Feedback listener cleanup');
       unsubscribe();
     };
-  }, [workspaceId, currentUid, currentUser]);
+  }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);
 
-  // ── Persistent session via onAuthStateChanged ──
-  // Use a ref to track if login was already handled by LoginPage
-  // to prevent double-trigger on signup (Firebase fires onAuthStateChanged immediately after createUser)
+  // ── Authentication State Machine ──
+  // Possible states: 'idle' | 'checking' | 'authenticating' | 'authenticated' | 'logging_out'
+  const authStateRef = useRef('checking'); // Start with checking since we're loading auth state
   const loginHandledRef = useRef(false);
   const loginInProgressRef = useRef(false); // Track if login is currently in progress
+  const lastLoginAttemptRef = useRef(0); // Track timestamp of last login attempt to prevent rapid duplicates
   const logoutInProgressRef = useRef(false);
   const expiredLogoutRef = useRef(false); // true only when logout was triggered by session expiry
+  const authInitializedRef = useRef(false); // Track if onAuthStateChanged has fired at least once
+
+  // Expose refs globally so LoginPage can set them before calling onLogin
+  useEffect(() => {
+    window.kiroAuthState = authStateRef;
+    window.kiroLoginInProgress = loginInProgressRef;
+    window.kiroLoginHandled = loginHandledRef;
+    window.kiroLastLoginAttempt = lastLoginAttemptRef;
+    
+    // Create a persistent log array that survives page refreshes using sessionStorage
+    try {
+      const existingLogs = sessionStorage.getItem('kiroDebugLogs');
+      window.kiroDebugLogs = existingLogs ? JSON.parse(existingLogs) : [];
+    } catch (e) {
+      window.kiroDebugLogs = [];
+    }
+    
+    window.kiroLog = (msg) => {
+      const timestamp = new Date().toISOString().substr(11, 12);
+      const logEntry = `[${timestamp}] ${msg}`;
+      window.kiroDebugLogs.push(logEntry);
+      console.log(logEntry);
+      // Keep only last 100 logs
+      if (window.kiroDebugLogs.length > 100) {
+        window.kiroDebugLogs.shift();
+      }
+      // Save to sessionStorage so it survives page refresh
+      try {
+        sessionStorage.setItem('kiroDebugLogs', JSON.stringify(window.kiroDebugLogs));
+      } catch (e) {
+        // Storage might be full or disabled
+      }
+    };
+    
+    // Function to dump all logs
+    window.kiroShowLogs = () => {
+      console.log('=== KIRO DEBUG LOGS (from sessionStorage) ===');
+      try {
+        const logs = sessionStorage.getItem('kiroDebugLogs');
+        const logArray = logs ? JSON.parse(logs) : window.kiroDebugLogs;
+        logArray.forEach(log => console.log(log));
+        console.log(`=== END LOGS (${logArray.length} total) ===`);
+      } catch (e) {
+        console.error('Error reading logs:', e);
+      }
+    };
+    
+    // Function to clear logs
+    window.kiroClearLogs = () => {
+      window.kiroDebugLogs = [];
+      sessionStorage.removeItem('kiroDebugLogs');
+      console.log('Logs cleared');
+    };
+    
+    window.kiroLog('[App.jsx] Debug logging initialized');
+  }, []);
 
   useEffect(() => {
     const SESSION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     const unsubscribe = onAuthChanged(async (user) => {
+      const logMsg = `[onAuthStateChanged] user=${user ? user.uid.substr(0,8) : 'null'} authState=${authStateRef.current} loginHandled=${loginHandledRef.current}`;
+      if (window.kiroLog) window.kiroLog(logMsg);
+      console.log('[App.jsx onAuthStateChanged] Triggered, user:', user ? user.uid : 'null', 'authState:', authStateRef.current, 'loginHandledRef:', loginHandledRef.current);
 
-      // Skip if logout is in progress — prevents false expiry detection
-      if (logoutInProgressRef.current) {
+      // Mark that auth has initialized (fired at least once)
+      authInitializedRef.current = true;
 
-        // Don't process anything during logout - wait for logout to complete
+      // STATE MACHINE: Handle logout state first
+      if (authStateRef.current === 'logging_out') {
+        console.log('[App.jsx onAuthStateChanged] Logout in progress - skipping');
         return;
       }
       
-      // Skip if login is in progress — let LoginPage handle it
-      if (loginInProgressRef.current) {
-
-        // Don't set authLoading to false yet - let handleLogin complete
+      // STATE MACHINE: If LoginPage is actively handling authentication, skip completely
+      if (authStateRef.current === 'authenticating' || loginInProgressRef.current) {
+        console.log('[App.jsx onAuthStateChanged] Authentication in progress - skipping');
         return;
       }
       
+      // Handle logged out state
       if (!user) {
-        // No user - logged out state
-
-        // If logout is in progress, this is expected - don't do anything
-        if (logoutInProgressRef.current) {
-
-          // Don't process anything during logout
-          return;
-        }
+        console.log('[App.jsx onAuthStateChanged] No user - setting auth state to idle');
+        authStateRef.current = 'idle';
         
-        // If login is in progress and user becomes null, this might be a race condition
-        // Wait for login to complete instead of showing login page
-        if (loginInProgressRef.current) {
-
-          // Don't set authLoading to false yet - let handleLogin complete
-          return;
-        }
-        
-        // User is logged out - set authLoading to false to show login page
-        // But only if we're not in the middle of logout or login
-        if (!logoutInProgressRef.current && !loginInProgressRef.current) {
+        // Only set authLoading to false if we're not in a transition state
+        if (!loginInProgressRef.current && !logoutInProgressRef.current) {
           setAuthLoading(false);
         }
         return;
@@ -551,62 +671,72 @@ function AppShell() {
             }
           }
 
-          // If admin without completed setup OR without a plan, don't auto-login via onAuthStateChanged
-          // Instead, show LoginPage which will handle plan selection if needed
-          // EXCEPTION: If this is a session re-login (user was already logged in before), always let them through
+          // Check if admin without plan or setup - show LoginPage for completion
           const isRelogin = expiredLogoutRef.current || sessionExpired;
           
-          // For admins without plan or setup, we need to show LoginPage so they can complete the flow
-          // But we should NOT block them if they're in the middle of the flow (loginInProgressRef)
-          if (userRole === 'admin' && (!completedSetup || !hasPlan) && !isRelogin) {
-            // Don't call handleLogin - let LoginPage handle it
-            // LoginPage will show plan selection if needed
-            setIsPlanSelectionActive(true); // Mark that plan selection is active
-            setNeedsPlanCheck(true); // Tell LoginPage to check for plan
-            setAuthLoading(false);
-            setAuth(null); // Clear auth to show LoginPage
+          // CRITICAL: If LoginPage set loginHandledRef, it means LoginPage is handling this login
+          // Do NOT interfere - just return and let LoginPage complete the flow
+          if (loginHandledRef.current) {
+            console.log('[App.jsx onAuthStateChanged] LoginPage is handling this login - returning');
             return;
           }
           
-          // If this is a re-login after session expiry, always mark setup as complete
-          // to prevent showing workspace setup again
+          console.log('[App.jsx onAuthStateChanged] Processing auto-login:', { userRole, completedSetup, hasPlan, isRelogin });
+          
+          // For admins without plan, redirect to LoginPage which will show plan selection
+          if (userRole === 'admin' && !hasPlan && !isRelogin) {
+            console.log('[App.jsx onAuthStateChanged] Admin needs plan - showing LoginPage');
+            authStateRef.current = 'idle';
+            setIsPlanSelectionActive(true);
+            setNeedsPlanCheck(true);
+            setAuthLoading(false);
+            setAuth(null);
+            return;
+          }
+          
+          // For admins without setup, redirect to LoginPage
+          if (userRole === 'admin' && !completedSetup && !isRelogin) {
+            console.log('[App.jsx onAuthStateChanged] Admin needs setup - showing LoginPage');
+            authStateRef.current = 'idle';
+            setNeedsPlanCheck(true);
+            setAuthLoading(false);
+            setAuth(null);
+            return;
+          }
+          
+          // If this is a re-login after session expiry, mark setup as complete
           if (isRelogin && completedSetup === false) {
             completedSetup = true;
-
           }
 
-          // CRITICAL: Set currentUid IMMEDIATELY before any async operations
-          // This ensures Firestore listeners have the uid when they initialize
-
+          // Set currentUid IMMEDIATELY before any async operations
           setCurrentUid(user.uid);
-
-          // Also set workspaceId immediately
           if (profile.workspaceId) {
-
             setWorkspaceId(profile.workspaceId);
           }
           
-          // Only call handleLogin if it hasn't been handled by LoginPage
-          // loginHandledRef is set to true after LoginPage completes login
-          // On reload, loginHandledRef is false, so handleLogin will be called
-          // CRITICAL: Also check loginInProgressRef to prevent race condition during login
-          // ALSO: Don't call handleLogin if plan selection is currently active
-          if (!loginHandledRef.current && !loginInProgressRef.current && !isPlanSelectionActive) {
-
-            // Don't set authLoading to false yet - let handleLogin do it after setting auth state
-            handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false);
+          // Check if we should proceed with auto-login
+          const currentTime = Date.now();
+          const recentLogin = lastLoginAttemptRef.current && (currentTime - lastLoginAttemptRef.current) < 2000;
+          
+          if (!recentLogin && !isPlanSelectionActive) {
+            console.log('[App.jsx onAuthStateChanged] Proceeding with auto-login');
+            authStateRef.current = 'authenticating';
+            handleLogin(userRole, profile.memberId, profile.email, profile.workspaceId || null, completedSetup, false, 'auto-login');
           } else {
-            // LoginPage already handled login OR login is in progress OR plan selection is active
-
-            if (loginInProgressRef.current) {
-
-            }
-            if (isPlanSelectionActive) {
-            }
-            // Ensure workspace is set even if we skip handleLogin
+            console.log('[App.jsx onAuthStateChanged] Skipping auto-login - LoginPage already handled it');
+            console.log('[App.jsx onAuthStateChanged] recentLogin:', recentLogin, 'isPlanSelectionActive:', isPlanSelectionActive);
+            
+            // LoginPage already called handleLogin, so we just need to ensure state is correct
+            // Don't call handleLogin again to avoid duplicate execution
             if (profile.workspaceId) setWorkspaceId(profile.workspaceId);
-            // Only set authLoading to false if we're NOT going to call handleLogin
-            setAuthLoading(false);
+            
+            // Important: Set authState to authenticated so the render logic knows we're logged in
+            authStateRef.current = 'authenticated';
+            
+            // Don't set authLoading to false here - let handleLogin do it
+            // because handleLogin might still be executing
+            console.log('[App.jsx onAuthStateChanged] State set to authenticated, waiting for handleLogin to complete');
           }
         }
       } else {
@@ -633,9 +763,9 @@ function AppShell() {
     const updateActivity = () => {
       // Double-check currentUid is still valid before writing
       if (!currentUid) return;
-      const now = Date.now();
-      if (now - lastWrite < ACTIVITY_THROTTLE) return;
-      lastWrite = now;
+      const activityTime = Date.now();
+      if (activityTime - lastWrite < ACTIVITY_THROTTLE) return;
+      lastWrite = activityTime;
       updateDoc(doc(db, 'users', currentUid), {
         lastActivityTime: serverTimestamp(),
       }).catch(() => {}); // Silently fail if Firestore is in invalid state
@@ -645,18 +775,37 @@ function AppShell() {
     return () => events.forEach(e => window.removeEventListener(e, updateActivity));
   }, [currentUid]);
 
-  const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false) => {
-    const callStack = new Error().stack;
+  const handleLogin = async (role, memberId, email, workspaceIdParam = null, completedSetup = null, isNewSignup = false, source = 'unknown') => {
+    const logMsg = `[handleLogin] role=${role} source=${source} authState=${authStateRef.current} loginInProgress=${loginInProgressRef.current}`;
+    if (window.kiroLog) window.kiroLog(logMsg);
+    console.log('[App.jsx handleLogin] Called with role:', role, 'source:', source, 'authState:', authStateRef.current);
 
-    // Prevent duplicate calls - if login is already in progress, ignore
+    // STATE MACHINE: Prevent duplicate calls ONLY if loginInProgressRef is true
     if (loginInProgressRef.current) {
-      console.warn('[App.jsx handleLogin] Login already in progress - ignoring');
+      console.warn('[App.jsx handleLogin] Login already in progress - ignoring duplicate call from', source);
       return;
     }
     
-    // Mark that login is in progress IMMEDIATELY to prevent race conditions
+    // Check if handleLogin was called very recently (within 500ms) - prevents rapid duplicates
+    // BUT: Only block if this is an auto-login call and LoginPage already called handleLogin
+    const loginTimestamp = Date.now();
+    if (source === 'auto-login' && lastLoginAttemptRef.current > 0 && (loginTimestamp - lastLoginAttemptRef.current) < 2000) {
+      console.warn('[App.jsx handleLogin] LoginPage already handled login - ignoring auto-login duplicate');
+      return;
+    }
+    lastLoginAttemptRef.current = loginTimestamp;
+    
+    // STATE MACHINE: Ensure we're in authenticating state
+    if (authStateRef.current !== 'authenticating') {
+      authStateRef.current = 'authenticating';
+    }
     loginInProgressRef.current = true;
+    setLoginInProgress(true);
     loginHandledRef.current = true;
+    
+    const flagsMsg = `[handleLogin] State confirmed as 'authenticating', loginInProgress=true, source=${source}`;
+    if (window.kiroLog) window.kiroLog(flagsMsg);
+    console.log('[App.jsx handleLogin] State:', authStateRef.current, 'proceeding with login from', source);
     
     // Set authLoading to true during login to prevent flicker
     setAuthLoading(true);
@@ -667,6 +816,9 @@ function AppShell() {
     // Clear session expired state
     expiredLogoutRef.current = false;
     setSessionExpired(false);
+    
+    // Clear any auth state change flags to prevent onAuthStateChanged from interfering
+    setNeedsPlanCheck(false);
     
     // Set currentUid immediately at the start of handleLogin
     const { getAuth } = await import('firebase/auth');
@@ -764,17 +916,18 @@ function AppShell() {
     setInitialLoading(true);
     setVisitedPages(new Set());
     setAuth({ role, memberId });
+    setDashVisible(true); // Set dashVisible IMMEDIATELY, not in setTimeout
     
-    // Set authLoading to false AFTER setting auth to prevent login page flash
-    setAuthLoading(false);
+    // CRITICAL: Keep authStateRef as 'authenticating' during the entire process
+    // This prevents onAuthStateChanged from interfering while handleLogin is executing
+    // We'll transition to 'authenticated' in the setTimeout after all states are ready
+    
+    // CRITICAL: Do NOT set authLoading to false yet - keep it true until we're ready to show dashboard
+    // This prevents the login page from flashing if a re-render happens before auth is set
+    // We'll set it to false in the setTimeout after all other states are set
     
     // Use setTimeout with 0 to batch the next state updates
     setTimeout(() => {
-      setDashVisible(true);
-      
-      // Mark login as complete
-      loginInProgressRef.current = false;
-      
       if (role === 'admin') {
         // Note: LoginPage already validates that admin has selected a plan
         // No need to check again here - trust LoginPage's validation
@@ -841,27 +994,72 @@ function AppShell() {
         setVisitedPages(new Set(['dashboard']));
       }
       
-      // Login process complete
+      // CRITICAL: Transition to 'authenticated' state BEFORE clearing authLoading
+      // This ensures render logic knows authentication is complete
+      authStateRef.current = 'authenticated';
+      console.log('[App.jsx handleLogin] State transition to authenticated');
+      
+      // NOW set authLoading to false - after all auth state is set and ready
+      setAuthLoading(false);
+      console.log('[App.jsx handleLogin] Set authLoading=false, authentication complete');
+      
+      // Clear login progress flags
       loginInProgressRef.current = false;
+      setLoginInProgress(false);
+      
+      // Clear loginHandledRef after a delay to allow subsequent page reloads to auto-login
+      setTimeout(() => {
+        loginHandledRef.current = false;
+        console.log('[App.jsx handleLogin] Cleared loginHandledRef for future auto-login');
+      }, 2000);
     }, 50);
   };
 
   const handleLogout = async (expired = false) => {
-    expiredLogoutRef.current = false; // manual logout — never expired
+    console.log('[App.jsx handleLogout] Logout initiated, expired:', expired);
+    
+    // STATE MACHINE: Transition to logging_out state
+    authStateRef.current = 'logging_out';
+    expiredLogoutRef.current = false;
     setSessionExpired(false);
     logoutInProgressRef.current = true;
-    loginInProgressRef.current = false; // Reset login progress flag
-    loginHandledRef.current = false; // Reset login handled flag
-    setIsPlanSelectionActive(false); // Clear plan selection flag
+    loginInProgressRef.current = false;
+    setLoginInProgress(false);
+    loginHandledRef.current = false;
+    lastLoginAttemptRef.current = 0; // Reset timestamp to allow immediate re-login
+    setIsPlanSelectionActive(false);
+    console.log('[App.jsx handleLogout] State transition to logging_out, refs reset');
     
-    // CRITICAL: Clear currentUid FIRST to trigger listener cleanup in AppContext
+    // CRITICAL: Set authLoading to true FIRST to show loading skeleton
+    setAuthLoading(true);
+    console.log('[App.jsx handleLogout] Set authLoading=true, showing loading skeleton');
+    
+    // Wait for React to re-render with skeleton before clearing auth
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // CRITICAL: Clear auth and user data AFTER skeleton is showing
     const uidToClean = currentUid;
+    setAuth(null);
     setCurrentUid(null);
     setWorkspaceId(null);
     setCurrentUser(null);
+    console.log('[App.jsx handleLogout] Auth and user data cleared');
     
-    // CRITICAL: Set auth to null immediately to prevent role access errors
-    setAuth(null);
+    // Reset UI state immediately to prevent WorkspaceSetup/Dashboard from showing
+    setDashVisible(false);
+    setShowWorkspaceSetup(false);
+    setInitialLoading(false);
+    setVisitedPages(new Set());
+    setActiveItem('dashboard');
+    setWorkspace(null);
+    setShowMgmtPwdPrompt(false);
+    setShowDonutWelcome(false);
+    setNeedsPlanCheck(false);
+    console.log('[App.jsx handleLogout] UI state reset complete');
+    
+    // Wait for React to process the state update and cleanup listeners
+    await new Promise(resolve => setTimeout(resolve, 200));
+    console.log('[App.jsx handleLogout] Waited for state cleanup');
     
     // Clear all localStorage cache related to app state
     try {
@@ -869,54 +1067,46 @@ function AppShell() {
       localStorage.removeItem('userEmail');
       localStorage.removeItem('workspaceId');
       // Don't clear teamMemberFormCache - that's for form persistence
+      console.log('[App.jsx handleLogout] localStorage cleared');
     } catch (err) {
       console.error('[handleLogout] Error clearing localStorage:', err);
     }
     
-    // Wait for React to process the state update and cleanup listeners
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
     // Clear session fields in Firestore before signing out
     if (uidToClean) {
       try { 
-
+        console.log('[App.jsx handleLogout] Clearing session for uid:', uidToClean);
         await clearSession(uidToClean); 
+        console.log('[App.jsx handleLogout] Session cleared in Firestore');
       } catch (err) {
-
+        console.error('[App.jsx handleLogout] Error clearing session:', err);
       }
     }
     
     // Sign out from Firebase
     try { 
-
+      console.log('[App.jsx handleLogout] Signing out from Firebase');
       await signOutUser(); 
+      console.log('[App.jsx handleLogout] Successfully signed out from Firebase');
     } catch (err) { 
-
+      console.error('[App.jsx handleLogout] Error signing out:', err);
     }
     
     // Wait a bit for Firebase to propagate the logout
     await new Promise(resolve => setTimeout(resolve, 150));
+    console.log('[App.jsx handleLogout] Waited for Firebase logout propagation');
     
-    // Reset remaining application state
-    setDashVisible(false);
-    setInitialLoading(false);
-    setVisitedPages(new Set());
-    setActiveItem('dashboard');
-    setShowWorkspaceSetup(false);
-    setWorkspace(null);
-    setShowMgmtPwdPrompt(false);
-    setShowDonutWelcome(false);
-    setNeedsPlanCheck(false);
-    
-    // IMPORTANT: Set logoutInProgressRef to false BEFORE setting authLoading to false
-    // This allows onAuthChanged to process the logout properly
+    // STATE MACHINE: Transition to idle state BEFORE showing login page
+    authStateRef.current = 'idle';
     logoutInProgressRef.current = false;
+    console.log('[App.jsx handleLogout] State transition to idle');
     
-    // Wait a tiny bit for the flag to propagate
+    // Wait for state to propagate
     await new Promise(resolve => setTimeout(resolve, 50));
     
-    // Set authLoading to false after all cleanup to show login page
+    // Finally, show login page
     setAuthLoading(false);
+    console.log('[App.jsx handleLogout] Logout complete - showing login page');
   };
 
   const handleNav = (item, extraProps = {}) => {
@@ -1011,7 +1201,8 @@ function AppShell() {
   };
 
   // ── Auth loading (waiting for onAuthStateChanged on mount) ──
-  if (authLoading) {
+  // Show loading skeleton if we're waiting for initial auth state
+  if (authLoading && !auth) {
     return (
       <>
         <SkeletonStyles />
@@ -1040,10 +1231,42 @@ function AppShell() {
   }
 
   // ── Not logged in ──
-  if (!auth) {
+  // Check auth state machine to determine what to show
+  // CRITICAL: Show login page ONLY when:
+  // 1. No auth object exists
+  // 2. Auth state is idle (not in any transition)
+  // 3. Not currently showing loading
+  // 4. Not in the middle of a login attempt
+  const shouldShowLoginPage = !auth && authStateRef.current === 'idle' && !authLoading && !loginInProgress;
+  
+  // Show loading skeleton if:
+  // - We're in a transitional auth state (checking/authenticating/logging_out)
+  // - OR loginInProgress is true
+  // - BUT NOT if auth is already set (authenticated users shouldn't see skeleton)
+  const shouldShowLoadingSkeleton = !auth && (authStateRef.current === 'checking' || authStateRef.current === 'authenticating' || authStateRef.current === 'logging_out' || loginInProgress);
+  
+  if (shouldShowLoadingSkeleton) {
+    console.log('[App.jsx Render] Showing loading skeleton - authState:', authStateRef.current, 'loginInProgress:', loginInProgress);
+    return (
+      <>
+        <SkeletonStyles />
+        <AppShellSkeleton />
+      </>
+    );
+  }
+  
+  if (shouldShowLoginPage) {
+    console.log('[App.jsx Render] Showing login page - authState:', authStateRef.current);
     return (
       <LoginPage onLogin={handleLogin} sessionExpired={sessionExpired} onClearExpired={() => setSessionExpired(false)} checkPlanOnMount={needsPlanCheck} />
     );
+  }
+  
+  // If we have auth but authLoading is still true, clear it
+  // This is a safety check to prevent getting stuck in loading state
+  if (auth && authLoading && authStateRef.current === 'authenticated') {
+    console.log('[App.jsx Render] Auth exists but authLoading is true - clearing it');
+    setTimeout(() => setAuthLoading(false), 0);
   }
 
   // ── Member role ──

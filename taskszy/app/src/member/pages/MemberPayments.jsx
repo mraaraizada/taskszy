@@ -487,13 +487,17 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
           )}
         </div>
 
+        {/* Table content wrapper with horizontal scroll */}
+        <div style={{ overflowX: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+
         {/* Column headers */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '520px 1.5fr 180px 120px 110px 150px',
+          display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 1fr 0.9fr 1.2fr',
           padding: '10px 20px',
           borderBottom: '1.5px solid #F0F2F8',
           background: '#FAFBFF',
           flexShrink: 0,
+          minWidth: '800px',
         }}>
           {['Task', 'Description', 'Stage', 'Due Date', 'Amount', 'Paid On'].map((h, i) => (
             <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: i === 1 ? 'left' : (i === 4 || i === 5) ? 'right' : 'left', paddingLeft: i === 2 ? 16 : 0 }}>{h}</div>
@@ -544,10 +548,11 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
 
               return (
                 <div key={uniqueKey} style={{
-                  display: 'grid', gridTemplateColumns: '520px 1.5fr 180px 120px 110px 150px',
+                  display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 1fr 0.9fr 1.2fr',
                   alignItems: 'center',
                   padding: '14px 20px',
                   borderBottom: isLast ? 'none' : '1px solid #F4F5F8',
+                  minWidth: '800px',
                   background: isPaid ? '#FAFFFE' : '#FFFCFA',
                   transition: 'background 0.12s',
                   cursor: 'pointer',
@@ -674,6 +679,10 @@ export default function MemberPayments({ member, setPageFilteredData = null, fil
             })}
           </div>
         )}
+
+        </div>
+        {/* End of scroll wrapper */}
+
       </div>
 
       {selectedTask && (

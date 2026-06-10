@@ -122,7 +122,8 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
       const lightB = Math.round(b + (255 - b) * 0.85);
       const lightBg = '#' + [lightR, lightG, lightB].map(x => x.toString(16).padStart(2, '0')).join('');
       
-      onAdd({ name: name.trim(), image: imagePreview || '??', color, bg: lightBg, type });
+      // Image is optional - use empty string if no image provided
+      onAdd({ name: name.trim(), image: imagePreview || '', color, bg: lightBg, type });
       setName('');
       setImage(null);
       setImagePreview('');
@@ -130,7 +131,8 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
     });
   };
 
-  const canAdd = name.trim() && imagePreview;
+  // Only require name - image is now optional
+  const canAdd = name.trim();
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
@@ -168,7 +170,7 @@ function TextImageAdd({ onAdd, onCancel, managementMode = false }) {
         value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && canAdd && handleAdd()}
-        placeholder="Text"
+        placeholder="Text (image optional)"
         maxLength={20}
         style={{ width: 180, padding: '7px 10px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', background: 'var(--input-bg)', outline: 'none', fontFamily: 'inherit' }}
         onFocus={e => e.target.style.borderColor = '#3B5BFC'}
@@ -1016,13 +1018,15 @@ function TagsAndCategoriesTab({ managementMode = false }) {
               >
               {editTagId === tag.id ? (
                 <>
-                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {tag.image?.startsWith('data:image') ? (
-                      <img src={tag.image} alt={tag.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                    ) : (
-                      <span style={{ fontSize: 14 }}>{tag.image}</span>
-                    )}
-                  </div>
+                  {tag.image && (
+                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {tag.image.startsWith('data:image') ? (
+                        <img src={tag.image} alt={tag.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 14 }}>{tag.image}</span>
+                      )}
+                    </div>
+                  )}
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
@@ -1039,13 +1043,15 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                 </>
               ) : (
                 <>
-                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {tag.image?.startsWith('data:image') ? (
-                      <img src={tag.image} alt={tag.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                    ) : (
-                      <span style={{ fontSize: 14 }}>{tag.image}</span>
-                    )}
-                  </div>
+                  {tag.image && (
+                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {tag.image.startsWith('data:image') ? (
+                        <img src={tag.image} alt={tag.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 14 }}>{tag.image}</span>
+                      )}
+                    </div>
+                  )}
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tag.name}</span>
                   {selectedTagId === tag.id && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
@@ -1131,13 +1137,15 @@ function TagsAndCategoriesTab({ managementMode = false }) {
               >
               {editCatId === cat.id ? (
                 <>
-                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {cat.icon?.startsWith('data:image') ? (
-                      <img src={cat.icon} alt={cat.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                    ) : (
-                      <span style={{ fontSize: 14 }}>{cat.icon}</span>
-                    )}
-                  </div>
+                  {cat.icon && (
+                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {cat.icon.startsWith('data:image') ? (
+                        <img src={cat.icon} alt={cat.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                      )}
+                    </div>
+                  )}
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
@@ -1154,13 +1162,15 @@ function TagsAndCategoriesTab({ managementMode = false }) {
                 </>
               ) : (
                 <>
-                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {cat.icon?.startsWith('data:image') ? (
-                      <img src={cat.icon} alt={cat.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                    ) : (
-                      <span style={{ fontSize: 14 }}>{cat.icon}</span>
-                    )}
-                  </div>
+                  {cat.icon && (
+                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {cat.icon.startsWith('data:image') ? (
+                        <img src={cat.icon} alt={cat.name} style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                      )}
+                    </div>
+                  )}
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{cat.name}</span>
                   {selectedCatId === cat.id && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>

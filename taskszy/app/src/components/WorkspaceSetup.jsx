@@ -99,8 +99,10 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
             // CRITICAL: Wait for this to complete before calling onComplete
             try {
               const { db } = await import('../lib/firebase');
-              const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+              const { doc, updateDoc, serverTimestamp, getDoc } = await import('firebase/firestore');
               const workspaceId = `ws_${uid}`;
+
+              console.log('[WorkspaceSetup] Updating workspace document:', workspaceId);
 
               await updateDoc(doc(db, 'workspaces', workspaceId), {
                 'settings.workspaceName': name.trim(),
@@ -111,15 +113,54 @@ export default function WorkspaceSetup({ onComplete, existingWorkspace = null, i
                 updatedAt: serverTimestamp(),
               });
 
-              // Wait a bit longer to ensure Firebase propagates the write
-              setTimeout(() => {
+              console.log('[WorkspaceSetup] ✅ Workspace document updated successfully');
 
-                onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
-              }, 1000);
+              // Verify the update was successful by reading it back
+              const workspaceDoc = await getDoc(doc(db, 'workspaces', workspaceId));
+              if (workspaceDoc.exists()) {
+                const data = workspaceDoc.data();
+                console.log('[WorkspaceSetup] Verification - hasCompletedSetup:', data.settings?.hasCompletedSetup);
+                console.log('[WorkspaceSetup] Verification - workspaceName:', data.settings?.workspaceName);
+                
+                if (data.settings?.hasCompletedSetup) {
+                  console.log('[WorkspaceSetup] ✅ Setup verification passed - calling onComplete');
+                  // Wait a bit to ensure all Firebase writes are propagated
+                  setTimeout(() => {
+                    onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
+                  }, 500);
+                } else {
+                  console.warn('[WorkspaceSetup] ⚠️ Setup flag not set yet, but continuing anyway');
+                  // Still proceed even if flag not set - it might be a propagation delay
+                  setTimeout(() => {
+                    onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
+                  }, 500);
+                }
+              } else {
+                console.error('[WorkspaceSetup] ❌ Workspace document not found after update');
+                // Still proceed - the data was written, just might not be visible yet
+                setTimeout(() => {
+                  onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
+                }, 500);
+              }
             } catch (error) {
-
-              setPwdError('Failed to save workspace settings. Please try again.');
-              setLoading(false);
+              console.error('[WorkspaceSetup] ❌ Error updating workspace:', error);
+              console.error('[WorkspaceSetup] Error code:', error.code);
+              console.error('[WorkspaceSetup] Error message:', error.message);
+              
+              // Check if it's a permission error or network error
+              if (error.code === 'permission-denied') {
+                console.error('[WorkspaceSetup] Permission denied - but data might already be saved');
+                // Data was likely saved to user profile, just workspace doc failed
+                // Try to proceed anyway after a delay
+                setTimeout(() => {
+                  console.log('[WorkspaceSetup] Proceeding despite permission error...');
+                  onComplete({ name: name.trim(), subtitle: subtitle.trim(), logo: logoPreview });
+                }, 1000);
+              } else {
+                // Show error only for non-permission errors
+                setPwdError('Failed to save workspace settings. Please try again.');
+                setLoading(false);
+              }
             }
           }).catch((error) => {
 

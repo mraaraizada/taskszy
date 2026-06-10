@@ -3746,8 +3746,8 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                         <select 
                           value={memberStage[key] !== undefined ? memberStage[key] : (m.stage || 'New')} 
                           onChange={(e) => setMemberStage(prev => ({ ...prev, [key]: e.target.value }))}
-                          disabled={m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold}
-                          style={{ flex: 1, height: 32, borderRadius: 8, border: `1.5px solid ${(m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : isComplete ? '#12C479' : (memberStage[key] && memberStage[key] !== m.stage) ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 11, fontWeight: 600, color: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : isComplete ? '#12C479' : 'var(--text-primary)', background: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#FFF7ED' : isComplete ? '#ECFDF5' : 'var(--bg-surface)', cursor: (m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold) ? 'not-allowed' : 'pointer', outline: 'none' }}>
+                          disabled={m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold || m.stage === 'Complete'}
+                          style={{ flex: 1, height: 32, borderRadius: 8, border: `1.5px solid ${(m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : (isComplete || m.stage === 'Complete') ? '#12C479' : (memberStage[key] && memberStage[key] !== m.stage) ? '#3B5BFC' : 'var(--border)'}`, padding: '0 10px', fontSize: 11, fontWeight: 600, color: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#F97316' : (isComplete || m.stage === 'Complete') ? '#12C479' : 'var(--text-primary)', background: (m.isOnHold || t.paused || t.isPaused || isCurrentUserOnHold) ? '#FFF7ED' : (isComplete || m.stage === 'Complete') ? '#ECFDF5' : 'var(--bg-surface)', cursor: (m.isOnHold || isComplete || t.paused || t.isPaused || isCurrentUserOnHold || m.stage === 'Complete') ? 'not-allowed' : 'pointer', outline: 'none' }}>
                           {STAGES.map((s) => {
                             // Clean the stage value to ensure no duplicates
                             const cleanCurrentStage = (m.stage || 'New').trim();
@@ -3755,13 +3755,13 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
                             return <option key={s} value={s}>{s}{isCurrent ? ' (Current)' : ''}</option>;
                           })}
                         </select>
-                        {!m.isOnHold && !isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
+                        {!m.isOnHold && !isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && m.stage !== 'Complete' && (
                           <button disabled={!memberStage[key] || memberStage[key] === m.stage || isUpdatingThis} onClick={() => handleMemberStageUpdate(m.id)}
                             style={{ height: 32, padding: '0 14px', borderRadius: 8, border: 'none', background: (memberStage[key] && memberStage[key] !== m.stage) ? 'linear-gradient(135deg, #3B5BFC, #2142D9)' : 'var(--border)', color: (memberStage[key] && memberStage[key] !== m.stage) ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: (memberStage[key] && memberStage[key] !== m.stage) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, transition: 'all 0.15s' }}>
                             {isUpdatingThis ? <><RefreshCw size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> Saving</> : 'Apply'}
                           </button>
                         )}
-                        {!isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && (
+                        {!isComplete && !t.paused && !t.isPaused && !isCurrentUserOnHold && m.stage !== 'Complete' && (
                           <button 
                             onClick={() => handleMemberHoldToggle(m.id, m.isOnHold)}
                             style={{ 

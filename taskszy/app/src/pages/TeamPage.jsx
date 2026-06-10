@@ -203,14 +203,66 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
         newMember.uid = uid;
         
         // Use actual current user info for addedBy field
+        // Debug: Log currentUser to see what data we have
+        console.log('[TeamPage] currentUser for addedByInfo:', {
+          name: currentUser?.name,
+          role: currentUser?.role,
+          userRole: currentUser?.userRole,
+          email: currentUser?.email
+        });
+        
         const addedByInfo = currentUser ? {
           uid: currentUser.uid || null, // Add uid for profile enrichment
           name: currentUser.name && currentUser.name !== 'User' ? currentUser.name : (currentUser.email || 'Admin'),
           avatar: currentUser.avatar || 'A',
           avatarImg: currentUser.avatarImg || null, // Add profile picture
           color: currentUser.color || '#3B5BFC',
-          role: currentUser.role && currentUser.role !== 'Member' ? currentUser.role : 'Administrator' // Use display role name, not userRole
+          // Properly handle role display - show actual role from currentUser
+          role: (() => {
+            console.log('[TeamPage] Determining role display...');
+            console.log('[TeamPage] currentUser.userRole:', currentUser.userRole);
+            console.log('[TeamPage] currentUser.role:', currentUser.role);
+            
+            // Check userRole first (from authentication)
+            if (currentUser.userRole === 'admin') {
+              console.log('[TeamPage] Using Administrator (from userRole)');
+              return 'Administrator';
+            }
+            if (currentUser.userRole === 'management') {
+              console.log('[TeamPage] Using Management (from userRole)');
+              return 'Management';
+            }
+            
+            // Then check role field (from team data)
+            const roleStr = String(currentUser.role || '').toLowerCase();
+            console.log('[TeamPage] Checking role field:', roleStr);
+            
+            if (roleStr.includes('admin')) {
+              console.log('[TeamPage] Using Administrator (from role field)');
+              return 'Administrator';
+            }
+            if (roleStr.includes('management') || roleStr.includes('manager')) {
+              console.log('[TeamPage] Using Management (from role field)');
+              return 'Management';
+            }
+            if (roleStr === 'member') {
+              console.log('[TeamPage] Using Member (from role field)');
+              return 'Member';
+            }
+            
+            // If role exists and is not Member, use it as-is
+            if (currentUser.role && currentUser.role !== 'Member') {
+              console.log('[TeamPage] Using role as-is:', currentUser.role);
+              return currentUser.role;
+            }
+            
+            // Default fallback
+            console.log('[TeamPage] Using Administrator (fallback)');
+            return 'Administrator';
+          })()
         } : { name: 'Admin', avatar: 'A', color: '#3B5BFC', role: 'Administrator' };
+        
+        console.log('[TeamPage] Final addedByInfo:', addedByInfo);
 
         onSave(newMember, addedByInfo);
         

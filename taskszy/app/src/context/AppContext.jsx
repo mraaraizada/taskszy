@@ -167,6 +167,7 @@ export function AppProvider({ children }) {
     }
 
     let isActive = true; // Flag to prevent actions after unmount
+    let isFirstSnapshot = true; // Flag to skip token check on initial snapshot
     
     const userRef = doc(db, 'users', currentUid);
     const unsubscribe = onSnapshot(userRef, async (snap) => {
@@ -174,22 +175,30 @@ export function AppProvider({ children }) {
       
       const profileData = snap.data();
 
-      // Check session token - logout if it doesn't match (another device logged in)
-      if (typeof window !== 'undefined' && profileData.sessionToken) {
-        const localToken = localStorage.getItem('sessionToken');
-        if (localToken && localToken !== profileData.sessionToken) {
+      // CRITICAL: Skip session token check on first snapshot to prevent logout during initial login
+      // The first snapshot fires immediately when user authenticates, before sessionToken is set in localStorage
+      // This was causing the "another device" redirect on first login attempt
+      if (!isFirstSnapshot) {
+        // Check session token - logout if it doesn't match (another device logged in)
+        if (typeof window !== 'undefined' && profileData.sessionToken) {
+          const localToken = localStorage.getItem('sessionToken');
+          if (localToken && localToken !== profileData.sessionToken) {
 
-          isActive = false; // Prevent further actions
-          
-          // Clear session token to prevent reload loop
-          localStorage.removeItem('sessionToken');
-          
-          // Sign out and reload
-          const { signOutUser } = await import('../lib/authService');
-          await signOutUser();
-          window.location.href = '/app/?reason=another-device';
-          return;
+            isActive = false; // Prevent further actions
+            
+            // Clear session token to prevent reload loop
+            localStorage.removeItem('sessionToken');
+            
+            // Sign out and reload
+            const { signOutUser } = await import('../lib/authService');
+            await signOutUser();
+            window.location.href = '/app/?reason=another-device';
+            return;
+          }
         }
+      } else {
+        // Mark first snapshot as processed
+        isFirstSnapshot = false;
       }
       
       // Check if user has been deactivated and needs to be logged out
@@ -231,6 +240,8 @@ export function AppProvider({ children }) {
               color: memberData.color || prev.color || '#3B5BFC',
               status: memberData.status || 'Active', // Add status from team data
               joined: memberData.joined || prev.joined, // Add joined date from team data
+              joinedDate: memberData.joinedDate || prev.joinedDate, // Add joinedDate timestamp for broadcast filtering
+              createdAt: memberData.createdAt || profileData.createdAt || prev.createdAt, // Add createdAt timestamp for broadcast filtering
               // ⭐ CRITICAL: Preserve userRole from previous state - it was set during login
               // userRole determines which dashboard to show and data access level
               userRole: prev.userRole,
@@ -357,6 +368,8 @@ export function AppProvider({ children }) {
         avatarImg: currentMember.avatarImg || prev.avatarImg || null,
         status: currentMember.status || 'Active', // Add status field from team data
         joined: currentMember.joined || prev.joined, // Add joined date from team data
+        joinedDate: currentMember.joinedDate || prev.joinedDate, // Add joinedDate timestamp for broadcast filtering
+        createdAt: currentMember.createdAt || prev.createdAt, // Add createdAt timestamp for broadcast filtering
         // ⭐ CRITICAL: Preserve userRole from previous state
         userRole: prev.userRole,
       }));
@@ -2335,12 +2348,29 @@ export function AppProvider({ children }) {
         return m;
       });
 
-      // Task's overall stage = the highest (most advanced) stage among members
+      // ⭐ CRITICAL FIX: Task's overall stage logic
+      // - Task is "Complete" ONLY when ALL members are at "Complete" stage
+      // - Otherwise, use the highest (most advanced) non-Complete stage among members
       const stageOrder = ['New', 'Start', 'Issue', 'Review A', 'Review B', 'Update', 'Complete'];
       const stages = updatedMembers.map(m => m.stage);
-      const stageIndexes = stages.map(s => stageOrder.indexOf(s));
-      const maxIdx = Math.max(...stageIndexes);
-      updatedTaskStage = stageOrder[maxIdx] || task.stage;
+      
+      // Check if ALL members are at Complete stage
+      const allMembersComplete = stages.every(s => s === 'Complete');
+      
+      if (allMembersComplete) {
+        updatedTaskStage = 'Complete';
+      } else {
+        // Find the highest non-Complete stage
+        const nonCompleteStages = stages.filter(s => s !== 'Complete');
+        if (nonCompleteStages.length > 0) {
+          const stageIndexes = nonCompleteStages.map(s => stageOrder.indexOf(s));
+          const maxIdx = Math.max(...stageIndexes);
+          updatedTaskStage = stageOrder[maxIdx] || task.stage;
+        } else {
+          // All members are Complete, set task to Complete
+          updatedTaskStage = 'Complete';
+        }
+      }
 
     } else {
       // Bulk update all members (skip members on hold)

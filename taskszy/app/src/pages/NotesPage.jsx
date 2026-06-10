@@ -33,16 +33,69 @@ function randomTagColor() {
 // -- Inline sheet viewer ------------------------------------------------------
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    // Force console logs to appear in production
+    if (typeof window !== 'undefined') {
+      window.console.log('[loadScript] Attempting to load script:', src);
+    }
+    
+    // Check if already loaded
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      window.console.log('[loadScript] Script already exists in DOM:', src);
+      window.console.log('[loadScript] Script loaded state:', existing.readyState || 'unknown');
+      resolve();
+      return;
+    }
+    
+    window.console.log('[loadScript] Creating new script element for:', src);
     const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
+    s.src = src;
+    
+    s.onload = () => {
+      window.console.log('[loadScript] ✅ Script loaded successfully:', src);
+      window.console.log('[loadScript] window.x_spreadsheet available:', !!window.x_spreadsheet);
+      resolve();
+    };
+    
+    s.onerror = (error) => {
+      window.console.error('[loadScript] ❌ Script load FAILED:', src);
+      window.console.error('[loadScript] Error event:', error);
+      window.console.error('[loadScript] Check if file exists at public folder');
+      window.console.error('[loadScript] Full URL attempted:', window.location.origin + src);
+      reject(error);
+    };
+    
+    window.console.log('[loadScript] Appending script to document head...');
     document.head.appendChild(s);
   });
 }
+
 function loadStyle(href) {
-  if (document.querySelector(`link[href="${href}"]`)) return;
+  window.console.log('[loadStyle] Attempting to load stylesheet:', href);
+  
+  const existing = document.querySelector(`link[href="${href}"]`);
+  if (existing) {
+    window.console.log('[loadStyle] Stylesheet already exists in DOM:', href);
+    return;
+  }
+  
+  window.console.log('[loadStyle] Creating new link element for:', href);
   const l = document.createElement('link');
-  l.rel = 'stylesheet'; l.href = href;
+  l.rel = 'stylesheet';
+  l.href = href;
+  
+  l.onload = () => {
+    window.console.log('[loadStyle] ✅ Stylesheet loaded successfully:', href);
+  };
+  
+  l.onerror = (error) => {
+    window.console.error('[loadStyle] ❌ Stylesheet load FAILED:', href);
+    window.console.error('[loadStyle] Error event:', error);
+    window.console.error('[loadStyle] Check if file exists at public folder');
+    window.console.error('[loadStyle] Full URL attempted:', window.location.origin + href);
+  };
+  
+  window.console.log('[loadStyle] Appending link to document head...');
   document.head.appendChild(l);
 }
 
@@ -53,54 +106,110 @@ function SheetViewer({ sheetItem, onAutoSave }) {
   const autoSaveTimerRef = useRef(null);
 
   useEffect(() => {
+    window.console.log('[SheetViewer] Starting to load xspreadsheet CSS and JS...');
+    window.console.log('[SheetViewer] Current location:', window.location.href);
+    window.console.log('[SheetViewer] Environment:', process.env.NODE_ENV);
+    window.console.log('[SheetViewer] Origin:', window.location.origin);
+    
     loadStyle('/xspreadsheet.css');
-    loadScript('/xspreadsheet.js').then(() => setReady(true));
+    loadScript('/xspreadsheet.js')
+      .then(() => {
+        window.console.log('[SheetViewer] xspreadsheet.js loaded successfully');
+        window.console.log('[SheetViewer] window.x_spreadsheet exists:', !!window.x_spreadsheet);
+        setReady(true);
+      })
+      .catch((error) => {
+        window.console.error('[SheetViewer] ERROR loading xspreadsheet.js:', error);
+        window.console.error('[SheetViewer] Script src attempted:', '/xspreadsheet.js');
+        window.console.error('[SheetViewer] Full URL would be:', window.location.origin + '/xspreadsheet.js');
+      });
   }, []);
 
   useEffect(() => {
-    if (!ready || !containerRef.current) return;
+    window.console.log('[SheetViewer] useEffect triggered - ready:', ready, 'containerRef:', !!containerRef.current);
+    
+    if (!ready || !containerRef.current) {
+      window.console.log('[SheetViewer] Not ready or no container. Skipping initialization.');
+      return;
+    }
+    
+    window.console.log('[SheetViewer] Clearing container and initializing spreadsheet...');
     containerRef.current.innerHTML = '';
     instanceRef.current = null;
+    
     const xs = window.x_spreadsheet;
-    if (!xs) return;
+    window.console.log('[SheetViewer] window.x_spreadsheet:', xs);
+    window.console.log('[SheetViewer] typeof x_spreadsheet:', typeof xs);
+    
+    if (!xs) {
+      window.console.error('[SheetViewer] ERROR: window.x_spreadsheet is not available!');
+      window.console.error('[SheetViewer] This means the script did not load properly.');
+      window.console.error('[SheetViewer] Check Network tab in DevTools for failed requests');
+      return;
+    }
+    
+    window.console.log('[SheetViewer] Initializing x_spreadsheet with config...');
     
     // Initialize spreadsheet
-    instanceRef.current = xs(containerRef.current, {
-      mode: 'edit', showToolbar: true, showGrid: true, showContextmenu: true,
-      view: {
-        height: () => containerRef.current?.clientHeight || 500,
-        width: () => containerRef.current?.clientWidth || 700,
-      },
-      row: { len: 100, height: 25 },
-      col: { len: 26, width: 100, indexWidth: 60, minWidth: 60 },
-      style: { bgcolor: '#ffffff', align: 'left', valign: 'middle', textwrap: false, strike: false, underline: false, color: '#0a0a0a', font: { name: 'Inter', size: 10, bold: false, italic: false } },
-    });
+    try {
+      instanceRef.current = xs(containerRef.current, {
+        mode: 'edit', showToolbar: true, showGrid: true, showContextmenu: true,
+        view: {
+          height: () => containerRef.current?.clientHeight || 500,
+          width: () => containerRef.current?.clientWidth || 700,
+        },
+        row: { len: 100, height: 25 },
+        col: { len: 26, width: 100, indexWidth: 60, minWidth: 60 },
+        style: { bgcolor: '#ffffff', align: 'left', valign: 'middle', textwrap: false, strike: false, underline: false, color: '#000000', font: { name: 'Arial', size: 13, bold: false, italic: false } },
+      });
+      
+      window.console.log('[SheetViewer] ✅ Spreadsheet instance created:', !!instanceRef.current);
+    } catch (error) {
+      window.console.error('[SheetViewer] ❌ ERROR creating spreadsheet instance:', error);
+      window.console.error('[SheetViewer] Error message:', error.message);
+      window.console.error('[SheetViewer] Error stack:', error.stack);
+      return;
+    }
     
     // Load existing sheet data if available
     // IMPORTANT: Only load the FIRST sheet to prevent multiple sheets/tabs
     if (sheetItem.sheetData) {
+      window.console.log('[SheetViewer] Loading existing sheet data...');
+      window.console.log('[SheetViewer] sheetData type:', Array.isArray(sheetItem.sheetData) ? 'array' : typeof sheetItem.sheetData);
+      window.console.log('[SheetViewer] sheetData length:', Array.isArray(sheetItem.sheetData) ? sheetItem.sheetData.length : 'N/A');
+      
       try {
         let dataToLoad = sheetItem.sheetData;
         
         // If data is an array of sheets, extract only the first sheet
         if (Array.isArray(sheetItem.sheetData)) {
           if (sheetItem.sheetData.length > 1) {
-
+            window.console.warn('[SheetViewer] Multiple sheets detected, loading only first sheet');
           }
           // Wrap first sheet in array to maintain x-spreadsheet format
           dataToLoad = sheetItem.sheetData.length > 0 ? [sheetItem.sheetData[0]] : sheetItem.sheetData;
         }
 
+        window.console.log('[SheetViewer] Calling loadData...');
         instanceRef.current.loadData(dataToLoad);
+        window.console.log('[SheetViewer] ✅ Sheet data loaded successfully');
       } catch (error) {
-
+        window.console.error('[SheetViewer] ❌ ERROR loading sheet data:', error);
+        window.console.error('[SheetViewer] Error message:', error.message);
+        window.console.error('[SheetViewer] Error stack:', error.stack);
       }
+    } else {
+      window.console.log('[SheetViewer] No existing sheet data to load');
     }
     
     // Set up autosave on change
     if (instanceRef.current && onAutoSave) {
+      window.console.log('[SheetViewer] Setting up autosave listener...');
+      
       // Listen for cell changes
       instanceRef.current.on('cell-edited', () => {
+        window.console.log('[SheetViewer] Cell edited - scheduling autosave...');
+        
         // Clear existing timer
         if (autoSaveTimerRef.current) {
           clearTimeout(autoSaveTimerRef.current);
@@ -108,35 +217,47 @@ function SheetViewer({ sheetItem, onAutoSave }) {
         
         // Set new timer to save after 2 seconds of inactivity
         autoSaveTimerRef.current = setTimeout(() => {
+          window.console.log('[SheetViewer] Autosave triggered - saving data...');
+          
           try {
             const data = instanceRef.current.getData();
+            window.console.log('[SheetViewer] Data retrieved for saving:', Array.isArray(data) ? `array with ${data.length} sheets` : typeof data);
             
             // IMPORTANT: Only save the FIRST sheet to prevent multiple sheets/tabs
             let dataToSave = data;
             if (Array.isArray(data)) {
               if (data.length > 1) {
-
+                window.console.warn('[SheetViewer] Multiple sheets in data, saving only first sheet');
               }
               // Always save only the first sheet wrapped in array
               dataToSave = data.length > 0 ? [data[0]] : data;
             }
 
+            window.console.log('[SheetViewer] Calling onAutoSave...');
             onAutoSave(dataToSave);
+            window.console.log('[SheetViewer] ✅ Autosave completed');
           } catch (error) {
-
+            window.console.error('[SheetViewer] ❌ ERROR during autosave:', error);
+            window.console.error('[SheetViewer] Error message:', error.message);
+            window.console.error('[SheetViewer] Error stack:', error.stack);
           }
         }, 2000);
       });
+      
+      window.console.log('[SheetViewer] ✅ Autosave listener set up successfully');
+    } else {
+      window.console.log('[SheetViewer] Skipping autosave setup - instance:', !!instanceRef.current, 'onAutoSave:', !!onAutoSave);
     }
     
     // Handle resize events to update spreadsheet dimensions
     const handleResize = () => {
       if (instanceRef.current && containerRef.current) {
         try {
+          window.console.log('[SheetViewer] Handling resize...');
           // Force spreadsheet to recalculate its size
           instanceRef.current.reRender();
         } catch (error) {
-
+          window.console.error('[SheetViewer] ERROR during resize:', error);
         }
       }
     };
@@ -147,6 +268,7 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     // Use ResizeObserver to detect container size changes
     let resizeObserver;
     if (containerRef.current && window.ResizeObserver) {
+      window.console.log('[SheetViewer] Setting up ResizeObserver...');
       resizeObserver = new ResizeObserver(() => {
         handleResize();
       });
@@ -154,9 +276,15 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     }
     
     // Trigger initial resize after a short delay
-    setTimeout(handleResize, 100);
+    setTimeout(() => {
+      window.console.log('[SheetViewer] Triggering initial resize...');
+      handleResize();
+    }, 100);
+    
+    window.console.log('[SheetViewer] ✅ Setup complete!');
     
     return () => {
+      window.console.log('[SheetViewer] Cleanup triggered');
       window.removeEventListener('resize', handleResize);
       if (resizeObserver) {
         resizeObserver.disconnect();

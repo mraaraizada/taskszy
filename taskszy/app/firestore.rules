@@ -80,11 +80,11 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/users/$(uid)).data.workspaceId == getUserData().workspaceId;
       
       // Users can create their own profile (CRITICAL: Allow first-time user creation)
-      // OR admins can create profiles for team members (only if admin profile exists)
+      // OR admins AND MANAGEMENT can create profiles for team members (only if admin/management profile exists)
       allow create: if (isSignedIn() && request.auth.uid == uid) 
                     || (isSignedIn() 
                         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                        && isAdmin());
+                        && isAdminOrManagement());
     }
     
     // ══════════════════════════════════════════════════════════════════════
@@ -106,10 +106,12 @@ service cloud.firestore {
                     && workspaceId == 'ws_' + request.auth.uid
                     && request.resource.data.ownerId == request.auth.uid;
       
-      // Workspace admin can update/delete workspace settings (only if their profile exists)
+      // Workspace admin AND MANAGEMENT can update/delete workspace settings (only if their profile exists)
+      // This allows both admin and management to complete workspace setup
       allow update, delete: if isSignedIn() 
                             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                            && isWorkspaceAdmin(workspaceId);
+                            && belongsToWorkspace(workspaceId)
+                            && isAdminOrManagement();
       
       // Super admins can update workspace settings (for admin dashboard management)
       allow update: if isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));

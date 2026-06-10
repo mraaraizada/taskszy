@@ -121,16 +121,30 @@ export function shouldMemberSeeBroadcast(broadcast, member) {
 
   // IMPORTANT: Check if broadcast was created AFTER user joined
   // Users should NOT see broadcasts from before they joined the workspace
-  if (member.joined && broadcast.time) {
+  if (member && broadcast.time) {
     try {
-      // Parse member's join date (format: "Jan 2026" or full date)
-      const joinedDate = new Date(member.joined);
-      const broadcastDate = broadcast.time instanceof Date ? broadcast.time : new Date(broadcast.time);
+      let joinedDate = null;
       
-      // If broadcast was created before user joined, don't show it
-      if (broadcastDate < joinedDate) {
+      // Try to get join date from different possible fields:
+      // 1. joinedDate or createdAt (Firestore Timestamp)
+      // 2. joined (string date like "Jan 2026")
+      if (member.joinedDate) {
+        joinedDate = member.joinedDate instanceof Date ? member.joinedDate : member.joinedDate.toDate();
+      } else if (member.createdAt) {
+        joinedDate = member.createdAt instanceof Date ? member.createdAt : member.createdAt.toDate();
+      } else if (member.joined) {
+        // Parse string date (format: "Jan 2026" or full date)
+        joinedDate = new Date(member.joined);
+      }
+      
+      if (joinedDate && !isNaN(joinedDate.getTime())) {
+        const broadcastDate = broadcast.time instanceof Date ? broadcast.time : new Date(broadcast.time);
+        
+        // If broadcast was created before user joined, don't show it
+        if (broadcastDate < joinedDate) {
 
-        return false;
+          return false;
+        }
       }
     } catch (error) {
 

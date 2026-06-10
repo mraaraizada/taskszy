@@ -3409,9 +3409,12 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           </div>
         </div>
 
+        {/* Table content wrapper with horizontal scroll */}
+        <div style={{ overflowX: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+
         {/* Column headers */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '50px 560px 1.5fr 160px 130px 130px 120px 90px 90px 110px',
+          display: 'grid', gridTemplateColumns: '50px 2fr 1.5fr 1.2fr 1fr 1fr 1fr 0.8fr 0.8fr 1fr',
           padding: '10px 20px',
           borderBottom: '1.5px solid var(--border-light)',
           background: 'var(--bg-subtle)',
@@ -3419,6 +3422,7 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
           position: 'sticky',
           top: 0,
           zIndex: 10,
+          minWidth: '1000px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <input 
@@ -3469,9 +3473,10 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                   data-task-id={row.id}
                   onClick={() => !row.isPaid && toggleRow(row)}
                   style={{
-                    display: 'grid', gridTemplateColumns: '50px 560px 1.5fr 160px 130px 130px 120px 90px 90px 110px',
+                    display: 'grid', gridTemplateColumns: '50px 2fr 1.5fr 1.2fr 1fr 1fr 1fr 0.8fr 0.8fr 1fr',
                     alignItems: 'center',
                     padding: '14px 20px',
+                    minWidth: '1000px',
                     minHeight: '60px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                     background: isSelected ? '#EEF2FF' : row.isPaid ? 'var(--bg-surface)' : 'var(--bg-surface)',
@@ -3937,6 +3942,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
             })}
           </div>
         )}
+        </div>
+        {/* End table content wrapper with horizontal scroll */}
+
       </div>
 
       {showPaymentModal && (

@@ -1021,7 +1021,7 @@ export default function Dashboard({ hideBudget = false, member = null, onCreateT
   // OPTIMIZATION: Memoize visible broadcasts to prevent excessive filtering on every render
   const visibleBroadcasts = useMemo(() => {
     return getVisibleBroadcasts(broadcasts, currentUser);
-  }, [broadcasts, currentUser.role, currentUser.userRole, currentUser.uid]);
+  }, [broadcasts, currentUser.role, currentUser.userRole, currentUser.uid, currentUser.joinedDate, currentUser.createdAt]);
 
   // Determine if this is a shared calendar based on the dashboard type
   // Admin Dashboard (member = null) → shared calendar for ALL users

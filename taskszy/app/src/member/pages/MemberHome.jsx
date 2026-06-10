@@ -655,7 +655,7 @@ export default function MemberHome({ member, onNavigateToNotes = null, openTaskI
 
   const visibleBroadcasts = useMemo(() => {
     return getVisibleBroadcasts(broadcasts, member);
-  }, [broadcasts, member.role, member.userRole, member.uid]);
+  }, [broadcasts, member.role, member.userRole, member.uid, member.joinedDate, member.createdAt]);
 
   // React to refresh trigger - this will cause component to re-render with fresh data
   useEffect(() => {

@@ -167,18 +167,40 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
     const listenerId = workspaceId || 'ALL';
     
     // Get user's join date to filter out old broadcasts
-    const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
+    // Try multiple sources: createdAt, joinedDate, or joined timestamp
+    let userCreatedAt = null;
+    
+    if (currentUser?.createdAt) {
+      if (currentUser.createdAt.toDate) {
+        userCreatedAt = currentUser.createdAt.toDate();
+      } else if (currentUser.createdAt instanceof Date) {
+        userCreatedAt = currentUser.createdAt;
+      } else if (typeof currentUser.createdAt === 'number') {
+        userCreatedAt = new Date(currentUser.createdAt);
+      }
+    } else if (currentUser?.joinedDate) {
+      if (currentUser.joinedDate.toDate) {
+        userCreatedAt = currentUser.joinedDate.toDate();
+      } else if (currentUser.joinedDate instanceof Date) {
+        userCreatedAt = currentUser.joinedDate;
+      }
+    }
+    
+    console.log('[ManagementApp] Feedback listener - userCreatedAt:', userCreatedAt);
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-
+      console.log('[ManagementApp] Feedback request received:', request ? 'YES' : 'NO');
+      if (request) {
+        console.log('[ManagementApp] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
+      }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-
+      console.log('[ManagementApp] Feedback listener cleanup');
       unsubscribe();
     };
-  }, [workspaceId, currentUid, currentUser]);
+  }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);
 
   // Track page navigation
   useEffect(() => {
@@ -452,7 +474,7 @@ export default function ManagementApp({ memberId, onLogout, visible, triggerWelc
         setSelectedScribeId(scribeId); 
         handleNav('notes'); 
       }} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
-      case 'team':     return <TeamPage managementMode={true} setPageFilteredData={setPageFilteredData} filterToMemberId={pageExtraProps.filterToMemberId} />;
+      case 'team':     return <TeamPage managementMode={true} currentUser={currentUser} setPageFilteredData={setPageFilteredData} filterToMemberId={pageExtraProps.filterToMemberId} />;
       case 'manage':   return <RolesPage managementMode={true} />;
       case 'payments': return <MemberPayments member={displayMember} setPageFilteredData={setPageFilteredData} filterToTaskId={pageExtraProps.filterToTaskId} />;
       case 'workdesc': return <MemberWorkDesc member={displayMember} />;

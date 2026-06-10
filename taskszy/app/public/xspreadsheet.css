@@ -295,7 +295,7 @@ body {
 }
 .x-spreadsheet-editor .x-spreadsheet-editor-area .textline {
   overflow: hidden;
-  visibility: hidden;
+  visibility: visible;
   position: fixed;
   top: 0;
   left: 0;

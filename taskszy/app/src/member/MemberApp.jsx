@@ -152,18 +152,40 @@ export default function MemberApp({ memberId, onLogout, visible }) {
     const listenerId = workspaceId || 'ALL';
     
     // Get user's join date to filter out old broadcasts
-    const userCreatedAt = currentUser?.createdAt?.toDate ? currentUser.createdAt.toDate() : null;
+    // Try multiple sources: createdAt, joinedDate, or joined timestamp
+    let userCreatedAt = null;
+    
+    if (currentUser?.createdAt) {
+      if (currentUser.createdAt.toDate) {
+        userCreatedAt = currentUser.createdAt.toDate();
+      } else if (currentUser.createdAt instanceof Date) {
+        userCreatedAt = currentUser.createdAt;
+      } else if (typeof currentUser.createdAt === 'number') {
+        userCreatedAt = new Date(currentUser.createdAt);
+      }
+    } else if (currentUser?.joinedDate) {
+      if (currentUser.joinedDate.toDate) {
+        userCreatedAt = currentUser.joinedDate.toDate();
+      } else if (currentUser.joinedDate instanceof Date) {
+        userCreatedAt = currentUser.joinedDate;
+      }
+    }
+    
+    console.log('[MemberApp] Feedback listener - userCreatedAt:', userCreatedAt);
 
     const unsubscribe = listenForFeedbackRequests(listenerId, (request) => {
-
+      console.log('[MemberApp] Feedback request received:', request ? 'YES' : 'NO');
+      if (request) {
+        console.log('[MemberApp] Should show:', !userCreatedAt || request.createdAt >= userCreatedAt);
+      }
       setFeedbackRequest(request);
     }, userCreatedAt);
     
     return () => {
-
+      console.log('[MemberApp] Feedback listener cleanup');
       unsubscribe();
     };
-  }, [workspaceId, currentUid, currentUser]);
+  }, [workspaceId, currentUid, currentUser?.createdAt, currentUser?.joinedDate]);
   
   // Track page navigation
   useEffect(() => {

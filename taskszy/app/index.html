@@ -6,6 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TasksZy I Organize Better, Scale Faster</title>
     
+    <!-- Fix for spreadsheet text visibility -->
+    <style>
+      /* Override x-spreadsheet hidden textline to make text visible */
+      .x-spreadsheet-editor .x-spreadsheet-editor-area .textline {
+        visibility: visible !important;
+      }
+      /* Ensure cell text is visible with proper color */
+      .x-spreadsheet-editor .x-spreadsheet-editor-area textarea {
+        color: #0a0a0a !important;
+      }
+      /* Make sure cells display text properly */
+      .x-spreadsheet-cell {
+        color: #0a0a0a !important;
+      }
+      /* Fix toolbar visibility - force text and icons to be visible */
+      .x-spreadsheet-toolbar,
+      .x-spreadsheet-toolbar * {
+        color: #333 !important;
+        opacity: 1 !important;
+      }
+      .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn {
+        color: #333 !important;
+      }
+      .x-spreadsheet-toolbar .x-spreadsheet-dropdown-title {
+        color: #333 !important;
+        opacity: 1 !important;
+      }
+      .x-spreadsheet-icon .x-spreadsheet-icon-img {
+        opacity: 0.8 !important;
+      }
+    </style>
+    
     <!-- Aggressive console suppression for third-party scripts -->
     <script>
       (function() {
