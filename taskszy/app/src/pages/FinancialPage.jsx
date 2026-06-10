@@ -2307,19 +2307,6 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
   // Combined filter options
   const filterOptions = [...PAYMENT_CATEGORIES, ...roleOptions];
 
-  const categoryDropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
-        setShowCategoryDropdown(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const toggleCategory = (option) => {
     setSelectedCategories(prev => {
       const exists = prev.find(c => c.label === option.label);
