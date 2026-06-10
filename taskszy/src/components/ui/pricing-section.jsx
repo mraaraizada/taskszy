@@ -24,22 +24,14 @@ const BillingReceipt = ({ isOpen, onClose, planData }) => {
       audioRef.current.play().catch(err => console.log('Audio play failed:', err));
       
       // Stop audio after 7 seconds (when animation completes)
-      const audioTimer = setTimeout(() => {
+      const timer = setTimeout(() => {
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
         }
       }, 7000);
-
-      // Auto-redirect to app after 8 seconds (1 second after button appears)
-      const redirectTimer = setTimeout(() => {
-        window.location.href = '/app';
-      }, 8000);
       
-      return () => {
-        clearTimeout(audioTimer);
-        clearTimeout(redirectTimer);
-      };
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -268,26 +260,11 @@ const BillingReceipt = ({ isOpen, onClose, planData }) => {
                   Thank you for choosing Taskzy.
                 </div>
                 <div className="text-[10px] leading-snug px-2">
-                  Sign up now to activate your plan<br />
-                  and start managing your workspace.
+                  Once your plan is activated, you will be<br />
+                  redirected to your dashboard to start<br />
+                  managing your workspace.
                 </div>
               </div>
-
-              {/* Continue Button - appears after animation */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 7.2, duration: 0.3 }}
-                className="mb-3"
-              >
-                <a
-                  href="/app"
-                  className="block w-full py-2.5 text-center text-[12px] font-bold bg-[#3B5BFC] text-white rounded hover:bg-[#2a4adc] transition-colors no-underline"
-                  style={{ textDecoration: 'none' }}
-                >
-                  Continue to App →
-                </a>
-              </motion.div>
 
               {/* Divider Line */}
               <div className="my-3" style={{ 

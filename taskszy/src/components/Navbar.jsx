@@ -4,48 +4,42 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
   const [showBanner, setShowBanner] = useState(true)
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+  const [timeLeft, setTimeLeft] = useState({ days: 7, hours: 0, minutes: 0, seconds: 0 })
 
-  // Countdown timer effect - Fixed end date (7 days from June 6, 2026)
+  // Countdown timer effect - 7 days that loops infinitely
   useEffect(() => {
-    // Set a fixed promotional end date - 7 days from now
-    const END_DATE = new Date('2026-06-13T23:59:59'); // June 13, 2026, 11:59:59 PM
-    
-    const calculateTimeLeft = () => {
-      const now = new Date();
-      const difference = END_DATE - now;
-      
-      if (difference <= 0) {
-        // If promotion ended, reset to a new 7-day period
-        const newEndDate = new Date();
-        newEndDate.setDate(newEndDate.getDate() + 7);
-        const newDifference = newEndDate - now;
-        
-        return {
-          days: Math.floor(newDifference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((newDifference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((newDifference / 1000 / 60) % 60),
-          seconds: Math.floor((newDifference / 1000) % 60)
-        };
-      }
-      
-      return {
-        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((difference / 1000 / 60) % 60),
-        seconds: Math.floor((difference / 1000) % 60)
-      };
-    };
-    
-    // Initial calculation
-    setTimeLeft(calculateTimeLeft());
-    
-    // Update every second
     const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft());
-    }, 1000);
+      setTimeLeft((prevTime) => {
+        let { days, hours, minutes, seconds } = prevTime
+        
+        // Countdown logic
+        if (seconds > 0) {
+          seconds--
+        } else if (minutes > 0) {
+          minutes--
+          seconds = 59
+        } else if (hours > 0) {
+          hours--
+          minutes = 59
+          seconds = 59
+        } else if (days > 0) {
+          days--
+          hours = 23
+          minutes = 59
+          seconds = 59
+        } else {
+          // Reset to 7 days when timer reaches 0
+          days = 6
+          hours = 23
+          minutes = 59
+          seconds = 59
+        }
+        
+        return { days, hours, minutes, seconds }
+      })
+    }, 1000)
 
-    return () => clearInterval(timer);
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -137,11 +131,7 @@ export default function Navbar() {
         <div className="flex items-center gap-2">
           {/* Contact Sales button */}
           <a
-            href="/app"
-            onClick={(e) => {
-              e.preventDefault();
-              window.location.href = '/app';
-            }}
+            href="#"
             className="hidden md:block relative px-4 py-2 rounded-full border border-foreground text-foreground text-xs font-medium overflow-hidden group transition-all cursor-pointer uppercase tracking-wider"
           >
             <span className="relative z-10 transition-colors duration-300 group-hover:text-background">
