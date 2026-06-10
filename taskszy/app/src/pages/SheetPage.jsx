@@ -56,8 +56,8 @@ export default function SheetPage() {
         textwrap: false,
         strike: false,
         underline: false,
-        color: '#0a0a0a',
-        font: { name: 'Inter', size: 10, bold: false, italic: false },
+        color: '#000000',
+        font: { name: 'Arial', size: 13, bold: false, italic: false },
       },
     });
 

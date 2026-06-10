@@ -287,6 +287,7 @@ export default function MemberSidebar({ activePage, setActivePage, member, onLog
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#FEF2F2', borderRadius: 9, padding: '6px 8px', border: '1px solid #FECACA' }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#EF4444', flex: 1 }}>Sure?</span>
                 <button onClick={() => setConfirmLogout(false)} style={{ background: '#fff', border: '1px solid #E8EAEF', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>No</button>
+                <button onClick={onLogout} style={{ background: '#EF4444', border: '1px solid #EF4444', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>Yes</button>
               </div>
             )}
           </div>

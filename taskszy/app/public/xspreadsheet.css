@@ -10,6 +10,7 @@ body {
   box-sizing: content-box;
   background: #fff;
   -webkit-font-smoothing: antialiased;
+  color: #000000;
 }
 .x-spreadsheet textarea {
   font: 400 13px Arial, 'Lato', 'Source Sans Pro', Roboto, Helvetica, sans-serif;
@@ -20,6 +21,26 @@ body {
 }
 .x-spreadsheet-table {
   vertical-align: bottom;
+  color: #000000;
+}
+.x-spreadsheet-table canvas {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+/* Ensure all cell text is visible */
+.x-spreadsheet-table td,
+.x-spreadsheet-table th {
+  color: #000000 !important;
+  user-select: text !important;
+  -moz-user-select: text !important;
+  -webkit-user-select: text !important;
+}
+/* Make cell content visible and selectable */
+.x-spreadsheet-cell {
+  color: #000000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  user-select: text !important;
 }
 .x-spreadsheet-tooltip {
   font-family: inherit;
@@ -215,6 +236,8 @@ body {
   pointer-events: none;
   width: 100%;
   height: 100%;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 .x-spreadsheet-editor,
 .x-spreadsheet-selector {
@@ -226,6 +249,9 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
+  color: #000000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 /* @{css-prefix}-selector */
 .x-spreadsheet-selector .hide-input {
@@ -287,11 +313,17 @@ body {
   text-align: start;
   overflow-y: hidden;
   font: 400 13px Arial, 'Lato', 'Source Sans Pro', Roboto, Helvetica, sans-serif;
-  color: inherit;
+  color: #000000 !important;
+  background-color: #ffffff !important;
   white-space: normal;
   word-wrap: break-word;
   line-height: 22px;
   margin: 0;
+  opacity: 1 !important;
+  visibility: visible !important;
+  user-select: text !important;
+  -moz-user-select: text !important;
+  -webkit-user-select: text !important;
 }
 .x-spreadsheet-editor .x-spreadsheet-editor-area .textline {
   overflow: hidden;
