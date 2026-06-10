@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
 import { usePaginatedPayments } from '../hooks/usePaginatedPayments';
+import { useClickOutside } from '../hooks/useClickOutside';
 import { useLottie } from 'lottie-react';
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -408,6 +409,12 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
   
   const memberDropdownRef = useRef(null);
   
+  // ⭐ Click outside to close member dropdown
+  const memberDropdownContainerRef = useClickOutside(() => setShowMemberDropdown(false), showMemberDropdown);
+  
+  // ⭐ Click outside to close task dropdown
+  const taskDropdownContainerRef = useClickOutside(() => setShowTaskDropdown(false), showTaskDropdown);
+  
   // Payment categories from Firebase - empty for Admin A
   const PAYMENT_CATEGORIES = isAdminA ? [] : (CATEGORIES && CATEGORIES.length > 0 
     ? CATEGORIES.map(cat => {
@@ -649,7 +656,7 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Team Member *</label>
               
               {/* ⭐ Custom dropdown with avatars and role grouping */}
-              <div style={{ position: 'relative' }} ref={memberDropdownRef}>
+              <div style={{ position: 'relative' }} ref={memberDropdownContainerRef}>
                 <button
                   type="button"
                   onClick={() => setShowMemberDropdown(!showMemberDropdown)}
@@ -729,9 +736,17 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                     overflowY: 'auto',
                     zIndex: 1000
                   }}>
-                    {/* ⭐ Group by roles */}
-                    {[...new Set(team.filter(m => m.status === 'Active').map(m => m.role))].sort().map(role => {
-                      const membersInRole = team.filter(m => m.status === 'Active' && m.role === role);
+                    {/* ⭐ Group by roles - Show ALL members but sort Active first, then Inactive */}
+                    {[...new Set(team.map(m => m.role))].sort().map(role => {
+                      // Sort by status: Active members first, then Inactive
+                      const membersInRole = team
+                        .filter(m => m.role === role)
+                        .sort((a, b) => {
+                          // Active (1) comes before Inactive (0)
+                          const aActive = a.status === 'Active' ? 1 : 0;
+                          const bActive = b.status === 'Active' ? 1 : 0;
+                          return bActive - aActive; // Descending so Active (1) is first
+                        });
                       return (
                         <div key={role}>
                           {/* Role header */}
@@ -782,7 +797,8 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                     borderRadius: '50%',
                                     objectFit: 'cover',
                                     flexShrink: 0,
-                                    border: '2px solid var(--bg-surface)'
+                                    border: '2px solid var(--bg-surface)',
+                                    opacity: m.status === 'Inactive' ? 0.5 : 1
                                   }}
                                 />
                               ) : (
@@ -797,7 +813,8 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                                   fontSize: 10,
                                   fontWeight: 800,
                                   color: '#fff',
-                                  flexShrink: 0
+                                  flexShrink: 0,
+                                  opacity: m.status === 'Inactive' ? 0.5 : 1
                                 }}>
                                   {m.avatar}
                                 </div>
@@ -805,8 +822,35 @@ function AddPaymentModal({ onClose, onAdd, team, tasks, prefilledTaskId = null }
                               
                               {/* Member info */}
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{m.name}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
+                                <div style={{ 
+                                  fontSize: 13, 
+                                  fontWeight: 600, 
+                                  color: m.status === 'Inactive' ? 'var(--text-muted)' : 'var(--text-primary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6
+                                }}>
+                                  {m.name}
+                                  {m.status === 'Inactive' && (
+                                    <span style={{
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      color: '#EF4444',
+                                      background: '#FEE2E2',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.3px'
+                                    }}>
+                                      Inactive
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ 
+                                  fontSize: 11, 
+                                  color: 'var(--text-muted)',
+                                  opacity: m.status === 'Inactive' ? 0.7 : 1
+                                }}>{m.email}</div>
                               </div>
                             </div>
                           ))}

@@ -5,6 +5,7 @@ import { useLottie } from 'lottie-react';
 import PlanSelection from './PlanSelection';
 import { AdminPasswordModal } from './AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 // Dynamic lottie loader — Confetti.json is 95KB, load only when needed
 function useConfettiAnimation() {
@@ -43,11 +44,17 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
   const dropRef = useRef(null);
+  
+  // Click outside to close search dropdown
+  const searchDropdownRef = useClickOutside(() => setFocused(false), focused && query.trim().length > 0);
 
   // Badge state — edit fields are local; display values come from context
   const [badgeOpen, setBadgeOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editSub, setEditSub] = useState('');
+  
+  // Click outside to close badge dropdown
+  const badgeDropdownRef = useClickOutside(() => setBadgeOpen(false), badgeOpen);
   const currentPlan = contextPlan?.name || 'Professional';
   const setCurrentPlan = (name) => setContextPlan(prev => ({ ...(prev || {}), name }));
   const [showPlanSelector, setShowPlanSelector] = useState(false);
@@ -306,7 +313,8 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
       </div>
 
       {/* Centre: glassmorphism brand capsule */}
-      <div ref={badgeRef} style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 300 }}>
+      <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 300 }} ref={badgeDropdownRef}>
+        <div ref={badgeRef}>
         <div
           onClick={() => { setBadgeOpen(p => !p); setEditName(workspaceName); setEditSub(workspaceSub); }}
           style={{
@@ -490,13 +498,14 @@ export default function Header({ title, subtitle, currentPage, onSearchResultCli
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Right: search + dark toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
         {/* Task search */}
-        <div ref={dropRef} style={{ position: 'relative' }}>
+        <div style={{ position: 'relative' }} ref={searchDropdownRef}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             background: focused ? 'var(--bg-surface)' : 'var(--input-bg)',

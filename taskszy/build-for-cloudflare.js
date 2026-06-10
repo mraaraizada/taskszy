@@ -110,7 +110,9 @@ try {
   console.log('   ├── index.html (root website)');
   console.log('   ├── functions/_middleware.js (SPA routing)');
   console.log('   ├── app/');
-  console.log('   │   └── index.html (main app)');
+  console.log('   │   ├── index.html (main app)');
+  console.log('   │   ├── xspreadsheet.js (spreadsheet library)');
+  console.log('   │   └── xspreadsheet.css (spreadsheet styles)');
   console.log('   └── adminzdashboard/');
   console.log('       └── index.html (admin dashboard)');
   
@@ -119,6 +121,8 @@ try {
     './deploy/index.html',
     './deploy/functions/_middleware.js',
     './deploy/app/index.html',
+    './deploy/app/xspreadsheet.js',
+    './deploy/app/xspreadsheet.css',
     './deploy/adminzdashboard/index.html'
   ];
   

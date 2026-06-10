@@ -111,8 +111,19 @@ function SheetViewer({ sheetItem, onAutoSave }) {
     window.console.log('[SheetViewer] Environment:', process.env.NODE_ENV);
     window.console.log('[SheetViewer] Origin:', window.location.origin);
     
-    loadStyle('/xspreadsheet.css');
-    loadScript('/xspreadsheet.js')
+    // CRITICAL: Use relative path for Vite's base configuration
+    // In production, base is '/app/' so we need './xspreadsheet.css' not '/xspreadsheet.css'
+    // The './' makes it relative to current location (app/) instead of site root
+    const basePath = import.meta.env.BASE_URL || '/';
+    const cssPath = `${basePath}xspreadsheet.css`;
+    const jsPath = `${basePath}xspreadsheet.js`;
+    
+    window.console.log('[SheetViewer] Base path:', basePath);
+    window.console.log('[SheetViewer] CSS path:', cssPath);
+    window.console.log('[SheetViewer] JS path:', jsPath);
+    
+    loadStyle(cssPath);
+    loadScript(jsPath)
       .then(() => {
         window.console.log('[SheetViewer] xspreadsheet.js loaded successfully');
         window.console.log('[SheetViewer] window.x_spreadsheet exists:', !!window.x_spreadsheet);
@@ -120,8 +131,8 @@ function SheetViewer({ sheetItem, onAutoSave }) {
       })
       .catch((error) => {
         window.console.error('[SheetViewer] ERROR loading xspreadsheet.js:', error);
-        window.console.error('[SheetViewer] Script src attempted:', '/xspreadsheet.js');
-        window.console.error('[SheetViewer] Full URL would be:', window.location.origin + '/xspreadsheet.js');
+        window.console.error('[SheetViewer] Script src attempted:', jsPath);
+        window.console.error('[SheetViewer] Full URL would be:', window.location.origin + jsPath);
       });
   }, []);
 

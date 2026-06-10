@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => ({
     jsxRuntime: 'automatic'
   })],
   base: mode === 'production' ? '/app/' : '/',
+  publicDir: 'public', // Explicitly set public directory
   server: {
     port: 5174,
     strictPort: true,
@@ -25,6 +26,7 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
     assetsDir: 'assets',
     chunkSizeWarningLimit: 1000,
+    copyPublicDir: true, // Ensure public files are copied
     rollupOptions: {
       output: {
         manualChunks(id) {
