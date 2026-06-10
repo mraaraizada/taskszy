@@ -24,8 +24,13 @@ export default function SheetPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadStyle('/xspreadsheet.css');
-    loadScript('/xspreadsheet.js').then(() => setReady(true));
+    // Use relative paths for production compatibility
+    const basePath = import.meta.env.BASE_URL || '/';
+    const cssPath = `${basePath}xspreadsheet.css`;
+    const jsPath = `${basePath}xspreadsheet.js`;
+    
+    loadStyle(cssPath);
+    loadScript(jsPath).then(() => setReady(true));
   }, []);
 
   useEffect(() => {
