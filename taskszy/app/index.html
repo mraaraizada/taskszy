@@ -16,6 +16,30 @@
       .x-spreadsheet-table {
         background: #fff;
       }
+      
+      /* Make toolbar icons more visible */
+      .x-spreadsheet-icon .x-spreadsheet-icon-img {
+        opacity: 0.85 !important;
+      }
+      
+      .x-spreadsheet-toolbar-btn:hover .x-spreadsheet-icon-img {
+        opacity: 1 !important;
+      }
+      
+      /* Ensure toolbar is visible */
+      .x-spreadsheet-toolbar {
+        background: #f5f6f7 !important;
+        border-bottom: 1px solid #e0e2e4 !important;
+      }
+      
+      .x-spreadsheet-toolbar-btn {
+        border: 1px solid transparent !important;
+      }
+      
+      .x-spreadsheet-toolbar-btn:hover {
+        background: rgba(0, 0, 0, 0.08) !important;
+        border-radius: 2px !important;
+      }
     </style>
     
     <!-- Aggressive console suppression for third-party scripts -->
