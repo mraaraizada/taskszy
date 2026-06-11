@@ -13,7 +13,7 @@ import CardSwap, { Card } from './CardSwap'
 import { TodoCard } from './TodoCard'
 import { ProjectTable } from './ProjectTable'
 import { SpreadsheetMini } from './SpreadsheetMini'
-import { AnalyticsChart } from './AnalyticsChart'
+import MagnifiedBento from './MagnifiedBento'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -499,17 +499,19 @@ export default function IntegrationArchitecture() {
                 </div>
               </div>
 
-              {/* Row 2, Col 2: Analytics Chart (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white relative">
-                <AnalyticsChart />
-              </div>
-
-              {/* Row 3, Col 1: Empty (3 cols x 1 row) */}
+              {/* Row 2, Col 2: Empty (3 cols x 1 row) */}
               <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
               </div>
 
-              {/* Row 3, Col 2: Empty (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
+              {/* Row 3: Three Square Boxes (2 cols x 1 row each) */}
+              <div className="col-span-2 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
+              </div>
+
+              <div className="col-span-2 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white">
+                <MagnifiedBento />
+              </div>
+
+              <div className="col-span-2 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
               </div>
             </div>
           </div>
