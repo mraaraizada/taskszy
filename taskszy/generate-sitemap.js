@@ -22,13 +22,14 @@ const TODAY = new Date().toISOString().split('T')[0];
 const isCI = process.env.CI || process.env.GITHUB_ACTIONS;
 
 // Static routes with priority and change frequency
+// Note: Hash (#) fragments are not allowed in sitemaps - they're ignored by search engines
 const staticRoutes = [
   { path: '/', priority: '1.0', changefreq: 'weekly' },
-  { path: '/#features', priority: '0.9', changefreq: 'monthly' },
-  { path: '/#pricing', priority: '0.9', changefreq: 'monthly' },
-  { path: '/#faq', priority: '0.7', changefreq: 'monthly' },
-  { path: '/#testimonials', priority: '0.7', changefreq: 'monthly' },
   { path: '/blog', priority: '0.8', changefreq: 'weekly' },
+  // Add more actual pages here as you create them:
+  // { path: '/pricing', priority: '0.9', changefreq: 'monthly' },
+  // { path: '/features', priority: '0.9', changefreq: 'monthly' },
+  // { path: '/about', priority: '0.7', changefreq: 'monthly' },
 ];
 
 // Generate sitemap XML
