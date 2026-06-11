@@ -1,3 +1,16 @@
-# Redirect www to non-www
-https://www.taskszy.com/* https://taskszy.com/:splat 301!
-http://www.taskszy.com/* https://taskszy.com/:splat 301!
+# Netlify/Cloudflare Redirects for SEO
+# https://docs.netlify.com/routing/redirects/
+
+# Redirect HTTP to HTTPS (handled by platform, but documented here)
+# http://taskzy.com/* https://taskzy.com/:splat 301!
+# http://www.taskzy.com/* https://taskzy.com/:splat 301!
+
+# Redirect www to non-www for SEO consistency
+https://www.taskzy.com/* https://taskzy.com/:splat 301!
+
+# SPA fallback - send all requests to index.html
+/*    /index.html   200
+
+# Old URLs redirects (add as needed)
+# /old-blog/*  /blog/:splat  301
+# /pricing-old  /pricing  301

@@ -1,0 +1,9 @@
+/* TEAM */
+Developer: Taskzy Team
+Site: https://taskzy.com
+Location: Global
+
+/* SITE */
+Standards: HTML5, CSS3, JavaScript ES6+, React
+Components: Vite, React Router, Firebase
+Software: Visual Studio Code
