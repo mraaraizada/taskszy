@@ -13,10 +13,37 @@ import Testimonials from './components/Testimonials'
 import FAQ from './components/FAQ'
 import Pricing from './components/Pricing'
 import Footer from './components/Footer'
+import SEOHelmet from './components/SEOHelmet'
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <>
+      <SEOHelmet 
+        title="Taskzy - Complete Workspace Management Platform | Organize Better, Scale Faster"
+        description="All-in-one workspace management platform for teams. Manage tasks, projects, budgets, workflows & performance. Free 14-day trial. Built for agencies & growing businesses."
+        keywords="task management software, team collaboration tool, project management platform, workspace management, agile project management, team productivity, workflow automation, budget tracking"
+        canonical="https://taskzy.com/"
+        ogImage="https://taskzy.com/dashboard.png"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Taskzy - Complete Workspace Management Platform",
+          "description": "All-in-one workspace management for modern teams",
+          "url": "https://taskzy.com/",
+          "breadcrumb": {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://taskzy.com/"
+              }
+            ]
+          }
+        }}
+      />
+      <div className="min-h-screen flex flex-col bg-white">
       {/* Navbar - sticky across all pages */}
       <Navbar />
 
@@ -40,5 +67,6 @@ export default function App() {
       <FAQ />
       <Footer />
     </div>
+    </>
   )
 }
