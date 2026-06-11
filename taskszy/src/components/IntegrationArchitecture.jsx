@@ -14,6 +14,7 @@ import { TodoCard } from './TodoCard'
 import { ProjectTable } from './ProjectTable'
 import { SpreadsheetMini } from './SpreadsheetMini'
 import MagnifiedBento from './MagnifiedBento'
+import StackedList from './StackedList'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -511,7 +512,8 @@ export default function IntegrationArchitecture() {
                 <MagnifiedBento />
               </div>
 
-              <div className="col-span-2 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
+              <div className="col-span-2 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white">
+                <StackedList />
               </div>
             </div>
           </div>
