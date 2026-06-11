@@ -396,6 +396,18 @@ export default function PricingSection() {
       features: plan.features.filter(f => f.ok).map(f => ({ name: f.text }))
     })
     setReceiptOpen(true)
+    
+    // Redirect to app after 7 seconds (when receipt animation completes)
+    setTimeout(() => {
+      // Store selected plan in sessionStorage so app can pick it up
+      sessionStorage.setItem('selectedPlan', JSON.stringify({
+        id: plan.id,
+        name: plan.name,
+        billingCycle: yearly ? 'yearly' : 'monthly',
+        price: yearly ? plan.yearly : plan.monthly
+      }))
+      window.location.href = '/app'
+    }, 7000)
   }
 
   return (

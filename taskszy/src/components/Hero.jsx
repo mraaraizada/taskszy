@@ -57,7 +57,10 @@ export default function Hero() {
 
         {/* 4. CTA Buttons */}
         <motion.div {...fadeUp(16, 0.3)} className="mt-5 flex flex-col items-center">
-          <button className="relative rounded-full px-7 py-3 text-sm font-medium font-body bg-foreground text-background overflow-hidden group transition-all shadow-sm hover:shadow-md active:scale-[0.98] border-2 border-foreground">
+          <button 
+            onClick={() => window.location.href = '/app'}
+            className="relative rounded-full px-7 py-3 text-sm font-medium font-body bg-foreground text-background overflow-hidden group transition-all shadow-sm hover:shadow-md active:scale-[0.98] border-2 border-foreground cursor-pointer"
+          >
             <span className="relative z-10 transition-colors duration-300 group-hover:text-foreground">
               Create Workspace
             </span>

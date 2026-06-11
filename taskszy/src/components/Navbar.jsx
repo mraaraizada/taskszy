@@ -4,39 +4,46 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
   const [showBanner, setShowBanner] = useState(true)
-  const [timeLeft, setTimeLeft] = useState({ days: 7, hours: 0, minutes: 0, seconds: 0 })
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
-  // Countdown timer effect - 7 days that loops infinitely
+  // Countdown timer effect - synchronized across all devices using server time
   useEffect(() => {
+    // Fixed end date - set to a specific future date (7 days cycle)
+    // This creates a repeating 7-day cycle that's the same for everyone
+    const CYCLE_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+    
+    const calculateTimeLeft = () => {
+      // Get current UTC time to ensure consistency across timezones
+      const now = Date.now()
+      
+      // Calculate which cycle we're in and when the current cycle ends
+      // Using a fixed start date (Jan 1, 2025) as reference point
+      const referenceDate = new Date('2025-01-01T00:00:00Z').getTime()
+      const timeSinceReference = now - referenceDate
+      const currentCycle = Math.floor(timeSinceReference / CYCLE_DURATION)
+      const cycleEndTime = referenceDate + (currentCycle + 1) * CYCLE_DURATION
+      
+      // Calculate remaining time
+      const difference = cycleEndTime - now
+      
+      if (difference <= 0) {
+        return { days: 6, hours: 23, minutes: 59, seconds: 59 }
+      }
+      
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000)
+      
+      return { days, hours, minutes, seconds }
+    }
+    
+    // Initialize with calculated time
+    setTimeLeft(calculateTimeLeft())
+    
+    // Update every second
     const timer = setInterval(() => {
-      setTimeLeft((prevTime) => {
-        let { days, hours, minutes, seconds } = prevTime
-        
-        // Countdown logic
-        if (seconds > 0) {
-          seconds--
-        } else if (minutes > 0) {
-          minutes--
-          seconds = 59
-        } else if (hours > 0) {
-          hours--
-          minutes = 59
-          seconds = 59
-        } else if (days > 0) {
-          days--
-          hours = 23
-          minutes = 59
-          seconds = 59
-        } else {
-          // Reset to 7 days when timer reaches 0
-          days = 6
-          hours = 23
-          minutes = 59
-          seconds = 59
-        }
-        
-        return { days, hours, minutes, seconds }
-      })
+      setTimeLeft(calculateTimeLeft())
     }, 1000)
 
     return () => clearInterval(timer)
@@ -131,7 +138,11 @@ export default function Navbar() {
         <div className="flex items-center gap-2">
           {/* Contact Sales button */}
           <a
-            href="#"
+            href="/app"
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.href = '/app';
+            }}
             className="hidden md:block relative px-4 py-2 rounded-full border border-foreground text-foreground text-xs font-medium overflow-hidden group transition-all cursor-pointer uppercase tracking-wider"
           >
             <span className="relative z-10 transition-colors duration-300 group-hover:text-background">
