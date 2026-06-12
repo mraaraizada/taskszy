@@ -11,6 +11,17 @@ export function useAdminPassword() {
   // Session timeout: 30 minutes per page
   const SESSION_TIMEOUT = 30 * 60 * 1000;
   
+  // Listen for admin password changes and clear all authentications
+  useEffect(() => {
+    const handlePasswordChange = (event) => {
+      // Clear all authenticated pages when password changes
+      Object.keys(authenticatedPages).forEach(key => delete authenticatedPages[key]);
+    };
+    
+    window.addEventListener('adminPasswordChanged', handlePasswordChange);
+    return () => window.removeEventListener('adminPasswordChanged', handlePasswordChange);
+  }, []);
+  
   // Track current page based on URL changes
   useEffect(() => {
     const updateCurrentPage = () => {

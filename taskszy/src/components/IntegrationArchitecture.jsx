@@ -15,6 +15,9 @@ import { ProjectTable } from './ProjectTable'
 import { SpreadsheetMini } from './SpreadsheetMini'
 import MagnifiedBento from './MagnifiedBento'
 import StackedList from './StackedList'
+import BarChartDemo from './BarChartDemo'
+import StatisticsCard from './StatisticsCard'
+import ChatWidget from './ChatWidget'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -271,62 +274,16 @@ export default function IntegrationArchitecture() {
             </div>
           </div>
 
-          {/* Feature Boxes */}
-          {/* <div className="grid md:grid-cols-4 border-b-2 border-foreground">
-            <motion.div
-              {...fadeUp(0)}
-              className="p-8 border-r-2 border-foreground"
-            >
-              <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-                {features[0].title}
-              </h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                {features[0].description}
-              </p>
-            </motion.div>
-
-            <motion.div
-              {...fadeUp(0.1)}
-              className="p-8 border-r-2 border-foreground flex flex-col items-start justify-start"
-            >
-              <h3 className="font-display text-lg font-semibold text-foreground mb-6">
-                {features[1].title}
-              </h3>
-              <div className="flex-1 flex items-center justify-start w-full mt-20" style={{ marginLeft: '2.3rem' }}>
-                <WaitlistButton />
-              </div>
-            </motion.div>
-
-            <motion.div
-              {...fadeUp(0.2)}
-              className="pt-4 px-8 pb-8 border-r-2 border-foreground flex flex-col relative"
-            >
-              <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-                {features[2].title}
-              </h3>
-              <div className="flex-1 relative">
-                <PolicyModal />
-              </div>
-            </motion.div>
-            
-            <motion.div
-              {...fadeUp(0.3)}
-              className="p-8 flex flex-col items-start justify-start"
-            >
-              <h3 className="font-display text-lg font-semibold text-foreground mb-6">
-                One runtime
-              </h3>
-              <div className="flex-1 flex items-center justify-center w-full">
-                <CollectionPreview />
-              </div>
-            </motion.div>
-          </div> */}
-
           {/* Bento Grid Section */}
           <div className="p-8 bg-white">
             <div className="grid grid-cols-6 auto-rows-[300px] gap-6">
               {/* Row 1, Col 1: Security, Excel & Docs Animations + CardSwap - Taller (3 cols x 2 rows) */}
-              <div className="col-span-3 row-span-2 border-2 border-foreground p-8 flex items-start justify-between rounded-xl bg-white pt-4 relative overflow-visible">
+              <div className="col-span-3 row-span-2 border-2 border-foreground p-8 flex items-start justify-between rounded-xl bg-white pt-4 relative overflow-hidden">
+                {/* Title at top left */}
+                <div className="absolute top-4 left-6 z-20">
+                  <h2 className="text-xs text-primary uppercase tracking-wide font-semibold">Centralized Workspace</h2>
+                </div>
+                
                 {/* Animated connecting lines */}
                 <style>
                   {`
@@ -500,12 +457,18 @@ export default function IntegrationArchitecture() {
                 </div>
               </div>
 
-              {/* Row 2, Col 2: Empty (3 cols x 1 row) */}
-              <div className="col-span-3 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
+              {/* Row 2, Col 2: Bar Chart Component (3 cols x 1 row) */}
+              <div className="col-span-3 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white relative">
+                {/* Title positioned at top */}
+                <div className="absolute top-4 left-6 z-20">
+                  <h2 className="text-xs text-primary uppercase tracking-wide font-semibold">Performance Metrics</h2>
+                </div>
+                <BarChartDemo />
               </div>
 
               {/* Row 3: Three Square Boxes (2 cols x 1 row each) */}
-              <div className="col-span-2 row-span-1 border-2 border-foreground p-8 flex items-center justify-center rounded-xl">
+              <div className="col-span-2 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white">
+                <ChatWidget />
               </div>
 
               <div className="col-span-2 row-span-1 border-2 border-foreground rounded-xl overflow-hidden bg-white">

@@ -237,10 +237,17 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
               return currentUser.role;
             }
             
-            // Default fallback
+            // Default fallback - check team collection for role
             return 'Administrator';
           })()
-        } : { name: 'Admin', avatar: 'A', color: '#3B5BFC', role: 'Administrator' };
+        } : { 
+          uid: null,
+          name: 'Admin', 
+          avatar: 'A', 
+          avatarImg: null,
+          color: '#3B5BFC', 
+          role: 'Administrator' 
+        };
 
         onSave(newMember, addedByInfo);
         
@@ -320,12 +327,10 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                         value={form[field.key]} 
                         onChange={e => {
                           if (isReadOnly) return; // Prevent changes if read-only
-                          // Only allow digits, +, -, spaces, and parentheses for phone
+                          // Only allow digits for phone, max 12
                           if (field.key === 'phone') {
-                            const filtered = e.target.value.replace(/[^\d+\-\s()]/g, '');
-                            // Limit to 12 digits (not counting special characters)
-                            const digitsOnly = filtered.replace(/[^\d]/g, '');
-                            if (digitsOnly.length <= 12) {
+                            const filtered = e.target.value.replace(/[^\d]/g, '');
+                            if (filtered.length <= 12) {
                               f(field.key)(filtered);
                             }
                           } else if (field.key === 'email') {
@@ -338,7 +343,7 @@ function MemberModal({ member, onClose, onSave, roles, managementMode = false, o
                         }} 
                         readOnly={isReadOnly}
                         placeholder={field.placeholder}
-                        maxLength={field.key === 'phone' ? 20 : undefined}
+                        maxLength={field.key === 'phone' ? 12 : undefined}
                         style={{ 
                           width: '100%', 
                           padding: '10px 14px 10px 32px', 
@@ -727,7 +732,7 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
           {member.addedBy?.avatarImg ? (
             <img 
               src={member.addedBy.avatarImg} 
-              alt={member.addedBy.name}
+              alt={member.addedBy.name || 'Creator'}
               style={{ 
                 width: 20, 
                 height: 20, 
@@ -748,8 +753,8 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
               : member.addedBy?.name 
               ? member.addedBy.name
               : member.createdBy 
-              ? `Created by ${member.createdBy}` 
-              : 'Added by Admin'}
+              ? `${member.createdBy}` 
+              : 'System'}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -798,9 +803,6 @@ function MemberCard({ member, onEdit, onToggleStatus, onViewProfile, managementM
   );
 }
 
-// Track if team has been enriched at least once (persists across component mounts)
-let hasEnrichedTeamOnce = false;
-
 function TeamPage({ managementMode = false, onNavigateToManage, currentUser, setPageFilteredData = null }) {
   const { team, saveMember, toggleMemberStatus, financials, roles, currentPlan, workspaceId, currentUid } = useApp();
 
@@ -809,111 +811,8 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
     monitor.trackPageLoad('team_page');
   }, []);
 
-  // State to hold enriched team members with profile data
-  const [enrichedTeam, setEnrichedTeam] = useState([]);
-  const [isEnriching, setIsEnriching] = useState(false); // Don't show skeleton initially
-
-  // Load and enrich team members with profile data from Firestore
-  useEffect(() => {
-
-    const enrichTeamWithProfiles = async () => {
-      if (!team || team.length === 0) {
-        setEnrichedTeam([]);
-        setIsEnriching(false);
-        hasEnrichedTeamOnce = true;
-        return;
-      }
-
-      // Only show loading skeleton on very first load ever, not on subsequent visits
-      if (!hasEnrichedTeamOnce) {
-        setIsEnriching(true);
-      }
-
-      try {
-        const { getProfile } = await import('../lib/userProfileService');
-        
-        // Enrich each team member with their profile data
-        const enrichedMembers = await Promise.all(
-          team.map(async (member) => {
-            // Only enrich if member has a uid
-            if (!member.uid) {
-              return member;
-            }
-
-            try {
-              const profileData = await getProfile(member.uid);
-              
-              // Also enrich the addedBy field with creator's profile data
-              let enrichedAddedBy = member.addedBy || null;
-              if (member.addedBy?.uid) {
-                try {
-                  const creatorProfile = await getProfile(member.addedBy.uid);
-                  if (creatorProfile) {
-                    enrichedAddedBy = {
-                      ...member.addedBy,
-                      name: creatorProfile.name || member.addedBy.name,
-                      avatarImg: creatorProfile.avatarImg || null,
-                      avatar: member.addedBy.avatar, // Keep original initials as fallback
-                      color: member.addedBy.color,
-                      role: member.addedBy.role,
-                      uid: member.addedBy.uid,
-                    };
-                  }
-                } catch (err) {
-
-                }
-              }
-              
-              if (profileData) {
-                // Merge profile data with team member data
-                // IMPORTANT: Preserve status and other critical fields from team data
-                const enrichedMember = {
-                  ...member, // Start with all member data (including status)
-                  name: profileData.name || member.name,
-                  phone: profileData.phone || member.phone || '',
-                  location: profileData.location || member.location || '',
-                  about: profileData.about || member.about || '',
-                  avatarImg: profileData.avatarImg || member.avatarImg || null,
-                  userRole: profileData.role || member.userRole || 'member', // Add userRole from profile
-                  // Use enriched addedBy with profile data
-                  addedBy: enrichedAddedBy,
-                  // Explicitly preserve status from team data
-                  status: member.status,
-                };
-
-                // DON'T preload avatars - let the Avatar component handle loading
-                // This prevents unnecessary errors and the Avatar component has proper fallback
-                
-                // DON'T auto-save to Firestore - just enrich for display
-                // This prevents unnecessary writes and role overwrites
-                
-                return enrichedMember;
-              }
-            } catch (err) {
-
-            }
-            
-            return member;
-          })
-        );
-
-        setEnrichedTeam(enrichedMembers);
-        setIsEnriching(false);
-        hasEnrichedTeamOnce = true; // Mark as enriched - persists across component mounts
-
-      } catch (err) {
-
-        setEnrichedTeam(team);
-        setIsEnriching(false);
-        hasEnrichedTeamOnce = true;
-      }
-    };
-
-    enrichTeamWithProfiles();
-  }, [team, saveMember]);
-
-  // Use enriched team for display - show team data immediately, don't wait for enrichment
-  const displayTeam = enrichedTeam.length > 0 ? enrichedTeam : team;
+  // Use team data directly from AppContext - it's already enriched by the Firestore listener
+  const displayTeam = team;
 
   // Member limit based on selected plan (default Professional = 15 if no plan selected)
   const PLAN_LIMITS = { starter: 7, professional: 15, business: 30, enterprise: 50 };
@@ -1071,7 +970,7 @@ function TeamPage({ managementMode = false, onNavigateToManage, currentUser, set
         {/* Scrollable Grid inside component */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '18px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            {(pageLoading || isEnriching) ? (
+            {pageLoading ? (
               // Skeleton loading for pagination or enriching
               <>
                 {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => (

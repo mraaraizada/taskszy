@@ -386,12 +386,30 @@ export default function ManagementHelp({ member, setPageFilteredData }) {
                       </div>
                       <div style={{ padding: '14px 16px', border: '1.5px solid #12C479', borderRadius: 12, fontSize: 14, color: '#059669', background: '#ECFDF5', lineHeight: 1.6 }}>{selectedSubmission.response}</div>
                     </div>
-                  ) : selectedSubmission.status === 'pending' && isAdmin ? (
-                    // Admin users can respond to all pending submissions
-                    <ResponseForm submissionId={selectedSubmission.id} onResolve={handleResolveWithPassword} initialResponse={editingResponse ? selectedSubmission.response : ''} isEditing={editingResponse} onCancelEdit={() => setEditingResponse(false)} />
-                  ) : selectedSubmission.status === 'pending' && !isAdmin ? (
-                    // Management users can only respond to team member submissions (not other management/admin)
+                  ) : selectedSubmission.status === 'pending' ? (
+                    // Check if this is the user's own help request first
                     (() => {
+                      const isOwnRequest = selectedSubmission.createdBy === currentUid || selectedSubmission.member?.uid === currentUid;
+                      
+                      // If it's their own request, they cannot respond to it
+                      if (isOwnRequest) {
+                        return (
+                          <div style={{ padding: '16px', border: '1.5px solid #FDE68A', borderRadius: 12, background: '#FFFBEB', display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Clock size={20} color="#F97316" strokeWidth={2.5} />
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#F97316' }}>Waiting for Response</div>
+                              <div style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>An admin or manager will respond to your request.</div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      // Admin users can respond to all pending submissions (except their own, checked above)
+                      if (isAdmin) {
+                        return <ResponseForm submissionId={selectedSubmission.id} onResolve={handleResolveWithPassword} initialResponse={editingResponse ? selectedSubmission.response : ''} isEditing={editingResponse} onCancelEdit={() => setEditingResponse(false)} />;
+                      }
+                      
+                      // Management users can only respond to team member submissions (not other management/admin)
                       // Use userRole (system role) for permission check
                       const submitterUserRole = selectedSubmission.member?.userRole?.toLowerCase();
                       

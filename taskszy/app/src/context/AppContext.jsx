@@ -1353,20 +1353,7 @@ export function AppProvider({ children }) {
     loadDonutWelcome();
   }, [currentUid]);
 
-  // Per-user password listener — reads from users/{uid}
-  useEffect(() => {
-    if (!currentUid) return;
-    const userRef = doc(db, 'users', currentUid);
-    const unsub = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) {
-        const userData = snap.data();
-        if (userData.userPassword !== undefined) {
-          setAdminPassword(userData.userPassword);
-        }
-      }
-    }, () => {});
-    return unsub;
-  }, [currentUid]);
+  // Per-user password listener has been removed - using workspace-level admin password instead
 
   // When donut welcome is dismissed, mark as seen per-user in Firestore
   const setShowDonutWelcome = useCallback((val) => {
@@ -1445,13 +1432,31 @@ export function AppProvider({ children }) {
       if (s.workspaceSub        !== undefined) setWorkspaceSub(s.workspaceSub);
       if (s.workspaceLogo       !== undefined) setWorkspaceLogo(s.workspaceLogo);
       if (s.hasCompletedSetup   !== undefined) setHasCompletedSetup(s.hasCompletedSetup);
+      if (s.adminPassword       !== undefined) {
+        setAdminPassword(s.adminPassword);
+      }
     }, () => {});
     return unsub;
   }, [wsPath]);
 
   const updateAdminPassword = useCallback((newPwd) => {
+    // CRITICAL: Update state immediately
     setAdminPassword(newPwd);
-    if (wsPath) updateDoc(doc(db, wsPath), { 'settings.adminPassword': newPwd }).catch(() => {});
+    
+    // Clear all page authentications in useAdminPassword hook
+    // This forces re-authentication with the new password
+    try {
+      // Dispatch custom event to notify useAdminPassword hook to clear auth
+      window.dispatchEvent(new CustomEvent('adminPasswordChanged', { detail: { newPassword: newPwd } }));
+    } catch (err) {
+      console.error('[AppContext] Failed to dispatch password change event:', err);
+    }
+    
+    if (wsPath) {
+      updateDoc(doc(db, wsPath), { 'settings.adminPassword': newPwd })
+        .then(() => {})
+        .catch((err) => {});
+    }
   }, [wsPath]);
 
   const saveWorkspaceSettings = useCallback((settings) => {
@@ -1710,33 +1715,65 @@ export function AppProvider({ children }) {
     }
     
     // ⭐ PHASE 1: Add creator tracking
-    // Get proper creator name and role
-    let creatorName = currentUser?.name || 'Admin';
-    let creatorRole = currentUser?.role || 'Administrator';
-    let creatorColor = currentUser?.color || '#3B5BFC';
-    let creatorAvatar = currentUser?.avatar || currentUser?.name?.charAt(0)?.toUpperCase() || 'A';
-    let creatorAvatarImg = currentUser?.avatarImg || null;
+    // Prioritize createdBy parameter if provided, otherwise use currentUser
+    let creatorName = 'Admin';
+    let creatorRole = 'Administrator';
+    let creatorColor = '#3B5BFC';
+    let creatorAvatar = 'A';
+    let creatorAvatarImg = null;
+    let creatorUid = null;
+    let creatorMemberId = null;
+    let systemRole = 'admin';
+    
+    if (createdBy) {
+      // Use provided createdBy info (from TasksPage)
+      creatorName = createdBy.name || 'Admin';
+      creatorRole = createdBy.role || 'Administrator';
+      creatorColor = createdBy.color || '#3B5BFC';
+      creatorAvatar = createdBy.avatar || createdBy.name?.charAt(0)?.toUpperCase() || 'A';
+      creatorAvatarImg = createdBy.avatarImg || null;
+      creatorUid = createdBy.uid || null;
+      creatorMemberId = createdBy.memberId || null;
+      systemRole = createdBy.userRole || 'admin';
+      
+      // If createdBy has memberId, enrich from team array
+      if (createdBy.memberId && team && team.length > 0) {
+        const teamMember = team.find(m => m.id === createdBy.memberId);
+        if (teamMember) {
+          creatorName = teamMember.name || creatorName;
+          creatorRole = teamMember.role || creatorRole;
+          creatorColor = teamMember.color || creatorColor;
+          creatorAvatar = teamMember.avatar || creatorAvatar;
+          creatorAvatarImg = teamMember.avatarImg || creatorAvatarImg;
+        }
+      }
+    } else if (currentUser) {
+      // Fallback to currentUser from context
+      creatorName = currentUser.name || 'Admin';
+      creatorRole = currentUser.role || 'Administrator';
+      creatorColor = currentUser.color || '#3B5BFC';
+      creatorAvatar = currentUser.avatar || currentUser.name?.charAt(0)?.toUpperCase() || 'A';
+      creatorAvatarImg = currentUser.avatarImg || null;
+      creatorUid = currentUser.uid || null;
+      creatorMemberId = currentUser.memberId || null;
+      systemRole = currentUser.userRole || 'admin';
 
-    // If currentUser has a memberId, get the actual team member info
-    if (currentUser?.memberId && team && team.length > 0) {
-      const teamMember = team.find(m => m.id === currentUser.memberId);
-      if (teamMember) {
-
-        creatorName = teamMember.name || creatorName;
-        creatorRole = teamMember.role || creatorRole;
-        // Use team member's visual info if available
-        creatorColor = teamMember.color || creatorColor;
-        creatorAvatar = teamMember.avatar || creatorAvatar;
-        creatorAvatarImg = teamMember.avatarImg || creatorAvatarImg;
+      // If currentUser has a memberId, get the actual team member info
+      if (currentUser.memberId && team && team.length > 0) {
+        const teamMember = team.find(m => m.id === currentUser.memberId);
+        if (teamMember) {
+          creatorName = teamMember.name || creatorName;
+          creatorRole = teamMember.role || creatorRole;
+          creatorColor = teamMember.color || creatorColor;
+          creatorAvatar = teamMember.avatar || creatorAvatar;
+          creatorAvatarImg = teamMember.avatarImg || creatorAvatarImg;
+        }
       }
     }
     
-    // Use userRole for system role (admin/management/team)
-    const systemRole = currentUser?.userRole || 'admin';
-    
     const creatorInfo = {
-      uid: currentUser?.uid || null,
-      memberId: currentUser?.memberId || null,
+      uid: creatorUid,
+      memberId: creatorMemberId,
       role: creatorRole, // ⭐ Team role (e.g., "Developer", "Designer")
       userRole: systemRole, // ⭐ System role (admin/management/team)
       name: creatorName, // ⭐ Actual user name
@@ -2605,23 +2642,28 @@ export function AppProvider({ children }) {
           await setDoc(doc(db, `${wsPath}/trash`, String(taskId)), trashedTask);
           
           // Delete all related payment documents
-          const paymentDeletePromises = relatedPayments.map((payment) => 
-            deleteDoc(doc(db, `${wsPath}/payments`, payment.id)).catch((err) => {
-
+          // Use Firestore query to delete all payments with matching taskId
+          const paymentsQuery = query(
+            collection(db, `${wsPath}/payments`),
+            where('taskId', '==', taskId)
+          );
+          
+          const paymentSnapshot = await getDocs(paymentsQuery);
+          const paymentDeletePromises = paymentSnapshot.docs.map((paymentDoc) => 
+            deleteDoc(paymentDoc.ref).catch((err) => {
+              console.error('Failed to delete payment:', paymentDoc.id, err);
             })
           );
           
           // Delete all related scribe documents
           const scribeDeletePromises = relatedScribes.map((scribe) => 
-            deleteDoc(doc(db, `${wsPath}/notes`, scribe.id)).catch((err) => {
-
+            deleteDoc(doc(db, `${wsPath}/notes`, String(scribe.id))).catch((err) => {
+              console.error('Failed to delete scribe:', scribe.id, err);
             })
           );
           
           await Promise.all([...paymentDeletePromises, ...scribeDeletePromises]);
-
         } catch (err) {
-
         }
       }
       
@@ -3094,6 +3136,20 @@ export function AppProvider({ children }) {
           updateDoc(doc(db, `${wsPath}/team`, String(member.id)), firestoreData).catch((err) => {
 
           });
+          
+          // ⭐ 2-WAY SYNC: Update user profile when team member is updated
+          if (member.uid) {
+            updateUserProfile(member.uid, {
+              name: member.name,
+              phone: member.phone || '',
+              location: member.location || '',
+              about: member.about || member.desc || '',
+              avatarImg: member.avatarImg || null,
+              memberId: member.id,
+            }).catch((err) => {
+              console.error('Failed to sync user profile:', err);
+            });
+          }
         }
       }
 
@@ -3109,7 +3165,7 @@ export function AppProvider({ children }) {
         return [...prev, memberData];
       }
     });
-  }, [addActivity, wsPath, getMemberStats, currentUser]);
+  }, [addActivity, wsPath, getMemberStats, currentUser, workspaceId]);
 
   const markDescRead = useCallback((memberId) => {
 

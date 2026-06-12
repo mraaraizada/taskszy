@@ -1,30 +1,67 @@
-import * as React from "react"
-import { cn } from "../../lib/utils"
+import * as React from 'react';
+import { cva } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
 
-const Button = React.forwardRef(
-  ({ className, variant = "default", size = "default", ...props }, ref) => {
-    return (
-      <button
-        className={cn(
-          "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-          {
-            "bg-primary text-primary-foreground hover:bg-primary/90": variant === "default",
-            "border border-input bg-background hover:bg-accent hover:text-accent-foreground": variant === "outline",
-            "bg-secondary text-secondary-foreground hover:bg-secondary/80": variant === "secondary",
-            "hover:bg-accent hover:text-accent-foreground": variant === "ghost",
-            "h-10 px-4 py-2": size === "default",
-            "h-9 rounded-md px-3": size === "sm",
-            "h-11 rounded-md px-8": size === "lg",
-            "h-10 w-10": size === "icon",
-          },
-          className
-        )}
-        ref={ref}
-        {...props}
-      />
-    )
+const buttonVariants = cva(
+  'cursor-pointer group whitespace-nowrap focus-visible:outline-hidden inline-flex items-center justify-center text-sm font-medium ring-offset-background transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-60 [&_svg]:shrink-0',
+  {
+    variants: {
+      variant: {
+        primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90',
+        outline: 'bg-background text-accent-foreground border border-input hover:bg-accent',
+        ghost: 'text-accent-foreground hover:bg-accent hover:text-accent-foreground',
+        dim: 'text-muted-foreground hover:text-foreground',
+      },
+      size: {
+        lg: 'h-10 rounded-md px-4 text-sm gap-1.5 [&_svg:not([class*=size-])]:size-4',
+        md: 'h-8 rounded-md px-3 gap-1.5 text-[0.8125rem] [&_svg:not([class*=size-])]:size-4',
+        sm: 'h-7 rounded-md px-2.5 gap-1 text-xs [&_svg:not([class*=size-])]:size-3.5',
+        icon: 'size-8 rounded-md [&_svg:not([class*=size-])]:size-4 shrink-0',
+      },
+      mode: {
+        default: 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        icon: 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      },
+    },
+    compoundVariants: [
+      {
+        variant: 'ghost',
+        mode: 'default',
+        className: '[&_svg:not([role=img]):not([class*=text-]):not([class*=opacity-])]:opacity-60',
+      },
+      {
+        size: 'sm',
+        mode: 'icon',
+        className: 'w-7 h-7 p-0',
+      },
+      {
+        size: 'md',
+        mode: 'icon',
+        className: 'w-8 h-8 p-0',
+      },
+      {
+        size: 'icon',
+        className: 'w-8 h-8 p-0',
+      },
+    ],
+    defaultVariants: {
+      variant: 'primary',
+      mode: 'default',
+      size: 'md',
+    },
   }
-)
-Button.displayName = "Button"
+);
 
-export { Button }
+function Button({ className, variant, size, mode, ...props }) {
+  return (
+    <button
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, mode, className }))}
+      {...props}
+    />
+  );
+}
+
+export { Button, buttonVariants };

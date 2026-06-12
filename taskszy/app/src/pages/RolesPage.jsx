@@ -357,7 +357,7 @@ function CopyModal({ item, type, onClose, onSave }) {
   );
 }
 
-function NewRoleModal({ onClose, onSave, managementMode = false }) {
+function NewRoleModal({ existingRoles = [], onClose, onSave, managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const { currentUser } = useApp();
   const [roleType, setRoleType] = useState('Admin');
@@ -365,7 +365,12 @@ function NewRoleModal({ onClose, onSave, managementMode = false }) {
   const [about, setAbout]       = useState('');
   const [color, setColor]       = useState('#7C3AED');
 
-  const isValid = roleType && name.trim();
+  // Check if role name already exists (case-insensitive)
+  const isDuplicate = name.trim() && existingRoles.some(role => 
+    role.name.toLowerCase() === name.trim().toLowerCase()
+  );
+
+  const isValid = roleType && name.trim() && !isDuplicate;
 
   const handleCreateRole = () => {
     if (!isValid) return;
@@ -421,8 +426,38 @@ function NewRoleModal({ onClose, onSave, managementMode = false }) {
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Content Manager"
-              style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--input-bg)', boxSizing: 'border-box', fontFamily: 'inherit' }}
-              onFocus={e => e.target.style.borderColor = '#3B5BFC'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              style={{ 
+                width: '100%', 
+                padding: '10px 14px', 
+                border: `1.5px solid ${isDuplicate ? '#EF4444' : 'var(--border)'}`, 
+                borderRadius: 10, 
+                fontSize: 13, 
+                color: 'var(--text-primary)', 
+                outline: 'none', 
+                background: isDuplicate ? '#FEF2F2' : 'var(--input-bg)', 
+                boxSizing: 'border-box', 
+                fontFamily: 'inherit' 
+              }}
+              onFocus={e => e.target.style.borderColor = isDuplicate ? '#EF4444' : '#3B5BFC'} 
+              onBlur={e => e.target.style.borderColor = isDuplicate ? '#EF4444' : 'var(--border)'} />
+            {isDuplicate && (
+              <div style={{ 
+                fontSize: 11, 
+                color: '#EF4444', 
+                marginTop: 4, 
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                This role name already exists
+              </div>
+            )}
           </div>
 
           {/* About � single line */}
@@ -529,7 +564,7 @@ function RoleCard({ role, selected, onSelect, onCopy, onDelete, onEdit }) {
   );
 }
 
-function RolesTab() {
+function RolesTab({ managementMode = false }) {
   const { showPasswordModal, pendingAction, requestAdminPassword, handlePasswordConfirm, handlePasswordCancel } = useAdminPassword();
   const { roles, saveRoles, team, saveMember } = useApp();
   const setRoles = saveRoles;
@@ -736,7 +771,7 @@ function RolesTab() {
         )}
       </div>
 
-      {showNew && <NewRoleModal onClose={() => setShowNew(false)} onSave={r => { setRoles(prev => [...prev, r]); setSelectedId(r.id); setShowNew(false); }} />}
+      {showNew && <NewRoleModal existingRoles={roles} onClose={() => setShowNew(false)} onSave={r => { setRoles(prev => [...prev, r]); setSelectedId(r.id); setShowNew(false); }} managementMode={managementMode} />}
       {copyingRole && <CopyModal item={copyingRole} type="Role" onClose={() => setCopyingRole(null)} onSave={confirmCopyRole} />}
       {editingRole && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.08)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1269,7 +1304,7 @@ export default function RolesPage({ managementMode = false }) {
           </div>
         </div>
         <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-          <RolesTab />
+          <RolesTab managementMode={managementMode} />
         </div>
       </div>
 

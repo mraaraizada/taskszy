@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield, X, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -7,13 +7,24 @@ export function AdminPasswordModal({ onClose, onConfirm, action = 'perform this 
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Listen for password changes and close modal if password changes while open
+  useEffect(() => {
+    const handlePasswordChange = (event) => {
+      // Close the modal when password changes
+      onClose();
+    };
+    
+    window.addEventListener('adminPasswordChanged', handlePasswordChange);
+    return () => window.removeEventListener('adminPasswordChanged', handlePasswordChange);
+  }, [onClose]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Get the current user's password (loaded from their profile)
+    // Get the CURRENT password directly from context at submit time
     const storedPassword = adminPassword || 'admin123';
 
     setTimeout(() => {

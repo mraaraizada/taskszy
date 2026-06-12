@@ -122,9 +122,10 @@ export async function getOrganizationsPaginated(options = {}) {
       const ownerAvatar = ownerData?.name ? ownerData.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : 'U';
       const ownerColor = ownerData?.color || '#3B5BFC';
       
-      // ⭐ OPTIMIZATION: Use aggregated counts from workspace document
-      const teamCount = workspaceData.teamCount || 0;
-      const activeTeamCount = workspaceData.activeTeamCount || 0;
+      // ⭐ OPTIMIZATION: Use aggregated counts from workspace document if available
+      // Otherwise, these will be enriched on-demand when the organization card is clicked
+      const teamCount = workspaceData.teamCount !== undefined ? workspaceData.teamCount : null;
+      const activeTeamCount = workspaceData.activeTeamCount !== undefined ? workspaceData.activeTeamCount : null;
       const totalTasks = workspaceData.tasksCount || 0;
       
       return {

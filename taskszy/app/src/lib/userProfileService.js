@@ -211,7 +211,9 @@ export async function updateProfile(uid, updates) {
             teamUpdates.location = updates.location;
           }
           if (updates.about !== undefined) {
+            // Sync to both 'about' and 'desc' fields for compatibility
             teamUpdates.about = updates.about;
+            teamUpdates.desc = updates.about;
           }
           if (updates.avatarImg !== undefined) {
             teamUpdates.avatarImg = updates.avatarImg;
@@ -219,13 +221,10 @@ export async function updateProfile(uid, updates) {
           
           // Update team collection
           await updateDoc(teamDocRef, teamUpdates);
-
-        } else {
-
         }
       }
     } catch (error) {
-
+      console.error('Failed to sync profile to team collection:', error);
       // Don't throw - profile update succeeded, team sync is secondary
     }
   }

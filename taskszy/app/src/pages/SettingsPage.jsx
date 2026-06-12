@@ -288,10 +288,12 @@ function ProfileTab() {
                   type={key === 'phone' ? 'tel' : 'text'}
                   value={form[key]} 
                   onChange={e => {
-                    // Only allow digits, +, -, spaces, and parentheses for phone
+                    // Only allow digits for phone, max 12
                     if (key === 'phone') {
-                      const filtered = e.target.value.replace(/[^\d+\-\s()]/g, '');
-                      setForm(p => ({ ...p, [key]: filtered }));
+                      const filtered = e.target.value.replace(/[^\d]/g, '');
+                      if (filtered.length <= 12) {
+                        setForm(p => ({ ...p, [key]: filtered }));
+                      }
                     } else {
                       setForm(p => ({ ...p, [key]: e.target.value }));
                     }

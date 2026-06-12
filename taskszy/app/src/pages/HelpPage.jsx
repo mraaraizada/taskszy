@@ -8,6 +8,7 @@ import { useAdminPassword } from '../hooks/useAdminPassword';
 
 export default function HelpPage({ setPageFilteredData = null }) {
   const { workspaceId, currentUid, currentUser } = useApp();
+  
   const [allSubmissions, setAllSubmissions] = useState([]); // Store all submissions
   const [displayedSubmissions, setDisplayedSubmissions] = useState([]); // Submissions to display
   const [selectedSubmission, setSelectedSubmission] = useState(null);
@@ -28,9 +29,31 @@ export default function HelpPage({ setPageFilteredData = null }) {
     if (!workspaceId) return;
 
     const unsubscribe = subscribeToHelpSubmissions(workspaceId, (loadedSubmissions) => {
+      // Filter submissions based on user role
+      let filteredSubmissions = loadedSubmissions;
+      
+      // If current user is management, filter out help requests from OTHER management users
+      // Keep only: their own requests + team member requests
+      if (currentUser?.userRole === 'management') {
+        filteredSubmissions = loadedSubmissions.filter(sub => {
+          // Keep if it's the current user's own help request
+          if (sub.createdBy === currentUid) {
+            return true;
+          }
+          
+          // Keep if the help request is from a team member (not management/admin)
+          const submitterRole = sub.member?.userRole || sub.member?.role?.toLowerCase() || '';
+          const isManagementUser = submitterRole === 'management' || submitterRole.includes('management');
+          const isAdminUser = submitterRole === 'admin' || submitterRole.includes('admin');
+          
+          // Exclude if submitter is management or admin (unless it's current user)
+          return !isManagementUser && !isAdminUser;
+        });
+      }
+      
       // Sort: Pending submissions first, then solved submissions
       // Within each group, sort by timestamp (newest first)
-      const sortedSubmissions = loadedSubmissions.sort((a, b) => {
+      const sortedSubmissions = filteredSubmissions.sort((a, b) => {
         // First, sort by status (pending before solved)
         if (a.status === 'pending' && b.status === 'solved') return -1;
         if (a.status === 'solved' && b.status === 'pending') return 1;
@@ -43,7 +66,7 @@ export default function HelpPage({ setPageFilteredData = null }) {
     }, 50); // Load 50 at a time from Firebase
 
     return () => unsubscribe();
-  }, [workspaceId]);
+  }, [workspaceId, currentUser, currentUid]);
   
   // Apply display limit
   useEffect(() => {
@@ -195,7 +218,9 @@ export default function HelpPage({ setPageFilteredData = null }) {
                   </div>
                 </div>
                 <button
-                  onClick={() => setSelectedSubmission(null)}
+                  onClick={() => {
+                    setSelectedSubmission(null);
+                  }}
                   style={{
                     padding: '8px 16px',
                     border: '1.5px solid var(--border)',
@@ -247,7 +272,83 @@ export default function HelpPage({ setPageFilteredData = null }) {
                 </div>
 
                 {/* Response Section */}
-                {selectedSubmission.status === 'solved' && !editingResponse ? (
+                {/* Simple logic: If user created this help request, they cannot solve it themselves */}
+                {/* Check both createdBy (new field) and member.uid (fallback for old requests) */}
+                {(() => {
+                  const isOwnRequest = selectedSubmission.createdBy === currentUid || selectedSubmission.member?.uid === currentUid;
+                  return isOwnRequest;
+                })() ? (
+                  // This is the current user's own help request
+                  selectedSubmission.status === 'pending' ? (
+                    // Pending - show waiting message
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Status</label>
+                      <div style={{
+                        padding: '16px 18px',
+                        border: '1.5px solid #FED7AA',
+                        borderRadius: 12,
+                        fontSize: 13,
+                        color: '#EA580C',
+                        background: '#FFF7ED',
+                        lineHeight: 1.6,
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8
+                      }}>
+                        <Clock size={16} color="#F97316" strokeWidth={2.5} />
+                        <span>Waiting for admin or management to respond to your request.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    // Solved - show response (no edit button for own requests)
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Response</label>
+                          {selectedSubmission.resolvedByInfo && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ 
+                                width: 20, 
+                                height: 20, 
+                                borderRadius: '50%', 
+                                background: selectedSubmission.resolvedByInfo.avatarImg ? 'transparent' : selectedSubmission.resolvedByInfo.color,
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                fontSize: 9,
+                                fontWeight: 800,
+                                color: '#fff',
+                                overflow: 'hidden'
+                              }}>
+                                {selectedSubmission.resolvedByInfo.avatarImg ? (
+                                  <img src={selectedSubmission.resolvedByInfo.avatarImg} alt={selectedSubmission.resolvedByInfo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  selectedSubmission.resolvedByInfo.avatar
+                                )}
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                                by {selectedSubmission.resolvedByInfo.name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: '14px 16px',
+                        border: '1.5px solid #12C479',
+                        borderRadius: 12,
+                        fontSize: 14,
+                        color: '#059669',
+                        background: '#ECFDF5',
+                        lineHeight: 1.6,
+                      }}>
+                        {selectedSubmission.response}
+                      </div>
+                    </div>
+                  )
+                ) : selectedSubmission.status === 'solved' && !editingResponse ? (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -280,8 +381,8 @@ export default function HelpPage({ setPageFilteredData = null }) {
                           </div>
                         )}
                       </div>
-                      {/* Only show Edit button if current user resolved it */}
-                      {selectedSubmission.resolvedBy === currentUid && (
+                      {/* Only show Edit button if current user resolved it AND it's not their own help request */}
+                      {selectedSubmission.resolvedBy === currentUid && selectedSubmission.createdBy !== currentUid && (
                         <button
                           onClick={() => setEditingResponse(true)}
                           style={{

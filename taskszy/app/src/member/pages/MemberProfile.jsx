@@ -403,7 +403,17 @@ export default function MemberProfile({ member }) {
                   {editing && field.editable ? (
                     <input
                       value={form[field.key]}
-                      onChange={e => setForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                      onChange={e => {
+                        if (field.key === 'phone') {
+                          // Only allow digits, max 12
+                          const filtered = e.target.value.replace(/[^\d]/g, '');
+                          if (filtered.length <= 12) {
+                            setForm(prev => ({ ...prev, [field.key]: filtered }));
+                          }
+                        } else {
+                          setForm(prev => ({ ...prev, [field.key]: e.target.value }));
+                        }
+                      }}
                       style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'transparent', border: 'none', borderBottom: '1.5px solid #7C3AED', outline: 'none', width: '100%', padding: '2px 0' }}
                     />
                   ) : (

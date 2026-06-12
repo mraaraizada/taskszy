@@ -1343,8 +1343,8 @@ function CreateTaskModal({ onClose, onCreate, onSchedule, teamMembers, requestDa
           </div>
           )}
 
-          {/* Scribe - Hidden when schedule mode is selected */}
-          {dateMode !== 'schedule' && (
+          {/* Scribe - Hidden when schedule mode is selected OR in admin/management mode */}
+          {dateMode !== 'schedule' && !managementMode && currentUser?.userRole === 'member' && (
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Scribe</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -4088,10 +4088,9 @@ export function AdminTaskModal({ task: initialTask, onClose, onEdit, onTimelineC
               </div>
             )}
 
-            {/* Scribes - Show after stage process, only if user has access */}
-            {(() => {
+            {/* Scribes - Show after stage process, only if user has access - HIDDEN in management mode */}
+            {!managementMode && (() => {
               if (!t.scribes || t.scribes.length === 0) {
-
                 return null;
               }
 

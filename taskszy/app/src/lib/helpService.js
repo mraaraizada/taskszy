@@ -77,6 +77,7 @@ export async function submitHelpRequest(workspaceId, submission) {
       uid: submission.member?.uid || null
     },
     message: submission.message,
+    createdBy: submission.member?.uid || null, // Track who created this help request
     timestamp: serverTimestamp(),
     status: 'pending',
     response: null,

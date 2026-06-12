@@ -525,6 +525,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       
       // Fetch profile AFTER setting the state
       const profile = await getProfile(user.uid);
+      
       setLoading(false);
       if (!profile) {
         setError('Account setup incomplete. Please contact your administrator.');
@@ -655,6 +656,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
 
     // Write full plan schema to Firestore workspace doc
     const wsId = authenticatedUser?.workspaceId;
+    
     if (wsId) {
       try {
         await setDoc(doc(db, `workspaces/${wsId}`), {
@@ -672,7 +674,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
           },
         }, { merge: true });
         
-        
         // ROBUST: Wait and verify plan was written before proceeding
         let planVerified = false;
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -683,9 +684,6 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
             planVerified = true;
             break;
           }
-        }
-        
-        if (!planVerified) {
         }
       } catch (err) {
         // Don't block login on plan write error
@@ -980,6 +978,26 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
         animation: fadeSlideOut 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
     `}</style>
+    
+    {/* Responsive styles */}
+    <style>{`
+      @media (max-width: 1024px) {
+        .login-panel-left {
+          display: none !important;
+        }
+        .login-panel-right {
+          width: 100% !important;
+        }
+      }
+      
+      @media (max-width: 768px) {
+        .login-form-card {
+          padding: 24px 20px !important;
+          max-width: 100% !important;
+        }
+      }
+    `}</style>
+    
     <div
       className="flex login-enter"
       style={{
@@ -991,7 +1009,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
       }}
     >
         {/* ─── LEFT: Visual Panel with Carousel ─── */}
-        <div style={{ width: '46%', height: '100%', flexShrink: 0 }}>
+        <div className="login-panel-left" style={{ width: '46%', height: '100%', flexShrink: 0 }}>
         <Carousel
           opts={{
             loop: true,
@@ -999,7 +1017,7 @@ export default function LoginPage({ onLogin, sessionExpired = false, onClearExpi
             watchSlides: false, // Disable slide watching for better performance
           }}
           setApi={setCarouselApi}
-          className="login-panel-left h-full"
+          className="h-full"
           style={{ pointerEvents: 'none' }} // Disable all pointer interactions
         >
           <CarouselContent className="h-full -ml-0">

@@ -6,7 +6,7 @@ import { AdminPasswordModal } from '../components/AdminPasswordModal';
 import { useAdminPassword } from '../hooks/useAdminPassword';
 import { TeamSkeleton } from '../components/Skeleton';
 import { toast } from 'sonner';
-import { getOrganizationsPaginated } from '../lib/optimizedOrganizationService';
+import { getOrganizationsPaginated, enrichOrganization } from '../lib/optimizedOrganizationService';
 
 const AVATAR_COLORS = ['#3B5BFC','#7C3AED','#12C479','#F97316','#EF4444','#06B6D4','#EC4899','#8B5CF6'];
 
@@ -821,17 +821,33 @@ function TeamPage({ managementMode = false }) {
         forceRefresh: reset
       });
       
+      // Enrich organizations that are missing team count data
+      const enrichedOrganizations = await Promise.all(
+        result.organizations.map(async (org) => {
+          // If teamCount is null (not 0), enrich the organization
+          if (org.teamCount === null || org.activeTeamCount === null) {
+            try {
+              const enrichedData = await enrichOrganization(org.id);
+              return { ...org, ...enrichedData };
+            } catch (error) {
+              // If enrichment fails, return org with 0 counts
+              return { ...org, teamCount: 0, activeTeamCount: 0 };
+            }
+          }
+          return org;
+        })
+      );
+      
       if (reset) {
-        setOrganizations(result.organizations);
+        setOrganizations(enrichedOrganizations);
       } else {
-        setOrganizations(prev => [...prev, ...result.organizations]);
+        setOrganizations(prev => [...prev, ...enrichedOrganizations]);
       }
       
       setLastDoc(result.lastDoc);
       setHasMore(result.hasMore);
 
     } catch (error) {
-
       toast.error('Failed to load organizations');
     } finally {
       setPageLoading(false);

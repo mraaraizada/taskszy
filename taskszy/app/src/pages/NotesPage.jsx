@@ -1100,7 +1100,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                 <StickyNote size={22} color="#7C3AED" strokeWidth={1.8} />
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Your Scribe is empty</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Great ideas start here � write a note or build a sheet!</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Great ideas start here — write a note or build a sheet!</div>
             </div>
           )}
           {displayedNotes.map((note) => {
@@ -1287,7 +1287,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                             setNewTag('');
                           }
                         }}
-                        placeholder="New tag�"
+                        placeholder="New tag…"
                         style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: 72 }}
                       />
                       <button 
@@ -1314,7 +1314,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                 </div>
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
-                  {/* Add member � all members can view the panel */}
+                  {/* Add member — all members can view the panel */}
                   <button
                     title="Add member"
                     onClick={() => setShowMemberPanel(true)}
@@ -1363,7 +1363,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
               <input
                 value={draft.title}
                 onChange={e => setDraft(p => ({ ...p, title: e.target.value }))}
-                placeholder="Note title�"
+                placeholder="Note title…"
                 style={{ width: '100%', fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', border: 'none', outline: 'none', background: 'transparent', marginBottom: 10 }}
               />
               ) : (
@@ -1390,7 +1390,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                     value={newTag}
                     onChange={e => setNewTag(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addCustomTag()}
-                    placeholder="New tag�"
+                    placeholder="New tag…"
                     style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: 80 }}
                   />
                   <button onClick={addCustomTag} style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: '#3B5BFC', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1413,7 +1413,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
             <textarea
               value={draft.body}
               onChange={e => setDraft(p => ({ ...p, body: e.target.value }))}
-              placeholder="Write your note here�"
+              placeholder="Write your note here…"
               style={{ flex: 1, padding: '20px 24px', fontSize: 14, lineHeight: 1.75, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
             />
             <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 10, flexShrink: 0 }}>
@@ -1455,7 +1455,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
-                  {/* Add member � all members can view the panel */}
+                  {/* Add member — all members can view the panel */}
                   <button
                     title="Add member"
                     onClick={() => setShowMemberPanel(true)}
@@ -1486,7 +1486,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
         )}
         </div>
 
-        {/* -- Member panel � slides in from right -- */}
+        {/* -- Member panel — slides in from right -- */}
         {showMemberPanel && (
         <div style={{
           width: 300,
@@ -1538,7 +1538,7 @@ export default function NotesPage({ deletedBy = null, currentUser = null, onNavi
                   <input
                     value={memberSearch}
                     onChange={e => setMemberSearch(e.target.value)}
-                    placeholder="Search members�"
+                    placeholder="Search members…"
                     style={{ width: '100%', height: 36, borderRadius: 9, border: '1.5px solid var(--border)', padding: '0 12px 0 32px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', background: 'var(--bg-subtle)', boxSizing: 'border-box' }}
                   />
                 </div>

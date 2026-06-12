@@ -2011,31 +2011,63 @@ export default function FinancialPage() {
 
 function OrganizationPanel({ onClose }) {
   const { refreshOrganizations, organizations } = useApp();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [displayCount, setDisplayCount] = useState(10); // Show 10 organizations initially
   const [customRequests, setCustomRequests] = useState([]);
 
-  // Load custom plan requests from organizations context
+  // Force refresh organizations when panel opens
   useEffect(() => {
-    if (organizations && organizations.length > 0) {
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Clear cache before refreshing
+      const { default: cacheManager, CACHE_KEYS } = await import('../lib/cacheManager');
+      cacheManager.clear(CACHE_KEYS.ORGANIZATIONS);
+      
+      if (refreshOrganizations) {
+        await refreshOrganizations(); // Force refresh to get latest data
+      }
+      setLoading(false);
+    };
+    
+    loadData();
+  }, []); // Run once when panel opens
 
-      // Filter organizations that have customPlanRequest
-      const requests = organizations
-        .filter(org => org.customPlanRequest)
-        .map(org => ({
-          id: org.id,
-          workspaceId: org.id,
-          email: org.customPlanRequest.email || org.ownerEmail || 'N/A',
-          description: org.customPlanRequest.description || org.customPlanRequest.message || 'No description available',
-          requestDate: org.requestDate || org.createdAt || null,
-          isCompleted: org.isCompleted || false,
-          status: org.customPlanRequest.status || 'pending',
-        }));
-
-      setCustomRequests(requests);
-    } else {
-
-      setCustomRequests([]);
+  // Load custom plan requests from customPlanRequests collection (not from workspace documents)
+  useEffect(() => {
+    const loadRequests = async () => {
+      try {
+        const { collection, query, orderBy: firestoreOrderBy, getDocs } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        
+        // Query customPlanRequests collection directly
+        const requestsRef = collection(db, 'customPlanRequests');
+        const q = query(requestsRef, firestoreOrderBy('requestDate', 'desc'));
+        const snapshot = await getDocs(q);
+        
+        const requests = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const requestDate = data.requestDate?.toDate ? data.requestDate.toDate() : (data.requestDate ? new Date(data.requestDate) : null);
+          
+          return {
+            id: doc.id,
+            workspaceId: data.workspaceId,
+            email: data.email || 'N/A',
+            description: data.description || 'No description available',
+            requestDate: requestDate,
+            status: data.status || 'pending',
+            isCompleted: data.status === 'completed',
+          };
+        });
+        
+        setCustomRequests(requests);
+      } catch (error) {
+        setCustomRequests([]);
+      }
+    };
+    
+    if (organizations !== undefined) {
+      loadRequests();
     }
   }, [organizations]);
 
@@ -2053,23 +2085,38 @@ function OrganizationPanel({ onClose }) {
       const { doc, updateDoc } = await import('firebase/firestore');
       const { db } = await import('../lib/firebase');
       
-      // Update workspace document to mark customPlanRequest as completed
-      await updateDoc(doc(db, 'workspaces', requestId), {
-        'customPlanRequest.status': 'completed',
-        'customPlanRequest.completedAt': new Date().toISOString(),
-        isCompleted: true,
+      // Update customPlanRequests collection document
+      await updateDoc(doc(db, 'customPlanRequests', requestId), {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
       });
       
       toast.success('Request marked as complete');
       
-      // Refresh organizations in the main context
-      if (refreshOrganizations) {
-        await refreshOrganizations();
-      }
+      // Refresh the requests list
+      const { collection, query, orderBy: firestoreOrderBy, getDocs } = await import('firebase/firestore');
+      const requestsRef = collection(db, 'customPlanRequests');
+      const q = query(requestsRef, firestoreOrderBy('requestDate', 'desc'));
+      const snapshot = await getDocs(q);
       
+      const requests = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const requestDate = data.requestDate?.toDate ? data.requestDate.toDate() : (data.requestDate ? new Date(data.requestDate) : null);
+        
+        return {
+          id: doc.id,
+          workspaceId: data.workspaceId,
+          email: data.email || 'N/A',
+          description: data.description || 'No description available',
+          requestDate: requestDate,
+          status: data.status || 'pending',
+          isCompleted: data.status === 'completed',
+        };
+      });
+      
+      setCustomRequests(requests);
       setLoading(false);
     } catch (err) {
-
       toast.error('Failed to mark as complete');
       setLoading(false);
     }
@@ -2142,11 +2189,19 @@ function OrganizationPanel({ onClose }) {
                       textAlign: 'right',
                       whiteSpace: 'nowrap',
                     }}>
-                      {org.requestDate ? (
-                        <>
-                          {org.requestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {org.requestDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </>
-                      ) : 'N/A'}
+                      {(() => {
+                        const date = org.requestDate;
+                        if (!date) return 'N/A';
+                        
+                        // Convert Firestore Timestamp to Date if needed
+                        const dateObj = date?.toDate ? date.toDate() : (date instanceof Date ? date : new Date(date));
+                        
+                        try {
+                          return `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • ${dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+                        } catch (e) {
+                          return 'N/A';
+                        }
+                      })()}
                     </div>
 
                     {/* Completion Badge */}

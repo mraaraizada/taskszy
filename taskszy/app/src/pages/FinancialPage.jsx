@@ -1543,6 +1543,16 @@ function PaymentDetailPanel({ payment, onClose }) {
                         alt={payment.memberName}
                         style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }}
                       />
+                    ) : payment.memberAvatar === 'TASK_BUDGET_ICON' ? (
+                      // Task Budget Icon
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Wallet size={13} color="#fff" strokeWidth={2.5} />
+                      </div>
+                    ) : payment.memberAvatar === 'ARROW_UP_ICON' || payment.paymentType === 'additional' ? (
+                      // Additional Payment Icon
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#12C479', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ArrowUpRight size={13} color="#fff" strokeWidth={2.5} />
+                      </div>
                     ) : (
                       <div style={{ width: 24, height: 24, borderRadius: '50%', background: payment.memberColor || '#3B5BFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>
                         {payment.memberAvatar || payment.memberName?.charAt(0)?.toUpperCase() || 'U'}
@@ -1977,17 +1987,99 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
               ? '#12C479' // ⭐ Green color for investment payments without task
               : (task?.members?.find(m => m.id === (payment.memberId || payment.assignedTo?.[0]?.id))?.color || '#6B7280'),
         // ⭐ Assigned By - use payment creator, then task creator, then current user
-        assignedBy:  payment.createdBy?.name || 
-                     task?.createdBy?.name || 
-                     (typeof task?.createdBy === 'string' ? task?.createdBy : null) ||
-                     currentUser?.name || 
-                     'Admin',
-        assignedRole: payment.createdBy?.role || 
-                      payment.createdBy?.userRole || 
-                      task?.createdBy?.role || 
-                      task?.createdBy?.userRole || 
-                      currentUser?.role || 
-                      'Admin',
+        assignedBy:  (() => {
+          // Priority 1: Payment creator
+          if (payment.createdBy?.name && payment.createdBy.name !== 'User') {
+            return payment.createdBy.name;
+          }
+          
+          // Priority 2: Task creator
+          if (task?.createdBy?.name && task.createdBy.name !== 'User') {
+            return task.createdBy.name;
+          }
+          
+          // Priority 3: Legacy string format
+          if (typeof task?.createdBy === 'string' && task.createdBy !== 'User') {
+            return task.createdBy;
+          }
+          
+          // Priority 4: Get name from team member if memberId exists
+          if (payment.createdBy?.memberId && team && team.length > 0) {
+            const creator = team.find(m => m.id === payment.createdBy.memberId);
+            if (creator?.name && creator.name !== 'User') {
+              return creator.name;
+            }
+          }
+          
+          if (task?.createdBy?.memberId && team && team.length > 0) {
+            const creator = team.find(m => m.id === task.createdBy.memberId);
+            if (creator?.name && creator.name !== 'User') {
+              return creator.name;
+            }
+          }
+          
+          // Priority 5: Current user
+          if (currentUser?.name && currentUser.name !== 'User') {
+            return currentUser.name;
+          }
+          
+          // Fallback - use email if available
+          if (currentUser?.email) {
+            return currentUser.email.split('@')[0];
+          }
+          
+          // Final fallback
+          return 'System';
+        })(),
+        assignedRole: (() => {
+          // Priority 1: Payment creator role (prefer team role over system role)
+          if (payment.createdBy?.role && payment.createdBy.role !== 'Member' && !payment.createdBy.role.includes('member')) {
+            return payment.createdBy.role;
+          }
+          
+          // Get role from team member if memberId exists
+          if (payment.createdBy?.memberId && team && team.length > 0) {
+            const creator = team.find(m => m.id === payment.createdBy.memberId);
+            if (creator?.role) {
+              return creator.role;
+            }
+          }
+          
+          // Map system role to display name
+          if (payment.createdBy?.userRole === 'admin') return 'Administrator';
+          if (payment.createdBy?.userRole === 'management') return 'Management';
+          if (payment.createdBy?.userRole === 'member') return 'Team Member';
+          
+          // Priority 2: Task creator role (prefer team role over system role)
+          if (task?.createdBy?.role && task.createdBy.role !== 'Member' && !task.createdBy.role.includes('member')) {
+            return task.createdBy.role;
+          }
+          
+          // Get role from team member if task has memberId
+          if (task?.createdBy?.memberId && team && team.length > 0) {
+            const creator = team.find(m => m.id === task.createdBy.memberId);
+            if (creator?.role) {
+              return creator.role;
+            }
+          }
+          
+          // Map task creator system role
+          if (task?.createdBy?.userRole === 'admin') return 'Administrator';
+          if (task?.createdBy?.userRole === 'management') return 'Management';
+          if (task?.createdBy?.userRole === 'member') return 'Team Member';
+          
+          // Priority 3: Current user role
+          if (currentUser?.role && currentUser.role !== 'Member') {
+            return currentUser.role;
+          }
+          
+          // Fallback to system role
+          if (currentUser?.userRole === 'admin') return 'Administrator';
+          if (currentUser?.userRole === 'management') return 'Management';
+          
+          // Final fallback
+          return 'Team Member';
+        })(),
         // ⭐ Map category to full category object with icon, color, bg
         category:    task?.category ? (() => {
           const categoryMatch = PAYMENT_CATEGORIES.find(c => c.label === task.category || c.label === task.category?.label);
@@ -3501,9 +3593,9 @@ export default function FinancialPage({ prefilledTaskId = null, setPageFilteredD
                   style={{
                     display: 'grid', gridTemplateColumns: '50px 2fr 1.5fr 1.2fr 1fr 1fr 1fr 0.8fr 0.8fr 1fr',
                     alignItems: 'center',
-                    padding: '16px 20px',
+                    padding: '20px 20px',
                     minWidth: '1000px',
-                    minHeight: '75px',
+                    minHeight: '85px',
                     borderBottom: isLast ? 'none' : '1px solid var(--border-light)',
                     background: isSelected ? '#EEF2FF' : row.isPaid ? 'var(--bg-surface)' : 'var(--bg-surface)',
                     transition: 'background 0.12s',

@@ -477,7 +477,17 @@ export default function ManagementProfile({ member }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{field.label}</div>
                   {editing && field.editable
-                    ? <input value={form[field.key]} onChange={e => setForm(p => ({ ...p, [field.key]: e.target.value }))} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'transparent', border: 'none', borderBottom: '1.5px solid #7C3AED', outline: 'none', width: '100%', padding: '2px 0' }} />
+                    ? <input value={form[field.key]} onChange={e => {
+                        if (field.key === 'phone') {
+                          // Only allow digits, max 12
+                          const filtered = e.target.value.replace(/[^\d]/g, '');
+                          if (filtered.length <= 12) {
+                            setForm(p => ({ ...p, [field.key]: filtered }));
+                          }
+                        } else {
+                          setForm(p => ({ ...p, [field.key]: e.target.value }));
+                        }
+                      }} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'transparent', border: 'none', borderBottom: '1.5px solid #7C3AED', outline: 'none', width: '100%', padding: '2px 0' }} />
                     : <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{field.value}</div>
                   }
                 </div>

@@ -4,6 +4,124 @@ import { Check, Mail, ArrowLeft, Tag, Lock, User, Phone, AtSign, Plus, X, ArrowR
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 
+// Responsive styles for plan selection
+const responsiveStyles = `
+  @media (max-width: 1200px) {
+    .plan-card {
+      width: calc(50% - 8px) !important;
+      min-width: 200px !important;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .plan-card {
+      width: calc(50% - 8px) !important;
+      min-width: 160px !important;
+    }
+    
+    .plan-selection-container {
+      padding: 16px 12px !important;
+    }
+    
+    .plans-grid {
+      gap: 10px !important;
+      justify-content: center !important;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    .plan-card {
+      width: calc(50% - 6px) !important;
+      min-width: 140px !important;
+    }
+    
+    .plans-grid {
+      gap: 8px !important;
+      padding-bottom: 16px !important;
+    }
+    
+    .plan-selection-header {
+      font-size: 20px !important;
+      margin-bottom: 8px !important;
+    }
+    
+    .plan-selection-subtitle {
+      font-size: 11px !important;
+    }
+    
+    .billing-toggle {
+      flex-direction: column !important;
+      gap: 8px !important;
+      padding: 12px !important;
+    }
+    
+    .plan-card {
+      padding: 14px 12px !important;
+    }
+    
+    .plan-card-header {
+      font-size: 15px !important;
+    }
+    
+    .plan-card-price {
+      font-size: 18px !important;
+    }
+    
+    .plan-card-features {
+      font-size: 10px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .plan-selection-container {
+      padding: 12px 8px !important;
+    }
+    
+    .plan-card {
+      width: calc(50% - 4px) !important;
+      padding: 12px 10px !important;
+    }
+    
+    .plans-grid {
+      gap: 6px !important;
+      padding-bottom: 12px !important;
+    }
+    
+    .plan-selection-header {
+      font-size: 18px !important;
+    }
+    
+    .back-button {
+      font-size: 11px !important;
+      padding: 6px 10px !important;
+    }
+  }
+  
+  /* Smooth scrolling */
+  .plan-selection-container {
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom scrollbar */
+  .plans-grid::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .plans-grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+  
+  .plans-grid::-webkit-scrollbar-thumb {
+    background: rgba(59, 91, 252, 0.3);
+    border-radius: 4px;
+  }
+  
+  .plans-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 91, 252, 0.5);
+  }
+`;
+
 // Dynamic lottie loaders — keep heavy JSONs out of the initial bundle
 function useSuccessConfetti() {
   const [data, setData] = useState(null);
@@ -1320,7 +1438,9 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
   }
 
   return (
-    <div className="plan-selection-enter" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '20px 32px 20px', overflow: 'hidden', position: 'relative' }}>
+    <>
+    <style>{responsiveStyles}</style>
+    <div className="plan-selection-enter plan-selection-container" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '20px 32px 20px', overflow: 'auto', position: 'relative' }}>
       {/* Background video */}
       <video
         src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260319_015952_e1deeb12-8fb7-4071-a42a-60779fc64ab6.mp4"
@@ -1333,16 +1453,16 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
       {/* Overlay */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(240,242,248,0.55)', zIndex: 1, pointerEvents: 'none' }} />
       {/* Content above video */}
-      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'visible' }}>
       {/* Header left + Toggle center — same row */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14, width: '100%', flexShrink: 0 }}>
         {/* Left: header */}
         <div style={{ flex: 1 }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
+          <button onClick={onBack} className="back-button" style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
             ← {backText}
           </button>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1A1D2E', letterSpacing: '-0.8px', lineHeight: 1.2, marginBottom: 3 }}>Choose Your Plan</h2>
-          <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 1 }}>Select the perfect plan for your team</p>
+          <h2 className="plan-selection-header" style={{ fontSize: 22, fontWeight: 800, color: '#1A1D2E', letterSpacing: '-0.8px', lineHeight: 1.2, marginBottom: 3 }}>Choose Your Plan</h2>
+          <p className="plan-selection-subtitle" style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 1 }}>Select the perfect plan for your team</p>
           <p style={{ fontSize: 11, color: '#6B7280' }}>Logged in as: <span style={{ fontWeight: 600, color: '#3B5BFC' }}>{email}</span></p>
         </div>
         {/* Center: toggle */}
@@ -1364,7 +1484,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
       </div>
 
       {/* Plans Grid */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'stretch', alignContent: 'center', width: '100%', flex: 1 }}>
+      <div className="plans-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'stretch', alignContent: 'flex-start', width: '100%', flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
         {PLANS.map((plan) => {
           const price = getPrice(plan);
           const isSelected = selectedPlan === plan.id;
@@ -1404,6 +1524,7 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
             <div
               key={plan.id}
               onClick={() => !isDisabled && handlePlanSelect(plan)}
+              className="plan-card"
               style={{ 
                 background: '#fff', 
                 borderRadius: 16, 
@@ -1539,11 +1660,12 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                     }
                     
                     // Save to Firestore - Create NEW entry each time
-                    const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+                    const { collection, addDoc, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
                     const { db } = await import('../lib/firebase');
                     
                     const requestId = `${wsId}_${Date.now()}`;
 
+                    // Save to customPlanRequests collection
                     await addDoc(collection(db, 'customPlanRequests'), {
                       workspaceId: wsId,
                       email: email,
@@ -1551,6 +1673,19 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
                       requestDate: serverTimestamp(),
                       status: 'pending',
                       requestId: requestId,
+                    });
+                    
+                    // Also update the workspace document so it shows in admin dashboard
+                    await updateDoc(doc(db, 'workspaces', wsId), {
+                      customPlanRequest: {
+                        email: email,
+                        description: description,
+                        message: description,
+                        status: 'pending',
+                      },
+                      'customPlanRequest.requestDate': serverTimestamp(),
+                      requestDate: serverTimestamp(),
+                      isCompleted: false,
                     });
 
                     // Close custom modal first
@@ -1582,5 +1717,6 @@ export default function PlanSelection({ email, workspaceId, onSelectPlan, onBack
       )}
       </div>
     </div>
+    </>
   );
 }
